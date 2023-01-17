@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/project-spell/static/css/main.3722cfe0.css",
+    "main.js": "/project-spell/static/js/main.7bc6925d.js",
+    "index.html": "/project-spell/index.html",
+    "main.3722cfe0.css.map": "/project-spell/static/css/main.3722cfe0.css.map",
+    "main.7bc6925d.js.map": "/project-spell/static/js/main.7bc6925d.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.3722cfe0.css",
+    "static/js/main.7bc6925d.js"
+  ]
+}
