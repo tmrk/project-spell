@@ -16,9 +16,9 @@ function App() {
 
   const { speak } = useSpeechSynthesis();
   const [playDone] = useSound(doneSfx, { volume: 0.8 });
-  //const [playBgMusic, { pause }] = useSound(bgMusic, { volume: 0.75 });
   const [isPlaying, setIsPlaying] = useState(false);
   const [playBgMusic, {pause}] = useSound(bgMusic, {
+    volume: 0.2,
     onplay: () => setIsPlaying(true),
     onend: () => setIsPlaying(false)
   });
