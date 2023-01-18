@@ -1,13 +1,19 @@
 {
   "files": {
-    "main.css": "/project-spell/static/css/main.3722cfe0.css",
-    "main.js": "/project-spell/static/js/main.7bc6925d.js",
+    "main.css": "/project-spell/static/css/main.52d93e2e.css",
+    "main.js": "/project-spell/static/js/main.e8851a86.js",
+    "static/js/845.f2e337ce.chunk.js": "/project-spell/static/js/845.f2e337ce.chunk.js",
+    "static/media/bgmusic.mp3": "/project-spell/static/media/bgmusic.88fc5bfaf6b6e3a4ed22.mp3",
+    "static/media/done.mp3": "/project-spell/static/media/done.cc5ce1cbfac9e7c442c5.mp3",
+    "static/media/pop.mp3": "/project-spell/static/media/pop.dbb8a440c43aadaef874.mp3",
+    "static/media/bad.mp3": "/project-spell/static/media/bad.3437f8b938870530cc85.mp3",
     "index.html": "/project-spell/index.html",
-    "main.3722cfe0.css.map": "/project-spell/static/css/main.3722cfe0.css.map",
-    "main.7bc6925d.js.map": "/project-spell/static/js/main.7bc6925d.js.map"
+    "main.52d93e2e.css.map": "/project-spell/static/css/main.52d93e2e.css.map",
+    "main.e8851a86.js.map": "/project-spell/static/js/main.e8851a86.js.map",
+    "845.f2e337ce.chunk.js.map": "/project-spell/static/js/845.f2e337ce.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.3722cfe0.css",
-    "static/js/main.7bc6925d.js"
+    "static/css/main.52d93e2e.css",
+    "static/js/main.e8851a86.js"
   ]
 }
