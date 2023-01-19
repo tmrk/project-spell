@@ -7,8 +7,9 @@ import bgMusic from './sounds/bgmusic.mp3';
 import doneSfx from './sounds/done.mp3';
 import MusicNoteIcon from '@material-ui/icons/MusicNote';
 import MusicOffIcon from '@material-ui/icons/MusicOff';
+import { ReactComponent as IconCroc } from './assets/croc.svg'
 
-const WORDS = ["cat", "mouse", "horse", "cow", "dog"];
+const WORDS = ["computer", "cat", "mouse", "horse", "cow", "dog"];
 const MUSIC = true;
 const IS_CASE_SENSITIVE = false;
 
@@ -29,12 +30,18 @@ function App() {
     setIsPlaying(!isPlaying);
   }
 
+  const [pageBackground, setPageBackground] = useState('');
   const [remainingWords, setRemainingWords] = useState(WORDS);
   const [letters, setLetters] = useState([]);
+  const [letterProgress, setLetterProgress] = useState(0);
   const [currentLetterIndex, setCurrentLetterIndex] = useState(null);
   const [startPage, setStartPage] = useState(true);
 
   const displayNewWord = () => {
+    if (!startPage) {
+      
+      if (WORDS.length === remainingWords.length) setLetterProgress(0); // reset progress
+
       const currentWord = remainingWords[Math.floor(Math.random() * remainingWords.length)];
       const currentWordLettersArray = currentWord.split("");
       const currentWordLetters = [];
@@ -53,6 +60,7 @@ function App() {
 
       if (remainingWords.length > 1) setRemainingWords(remainingWords.filter(word => word !== currentWord));
       else setRemainingWords(WORDS);
+    }
   }
 
   // Log all input into an array
@@ -74,7 +82,6 @@ function App() {
     if (!isLastLetter) setCurrentLetterIndex(currentLetterIndex + 1);
     else {
       console.log("This is the last letter of this word");
-      console.log(remainingWords);
       wordDone();
     }
   }
@@ -84,10 +91,12 @@ function App() {
     document.getElementsByTagName("input")[0].focus();
   }
 
-  const [pageBackground, setPageBackground] = useState('');
-
   const attemptSuccess = (isSuccess) => {
-    if (isSuccess) setPageBackground('green');
+    setPageBackground("");
+    if (isSuccess) {
+      setPageBackground('green');
+      setLetterProgress(letterProgress + 1)
+    }
     else setPageBackground('red');
   }
 
@@ -111,23 +120,30 @@ function App() {
         {isPlaying ? <MusicNoteIcon /> : <MusicOffIcon />}
       </div>
       {startPage ? <div id="msg">START</div> :
-      <div id="word">
-      {letters.map(letter => {
-        return (
-          <Letter 
-            key={letter.id} 
-            currentLetterIndex={currentLetterIndex} 
-            jumpToNextLetter={jumpToNextLetter}
-            index={letter.id}
-            letters={letters}
-            addAttempt={addAttempt}
-            IS_CASE_SENSITIVE={IS_CASE_SENSITIVE}
-            attemptSuccess={attemptSuccess}
-            speak={speak}
-          />
-        )
-      })}
-      </div>}
+      <>
+        <div id="progress">
+          <div className="progress-value" style={{width: (100 * letterProgress) / WORDS.join("").length + "%"}}>
+            <div><IconCroc /></div>
+          </div>
+        </div>
+        <div id="word">
+        {letters.map(letter => {
+          return (
+            <Letter 
+              key={letter.id} 
+              currentLetterIndex={currentLetterIndex} 
+              jumpToNextLetter={jumpToNextLetter}
+              index={letter.id}
+              letters={letters}
+              addAttempt={addAttempt}
+              IS_CASE_SENSITIVE={IS_CASE_SENSITIVE}
+              attemptSuccess={attemptSuccess}
+              speak={speak}
+            />
+          )
+        })}
+        </div>
+      </>}
     </div>
   );
 }

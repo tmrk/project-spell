@@ -17,30 +17,44 @@
   100% { transform: rotate(0deg); }
 }
 
+@keyframes croc {
+  25%  { transform: rotate(5deg); }
+  50%  { transform: translateY(-4px) rotate(-5deg); }
+  75%  { transform: translateY(0) rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
+
 * {
   margin: 0;
   padding: 0;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   cursor: default;
 }
 
-html {
+html, #root {
   height: 100%;
 }
 
 body {
-  height: 100%;
-}
-
-#root {
-  height: 100%;
-}
-
-#app {
   $pageBg: #ffee99;
 
   height: 100%;
   background-color: $pageBg;
+  touch-action: none;
+  -webkit-touch-callout: none;
+
+  &:has(#app.red) {
+    background-color: #ff2222;
+  }
+
+  &:has(.green) {
+    background-color: #33ff66;
+  }}
+
+#app {
+  height: 100%;
   color: #fff;
   display: flex;
   justify-content: center;
@@ -49,12 +63,38 @@ body {
   flex-direction: column;
   font-family: 'Noto Sans', sans-serif;
 
-  &.red {
-    background-color: #ff2222;
-  }
+  #progress {
+    width: min(60%, 640px);
+    height: 1vw;
+    margin-bottom: max(3vw, 3vh);
+    border-radius: 1vw;
+    background-color: rgba(255,255,255,0.3);
 
-  &.green {
-    background-color: #33ff66;
+    .progress-value {
+      height: 100%;
+      background: rgba(0, 204, 68, 0.5);
+      position: relative;
+      border-radius: max(1vw, 1vh);;
+      transition: width 0.3s linear;
+
+
+      div {
+        content: '';
+        width: 5vw;
+        height: 5vw;
+        margin-top: -1.5vw;
+        margin-right: -2.5vw;
+        position: absolute;
+        right: 0;
+        top: 0;
+        animation: croc 3s infinite;
+
+        svg {
+          width: 100%;
+          height: 100%;
+        }
+      }
+    }
   }
 
   #toggle-music {
@@ -63,29 +103,32 @@ body {
     right: 20px;
 
     svg {
-      width: 92px;
-      height: 92px;
+      width: 5vw;
+      height: 5vw;
+      min-width: 48px;
+      min-height: 48px;
     }
   }
 
   #msg {
-    padding: 0 50px;
+    padding: 0 2vw;
     background-color: #33ff66;
+    border-radius: 1vw;
     text-transform: uppercase;
-    font-size: 12rem;
+    font-size: 15vw;
     animation: jump-shaking 10s infinite;
     cursor: pointer;
   }
 
   #word {
-    height: 300px;
     display: flex;
     flex-direction: row;
     justify-content: center;
     align-items: center;
 
     .letter {
-      padding: 0 25px;
+      padding: 0 1.5vw;
+      border-radius: 1vw;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -93,7 +136,7 @@ body {
       display: flex;
       color: rgba(255,255,255,0.3);
       text-transform: uppercase;
-      font-size: 14rem;
+      font-size: 12vw;
 
       &[wobble='1'] {
         animation: wobble 0.5s 1;
@@ -107,11 +150,6 @@ body {
         color: #ff3344;
         background-color: rgba(255,255,255,0.3);
         animation: jump-shaking 2.5s infinite;
-
-        & > div {
-          /*border-top: 10px solid transparent;*/
-          /*border-bottom: 10px solid #ff3344;*/
-        }
       }
 
       input {

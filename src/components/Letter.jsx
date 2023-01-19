@@ -27,6 +27,7 @@ const Letter = ({letters, index, currentLetterIndex, jumpToNextLetter, addAttemp
       playPop();
       attemptSuccess(true);
       jumpToNextLetter();
+
     } else {
       console.log("Try again");
       playBad();
@@ -42,7 +43,7 @@ const Letter = ({letters, index, currentLetterIndex, jumpToNextLetter, addAttemp
       data-done={isDone} 
       data-focused={isFocused}
       onClick={() => {
-        speak({ text: letter.toUpperCase() });
+        speak({ text: JSON.stringify(letter.toLowerCase()) });
         setWobble(1);
       }}
       onAnimationEnd={() => setWobble(0)}
@@ -50,7 +51,8 @@ const Letter = ({letters, index, currentLetterIndex, jumpToNextLetter, addAttemp
     >
       <div>{letter}</div>
       {isFocused ? 
-        <input type="text" autoFocus onChange={handleChange} onFocus={clearInput}/>
+        <input type="text" autoFocus onChange={handleChange} onFocus={clearInput} 
+          autoComplete="off"  autoCorrect="off" autoCapitalize="off" spellCheck="false" />
       : ""}
     </div>
   );
