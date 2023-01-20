@@ -2,8 +2,11 @@ import { useState } from 'react';
 import useSound from 'use-sound';
 import popSfx from '../sounds/pop.mp3';
 import badSfx from '../sounds/bad.mp3';
+import { ReactComponent as SvgEye } from '../assets/eye.svg'
+import EyeStyle from './EyeStyle';
 
-const Letter = ({letters, index, currentLetterIndex, jumpToNextLetter, addAttempt, IS_CASE_SENSITIVE, attemptSuccess, speak}) => {
+const Letter = ({ letters, index, currentLetterIndex, jumpToNextLetter, addAttempt, 
+    IS_CASE_SENSITIVE, attemptSuccess, speak, cancel, voice }) => {
 
   const lastAttempt = letters[index].attempts[letters[index].attempts.length - 1];
   const letter = letters[index].letter;
@@ -43,12 +46,17 @@ const Letter = ({letters, index, currentLetterIndex, jumpToNextLetter, addAttemp
       data-done={isDone} 
       data-focused={isFocused}
       onClick={() => {
-        speak({ text: JSON.stringify(letter.toLowerCase()) });
+        cancel();
+        speak({ text: JSON.stringify(letter.toLowerCase()), voice: voice });
         setWobble(1);
       }}
       onAnimationEnd={() => setWobble(0)}
       wobble={wobble}
     >
+      <div className='eyes'>
+        <div className='lefteye' style={EyeStyle(letter).left}><SvgEye /></div>
+        <div className='righteye' style={EyeStyle(letter).right}><SvgEye /></div>
+      </div>
       <div>{letter}</div>
       {isFocused ? 
         <input type="text" autoFocus onChange={handleChange} onFocus={clearInput} 

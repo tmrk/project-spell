@@ -1,0 +1,7 @@
+<svg width="30px" height="30px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30">
+	<circle class="sclera" fill="#ffffff" cx="15" cy="15" r="15" />
+	<g class="lens" transform="translate(15,15)">
+		<circle class="iris" fill="#444444" r="6" />
+		<circle class="pupil" fill="#000000" r="3" />
+	</g>
+</svg>

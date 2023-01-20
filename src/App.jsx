@@ -7,7 +7,7 @@ import bgMusic from './sounds/bgmusic.mp3';
 import doneSfx from './sounds/done.mp3';
 import MusicNoteIcon from '@material-ui/icons/MusicNote';
 import MusicOffIcon from '@material-ui/icons/MusicOff';
-import { ReactComponent as IconCroc } from './assets/croc.svg'
+import { ReactComponent as SvgCroc } from './assets/croc.svg'
 
 const WORDS = ["computer", "cat", "mouse", "horse", "cow", "dog"];
 const MUSIC = true;
@@ -15,7 +15,7 @@ const IS_CASE_SENSITIVE = false;
 
 function App() {
 
-  const { speak } = useSpeechSynthesis();
+  const { speak, cancel, voices } = useSpeechSynthesis();
   const [playDone] = useSound(doneSfx, { volume: 0.8 });
   const [isPlaying, setIsPlaying] = useState(false);
   const [playBgMusic, {pause}] = useSound(bgMusic, {
@@ -36,6 +36,7 @@ function App() {
   const [letterProgress, setLetterProgress] = useState(0);
   const [currentLetterIndex, setCurrentLetterIndex] = useState(null);
   const [startPage, setStartPage] = useState(true);
+  const [voice, setVoice] = useState()
 
   const displayNewWord = () => {
     if (!startPage) {
@@ -56,7 +57,8 @@ function App() {
 
       setLetters(currentWordLetters);
       setCurrentLetterIndex(0);
-      speak({ text: "Spell the word " + currentWord });
+      cancel();
+      speak({ text: "Spell the word " + currentWord, voice: voice });
 
       if (remainingWords.length > 1) setRemainingWords(remainingWords.filter(word => word !== currentWord));
       else setRemainingWords(WORDS);
@@ -110,9 +112,11 @@ function App() {
 
   // Start game
   useEffect(() => {
+    const preferredVoice = voices.filter(voice => voice.voiceURI === "Google UK English Female")[0];
+    setVoice(preferredVoice);
     if (MUSIC) playBgMusic();
     displayNewWord();
-  }, [startPage])
+  }, [startPage, voice, voices])
 
   return (
     <div id="app" onClick={focusInput} className={pageBackground}>
@@ -123,7 +127,7 @@ function App() {
       <>
         <div id="progress">
           <div className="progress-value" style={{width: (100 * letterProgress) / WORDS.join("").length + "%"}}>
-            <div><IconCroc /></div>
+            <div><SvgCroc /></div>
           </div>
         </div>
         <div id="word">
@@ -139,6 +143,8 @@ function App() {
               IS_CASE_SENSITIVE={IS_CASE_SENSITIVE}
               attemptSuccess={attemptSuccess}
               speak={speak}
+              cancel={cancel}
+              voice={voice}
             />
           )
         })}
