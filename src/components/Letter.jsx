@@ -2,8 +2,8 @@ import { useState } from 'react';
 import useSound from 'use-sound';
 import popSfx from '../sounds/pop.mp3';
 import badSfx from '../sounds/bad.mp3';
-import { ReactComponent as SvgEye } from '../assets/eye.svg'
 import EyeStyle from './EyeStyle';
+import { Eye } from 'cartoon-eyes';
 
 const Letter = ({ letters, index, currentLetterIndex, jumpToNextLetter, addAttempt, 
     IS_CASE_SENSITIVE, attemptSuccess, speak, cancel, voice }) => {
@@ -54,8 +54,8 @@ const Letter = ({ letters, index, currentLetterIndex, jumpToNextLetter, addAttem
       wobble={wobble}
     >
       <div className='eyes'>
-        <div className='lefteye' style={EyeStyle(letter).left}><SvgEye /></div>
-        <div className='righteye' style={EyeStyle(letter).right}><SvgEye /></div>
+        <div className='lefteye' style={EyeStyle(letter).left}><Eye /></div>
+        <div className='righteye' style={EyeStyle(letter).right}><Eye /></div>
       </div>
       <div>{letter}</div>
       {isFocused ? 
