@@ -13,6 +13,7 @@ const DEFAULT_LABELS = Object.freeze({
   current: 'current letter',
   next: 'next',
   template: '{letter}, {state}',
+  hiddenTemplate: 'hidden letter, {state}',
 });
 
 const randomGazePosition = () => Math.floor(Math.random() * 181) - 90;
@@ -37,7 +38,15 @@ function PositionedEye({ style, gaze, isBlinking, blinkFrequency }) {
   );
 }
 
-export default function Letter({ letter, state, onSpeak, showEyes = true, labels = DEFAULT_LABELS }) {
+export default function Letter({
+  letter,
+  state,
+  onSpeak,
+  showEyes = true,
+  hidden = false,
+  hint = 'none',
+  labels = DEFAULT_LABELS,
+}) {
   const [isWobbling, setIsWobbling] = useState(false);
   const [blinkTiming] = useState(() => ({
     startDelay: BLINK_START_MIN + Math.floor(Math.random() * BLINK_START_RANGE),
@@ -45,8 +54,12 @@ export default function Letter({ letter, state, onSpeak, showEyes = true, labels
   }));
   const [isBlinking, setIsBlinking] = useState(false);
   const [gaze, setGaze] = useState(CENTRED_GAZE);
-  const eyeStyles = getEyeStyle(letter);
+  const glyphHidden = hidden && state !== 'done' && hint !== 'full';
+  const eyeStyles = getEyeStyle(letter, { neutral: glyphHidden });
   const stateLabel = state === 'done' ? labels.completed : state === 'active' ? labels.current : labels.next;
+  const label = glyphHidden
+    ? labels.hiddenTemplate.replace('{state}', stateLabel)
+    : labels.template.replace('{letter}', letter).replace('{state}', stateLabel);
 
   useEffect(() => {
     if (!showEyes) return undefined;
@@ -71,12 +84,12 @@ export default function Letter({ letter, state, onSpeak, showEyes = true, labels
   return (
     <button
       type="button"
-      className={`letter letter--${state}${isWobbling ? ' letter--wobbling' : ''}`}
+      className={`letter letter--${state}${glyphHidden ? ' letter--hidden' : ''}${
+        glyphHidden && hint === 'ghost' ? ' letter--hint-ghost' : ''
+      }${hidden ? ' letter--was-hidden' : ''}${isWobbling ? ' letter--wobbling' : ''}`}
       onClick={handleClick}
       onAnimationEnd={() => setIsWobbling(false)}
-      aria-label={labels.template
-        .replace('{letter}', letter)
-        .replace('{state}', stateLabel)}
+      aria-label={label}
     >
       <span className="letter__visual" aria-hidden="true">
         {showEyes && (

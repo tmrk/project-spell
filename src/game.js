@@ -14,6 +14,7 @@ export const SETTINGS_KEY = 'project-spell:settings:v1';
 
 export const DEFAULT_SETTINGS = Object.freeze({
   locale: DEFAULT_LOCALE,
+  gameMode: 'easy',
   minLetters: 3,
   maxLetters: 8,
   syllables: 'any',
@@ -212,6 +213,7 @@ export function normaliseSettings(value = {}) {
 
   return {
     locale: normaliseLocale(value.locale),
+    gameMode: value.gameMode === 'normal' ? 'normal' : 'easy',
     minLetters,
     maxLetters,
     syllables,

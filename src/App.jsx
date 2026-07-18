@@ -18,6 +18,8 @@ import badSfx from './sounds/bad.mp3';
 import './App.scss';
 
 const WORD_COMPLETION_PAUSE = 120;
+// Normal mode pauses so the child sees the fully revealed word before it advances.
+const WORD_COMPLETION_PAUSE_NORMAL = 650;
 
 function loadSettings() {
   const detectedLocale = detectDefaultLocale();
@@ -330,9 +332,11 @@ export default function App() {
   const [mistakes, setMistakes] = useState(0);
   const [feedback, setFeedback] = useState('idle');
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [hintLevel, setHintLevel] = useState('none');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const inputRef = useRef(null);
+  const missCountRef = useRef(0);
   const feedbackTimerRef = useRef(null);
   const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
@@ -377,6 +381,7 @@ export default function App() {
     return () => window.cancelAnimationFrame(frame);
   }, [letterIndex, phase, settingsOpen, wordIndex]);
 
+
   useEffect(
     () => () => {
       window.clearTimeout(feedbackTimerRef.current);
@@ -403,6 +408,11 @@ export default function App() {
     window.clearTimeout(advanceTimerRef.current);
   }, []);
 
+  const resetHintLadder = useCallback(() => {
+    missCountRef.current = 0;
+    setHintLevel('none');
+  }, []);
+
   const startRound = useCallback(() => {
     const words = createRound(settings);
     if (!words.length) {
@@ -412,6 +422,7 @@ export default function App() {
 
     clearRoundTimers();
     transitioningRef.current = false;
+    resetHintLadder();
     setRoundWords(words);
     setWordIndex(0);
     setLetterIndex(0);
@@ -421,7 +432,7 @@ export default function App() {
     setPhase('playing');
     primeEffects();
     if (settings.music) playMusic();
-  }, [clearRoundTimers, playMusic, primeEffects, settings]);
+  }, [clearRoundTimers, playMusic, primeEffects, resetHintLadder, settings]);
 
   const repeatWord = useCallback(() => {
     if (currentWord) say(formatMessage(copy.spellPrompt, { word: currentWord }));
@@ -454,6 +465,7 @@ export default function App() {
   }, []);
 
   const completeWord = useCallback(() => {
+    resetHintLadder();
     const isLastWord = wordIndex === roundWords.length - 1;
     if (isLastWord) {
       signalFeedback('idle');
@@ -476,7 +488,7 @@ export default function App() {
     signalFeedback('idle');
     setFeedbackMessage('');
     transitioningRef.current = false;
-  }, [copy.roundFinishedSpeeches, pauseMusic, roundWords.length, say, signalFeedback, wordIndex]);
+  }, [copy.roundFinishedSpeeches, pauseMusic, resetHintLadder, roundWords.length, say, signalFeedback, wordIndex]);
 
   const handleAttempt = useCallback(
     (value) => {
@@ -494,8 +506,20 @@ export default function App() {
           signalFeedback('error');
           playEffect(badSfx, 0.55);
 
-          if (nextLetterIndex !== letterIndex) setLetterIndex(nextLetterIndex);
+          if (nextLetterIndex !== letterIndex) {
+            setLetterIndex(nextLetterIndex);
+            resetHintLadder();
+          }
           setMistakes((count) => count + 1);
+          missCountRef.current += 1;
+          if (settings.gameMode === 'normal') {
+            if (missCountRef.current === 2) {
+              setHintLevel('ghost');
+              speakLetter(expected);
+            } else if (missCountRef.current >= 3) {
+              setHintLevel('full');
+            }
+          }
           setFeedbackMessage(copy.tryAgain);
           resetFeedbackSoon();
           return;
@@ -517,10 +541,15 @@ export default function App() {
         window.clearTimeout(advanceTimerRef.current);
         cancelSpeech();
 
+        const completionPause =
+          settings.gameMode === 'normal' ? WORD_COMPLETION_PAUSE_NORMAL : WORD_COMPLETION_PAUSE;
         if (wordIndex === roundWords.length - 1) {
           playEffect(doneSfx, 0.8, () => {
-            advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
+            advanceTimerRef.current = window.setTimeout(completeWord, completionPause);
           });
+        } else if (settings.gameMode === 'normal') {
+          playEffect(doneSfx, 0.8);
+          advanceTimerRef.current = window.setTimeout(completeWord, completionPause);
         } else {
           playEffect(doneSfx, 0.8);
           completeWord();
@@ -528,6 +557,7 @@ export default function App() {
       } else {
         playEffect(popSfx, 0.7);
         setLetterIndex(nextLetterIndex);
+        resetHintLadder();
       }
     },
     [
@@ -541,9 +571,12 @@ export default function App() {
       phase,
       playEffect,
       resetFeedbackSoon,
+      resetHintLadder,
       roundWords.length,
       signalFeedback,
       settings.acceptUnaccented,
+      settings.gameMode,
+      speakLetter,
       wordIndex,
     ],
   );
@@ -610,6 +643,7 @@ export default function App() {
     current: copy.letterCurrent,
     next: copy.letterNext,
     template: copy.letterLabel,
+    hiddenTemplate: copy.letterHiddenLabel,
   };
 
   return (
@@ -687,6 +721,8 @@ export default function App() {
                 state={index < letterIndex ? 'done' : index === letterIndex ? 'active' : 'waiting'}
                 onSpeak={speakLetter}
                 showEyes={settings.eyes}
+                hidden={settings.gameMode === 'normal'}
+                hint={index === letterIndex ? hintLevel : 'none'}
                 labels={letterLabels}
               />
             ))}

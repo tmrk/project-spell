@@ -75,6 +75,13 @@ describe('settings', () => {
     });
   });
 
+  it('defaults the game mode to easy and accepts only normal as the alternative', () => {
+    expect(normaliseSettings({}).gameMode).toBe('easy');
+    expect(normaliseSettings({ gameMode: 'normal' }).gameMode).toBe('normal');
+    expect(normaliseSettings({ gameMode: 'hard' }).gameMode).toBe('easy');
+    expect(normaliseSettings({ gameMode: 1 }).gameMode).toBe('easy');
+  });
+
   it('keeps supported locales and falls back to British English', () => {
     expect(normaliseSettings({ locale: 'en-US' })).toMatchObject({ locale: 'en-US' });
     expect(normaliseSettings({ locale: 'sv-SE' })).toMatchObject({ locale: 'sv-SE' });

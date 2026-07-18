@@ -174,6 +174,33 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
           </fieldset>
 
           <fieldset className="settings-section">
+            <legend>{copy.modeHeading}</legend>
+            <div className="mode-options">
+              {[
+                ['easy', copy.modeEasyLabel, copy.modeEasyDescription],
+                ['normal', copy.modeNormalLabel, copy.modeNormalDescription],
+              ].map(([mode, label, description]) => (
+                <label className="mode-option" key={mode}>
+                  <input
+                    type="radio"
+                    name="gameMode"
+                    value={mode}
+                    checked={draft.gameMode === mode}
+                    onChange={() => setValue('gameMode', mode)}
+                  />
+                  <span className="mode-option__copy">
+                    <strong>{label}</strong>
+                    <span>{description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {draft.gameMode === 'normal' && !draft.speech && (
+              <small className="mode-note">{copy.modeNormalNeedsSpeech}</small>
+            )}
+          </fieldset>
+
+          <fieldset className="settings-section">
             <legend>{copy.round}</legend>
             <div className="field-grid">
               <label>

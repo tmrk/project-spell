@@ -442,4 +442,64 @@ describe('Project Spell', () => {
       'Brilliant work! You finished the round!',
     );
   });
+
+  it('hides letters in normal mode, reveals typed letters, and escalates hints on misses', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        gameMode: 'normal',
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+
+    expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toHaveClass('letter--hidden');
+    expect(screen.getAllByRole('button', { name: 'hidden letter, next' })).toHaveLength(2);
+
+    fireEvent.keyDown(input, { key: 'c' });
+    expect(screen.getByRole('button', { name: 'c, completed' })).toHaveClass('letter--was-hidden');
+
+    fireEvent.keyDown(input, { key: 'x' });
+    expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).not.toHaveClass('letter--hint-ghost');
+
+    fireEvent.keyDown(input, { key: 'x' });
+    expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toHaveClass('letter--hint-ghost');
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('a');
+
+    fireEvent.keyDown(input, { key: 'x' });
+    expect(screen.getByRole('button', { name: 'a, current letter' })).not.toHaveClass('letter--hidden');
+
+    fireEvent.keyDown(input, { key: 'a' });
+    fireEvent.keyDown(input, { key: 't' });
+    expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(651));
+    expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toBeInTheDocument();
+  });
+
+  it('lets grown-ups pick normal mode and reminds them it needs speech', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+
+    fireEvent.click(screen.getByRole('radio', { name: /letters are hidden/ }));
+    expect(screen.queryByText(/works best with/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Say each word' }));
+    expect(screen.getByText(/works best with/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({
+      gameMode: 'normal',
+      speech: false,
+    });
+  });
 });

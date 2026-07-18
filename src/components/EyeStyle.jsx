@@ -30,7 +30,11 @@ export const EYE_OFFSETS = Object.freeze({
 const transform = ([x = 0, y = 0]) =>
   `translate(calc(-50% + ${x}em), calc(-50% + ${y}em))`;
 
-export default function getEyeStyle(letter) {
+// Raised fallback pair for hidden glyphs: per-letter offsets would leak the letter shape.
+const NEUTRAL_OFFSETS = Object.freeze([[-0.08, -0.05], [0.08, -0.05]]);
+
+export default function getEyeStyle(letter, { neutral = false } = {}) {
+  if (neutral) return NEUTRAL_OFFSETS.map((offset) => ({ transform: transform(offset) }));
   const baseLetter = letter
     .toLowerCase()
     .normalize('NFD')

@@ -88,3 +88,56 @@ describe('Letter eyes', () => {
     expect(screen.queryByTestId('cartoon-eye')).not.toBeInTheDocument();
   });
 });
+
+describe('Hidden letters (normal mode)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('hides the glyph without revealing the letter in the accessible name', () => {
+    render(<Letter letter="a" state="active" hidden onSpeak={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: 'hidden letter, current letter' });
+    expect(button).toHaveClass('letter--hidden');
+    expect(button).toHaveClass('letter--was-hidden');
+    expect(button).not.toHaveClass('letter--hint-ghost');
+  });
+
+  it('keeps upcoming hidden cards faint and non-revealing', () => {
+    render(<Letter letter="b" state="waiting" hidden onSpeak={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'hidden letter, next' })).toHaveClass('letter--hidden');
+  });
+
+  it('shows the ghost hint while keeping the accessible name hidden', () => {
+    render(<Letter letter="b" state="active" hidden hint="ghost" onSpeak={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: 'hidden letter, current letter' });
+    expect(button).toHaveClass('letter--hidden');
+    expect(button).toHaveClass('letter--hint-ghost');
+  });
+
+  it('reveals the glyph and the accessible name for a full hint', () => {
+    render(<Letter letter="c" state="active" hidden hint="full" onSpeak={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: 'c, current letter' });
+    expect(button).not.toHaveClass('letter--hidden');
+  });
+
+  it('reveals completed letters with the reveal marker class', () => {
+    render(<Letter letter="d" state="done" hidden onSpeak={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: 'd, completed' });
+    expect(button).not.toHaveClass('letter--hidden');
+    expect(button).toHaveClass('letter--was-hidden');
+  });
+
+  it('uses one neutral raised eye pair while the glyph is hidden', () => {
+    const neutral = getEyeStyle('m', { neutral: true });
+    expect(neutral).toEqual(getEyeStyle('i', { neutral: true }));
+    expect(neutral).toEqual([
+      { transform: 'translate(calc(-50% + -0.08em), calc(-50% + -0.05em))' },
+      { transform: 'translate(calc(-50% + 0.08em), calc(-50% + -0.05em))' },
+    ]);
+    expect(getEyeStyle('m')).not.toEqual(neutral);
+  });
+});
