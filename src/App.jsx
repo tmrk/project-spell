@@ -791,12 +791,9 @@ export default function App() {
       transitioningRef.current = false;
       pauseMusic();
       const praise = pickVaried(copy.roundFinishedSpeeches, lastRoundPraiseIndexRef);
-      const sticker = roundAwardRef.current.sticker;
-      say(praise, {
-        onEnd: sticker
-          ? () => say(sticker.word, { locale: sticker.locale, rate: 0.78, pitch: 1.04 })
-          : undefined,
-      });
+      // Keep completion praise concise. Collected words are spoken only when a child
+      // deliberately taps their sticker in the book, never as an automatic encore.
+      say(praise);
       return;
     }
 

@@ -755,6 +755,12 @@ describe('Project Spell', () => {
       badges: expect.arrayContaining(['first-round', 'perfect-round']),
     });
 
+    const roundPraise = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    const speechCountAfterPraise = window.speechSynthesis.speak.mock.calls.length;
+    expect(roundPraise.text).not.toMatch(/cat/iu);
+    act(() => roundPraise.onend());
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(speechCountAfterPraise);
+
     fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
     const book = screen.getByRole('dialog', { name: 'My sticker book' });
     expect(within(book).getByText('1 stickers')).toBeInTheDocument();
