@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
@@ -15,6 +15,18 @@ describe('Project Spell', () => {
         music: false,
       }),
     );
+  });
+
+  it('keeps the welcome screen minimal with flags and a dominant play action', () => {
+    render(<App />);
+
+    const languageSelect = screen.getByRole('combobox', { name: 'Language' });
+    expect(within(languageSelect).getByRole('option', { name: '🇬🇧 British English' })).toBeInTheDocument();
+    expect(within(languageSelect).getByRole('option', { name: '🇺🇸 US English' })).toBeInTheDocument();
+    expect(screen.queryByText('Ready to spell?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Listen, then type one letter at a time.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Language')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
   });
 
   it('starts a round and advances through a correctly typed word', async () => {
@@ -62,7 +74,10 @@ describe('Project Spell', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
 
-    expect(screen.getByRole('dialog', { name: 'Grown-ups' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: 'Grown-ups' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: '🇬🇧 British English' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: '🇺🇸 US English' })).toBeInTheDocument();
     expect(screen.getByLabelText('Words in a row')).toHaveValue('3');
   });
 

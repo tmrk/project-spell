@@ -145,7 +145,9 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
                 onChange={(event) => setValue('locale', event.target.value)}
               >
                 {LOCALE_OPTIONS.map((option) => (
-                  <option key={option.code} value={option.code}>{option.label}</option>
+                  <option key={option.code} value={option.code}>
+                    {option.flag} {option.label}
+                  </option>
                 ))}
               </select>
             </label>

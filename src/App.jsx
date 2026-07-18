@@ -397,19 +397,22 @@ export default function App() {
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
           <p className="eyebrow">{copy.projectName}</p>
-          <h1>{copy.welcomeHeading}</h1>
-          <p className="welcome-screen__hint">{copy.welcomeHint}</p>
-          <label className="welcome-language">
-            <span>{copy.language}</span>
-            <select value={settings.locale} onChange={changeWelcomeLanguage}>
-              {LOCALE_OPTIONS.map((option) => (
-                <option key={option.code} value={option.code}>{option.label}</option>
-              ))}
-            </select>
-          </label>
           <button type="button" className="primary-button welcome-play-button" onClick={startRound}>
             {copy.play}
           </button>
+          <div className="welcome-language">
+            <select
+              aria-label={copy.language}
+              value={settings.locale}
+              onChange={changeWelcomeLanguage}
+            >
+              {LOCALE_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.flag} {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </main>
       )}
 

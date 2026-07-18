@@ -9,7 +9,7 @@ export const LOCALES = Object.freeze({
 });
 
 export const LOCALE_OPTIONS = Object.freeze(
-  Object.values(LOCALES).map(({ code, label }) => Object.freeze({ code, label })),
+  Object.values(LOCALES).map(({ code, flag, label }) => Object.freeze({ code, flag, label })),
 );
 
 export function normaliseLocale(value) {

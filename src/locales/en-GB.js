@@ -5,8 +5,6 @@ const messages = Object.freeze({
   turnMusicOn: 'Turn music on',
   openSettings: 'Open grown-ups settings',
   projectName: 'Project Spell',
-  welcomeHeading: 'Ready to spell?',
-  welcomeHint: 'Listen, then type one letter at a time.',
   language: 'Language',
   play: 'Play',
   spellPrompt: 'Spell the word {word}',
@@ -75,6 +73,7 @@ const messages = Object.freeze({
 
 export default Object.freeze({
   code: 'en-GB',
+  flag: '🇬🇧',
   label: 'British English',
   voiceNamePattern: /serena|kate|susan|google uk english female/iu,
   messages,
