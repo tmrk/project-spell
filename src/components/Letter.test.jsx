@@ -55,6 +55,12 @@ describe('Letter eyes', () => {
     expect(screen.getAllByTestId('cartoon-eye')).toHaveLength(1);
   });
 
+  it('centres A on its two legs and J on its vertical stem', () => {
+    expect(EYE_OFFSETS.a).toEqual([[-0.105, -0.1], [0.105, -0.1]]);
+    expect(EYE_OFFSETS.j[0][0]).toBeGreaterThan(0);
+    expect(EYE_OFFSETS.j[0][1]).toBe(EYE_OFFSETS.i[0][1]);
+  });
+
   it('moves both pupils to the same shared gaze position', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random')
