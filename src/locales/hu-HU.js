@@ -7,7 +7,7 @@ const messages = Object.freeze({
   projectName: 'Project Spell',
   language: 'Nyelv',
   play: 'Játék',
-  spellPrompt: 'Betűzd ezt a szót: {word}',
+  spellPrompt: 'Betűzd azt a szót, hogy {word}',
   roundFinishedSpeeches: Object.freeze([
     'Nagyszerű! Befejezted a kört!',
     'Remek munka! Befejezted a kört!',
@@ -17,11 +17,12 @@ const messages = Object.freeze({
   tryAgain: 'Próbáld meg még egyszer',
   wordFinished: 'Ez az!',
   wordFinishedSpeeches: Object.freeze([
-    '{word}! Ügyes voltál!',
-    'Lebetűzted: {word}!',
-    'Nagyszerű — {word}!',
-    'Pontosan: {word}!',
-    'Szuper, ez a szó: {word}!',
+    'Ügyes!',
+    'Nagyszerű!',
+    'Szuper!',
+    'Remek!',
+    'Csodás!',
+    'Fantasztikus!',
   ]),
   encouragementSpeeches: Object.freeze([
     'Majdnem — próbáld újra!',

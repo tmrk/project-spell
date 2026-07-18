@@ -20,6 +20,16 @@ Before handing off a change, run:
 npm run check
 ```
 
+## Contributor and agent workflow
+
+When workspace-local collaboration files are present, start with `AGENT_WORKFLOW.md`, which explains how contributors share the repository safely. Project-specific constraints and commands also live in `AGENTS.md` when that workspace guide is present.
+
+- `ACTIVE_WORK.md` to claim current scope and avoid overlapping edits.
+- `RECENT_CHANGES.md` to pass on outcomes, validation results, and unfinished work.
+- `DECISIONS.md` for durable product and architecture rationale.
+
+These coordination files may be intentionally untracked. Read them and inspect `git status` before editing. Claim the task in `ACTIVE_WORK.md`, then record the result in `RECENT_CHANGES.md` before removing the claim.
+
 ## What is included
 
 - British-English, US-English, Swedish, and Hungarian word banks with explicit syllable metadata.

@@ -5,6 +5,8 @@ import swedish from './sv-SE';
 
 export const DEFAULT_LOCALE = 'en-GB';
 
+const HUNGARIAN_ACCENTED_VOWELS = new Set(['á', 'é', 'í', 'ó', 'ö', 'ő', 'ú', 'ü', 'ű']);
+
 // These countries and territories use established US-English spelling conventions.
 const US_ENGLISH_REGIONS = Object.freeze(
   new Set(['AS', 'FM', 'GU', 'LR', 'MH', 'MP', 'PH', 'PR', 'PW', 'UM', 'US', 'VI']),
@@ -63,6 +65,14 @@ export function detectDefaultLocale(language) {
 
 export function getLocale(value) {
   return LOCALES[normaliseLocale(value)];
+}
+
+export function getLetterSpeechText(letter, localeCode) {
+  const code = normaliseLocale(localeCode);
+  const text = String(letter ?? '').normalize('NFC').toLocaleLowerCase(code);
+  // Hungarian voices can expand a bare accented glyph into its Unicode-style
+  // description. A sentence boundary makes the voice pronounce only the letter.
+  return code === 'hu-HU' && HUNGARIAN_ACCENTED_VOWELS.has(text) ? `${text}.` : text;
 }
 
 export function formatMessage(template, values = {}) {

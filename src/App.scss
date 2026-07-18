@@ -336,9 +336,9 @@ input:focus-visible {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: clamp(6px, 0.8vw, 11px);
-  height: clamp(9px, 1.2vw, 16px);
-  border-radius: 2px;
+  width: clamp(10px, 1.4vw, 18px);
+  height: clamp(15px, 2vw, 25px);
+  border-radius: 3px;
   background: var(--confetti-colour);
   animation: confetti-burst 700ms ease-out var(--confetti-delay) both;
 }

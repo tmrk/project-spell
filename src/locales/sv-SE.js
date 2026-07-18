@@ -17,11 +17,12 @@ const messages = Object.freeze({
   tryAgain: 'Försök en gång till',
   wordFinished: 'Helt rätt!',
   wordFinishedSpeeches: Object.freeze([
-    '{word}! Bra jobbat!',
-    'Du stavade {word}!',
-    'Strålande — {word}!',
-    'Precis rätt: {word}!',
-    'Toppen, det är {word}!',
+    'Bra!',
+    'Snyggt!',
+    'Toppen!',
+    'Strålande!',
+    'Härligt!',
+    'Fantastiskt!',
   ]),
   encouragementSpeeches: Object.freeze([
     'Nästan — försök igen!',

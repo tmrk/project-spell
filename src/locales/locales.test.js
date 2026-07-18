@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOCALES } from './index';
+import { LOCALES, getLetterSpeechText } from './index';
 
 const REFERENCE_CODE = 'en-GB';
 
@@ -30,5 +30,28 @@ describe('locale catalogues', () => {
         });
       });
     });
+  });
+
+  it('keeps every word praise short and independent of the completed word', () => {
+    Object.values(LOCALES).forEach((locale) => {
+      locale.messages.wordFinishedSpeeches.forEach((praise) => {
+        expect(praise, `${locale.code} praise should not repeat the word`).not.toContain('{word}');
+        expect(praise.trim().split(/\s+/u).length, `${locale.code} praise should stay short`).toBeLessThanOrEqual(2);
+      });
+    });
+  });
+});
+
+describe('letter speech text', () => {
+  it.each(['á', 'é', 'í', 'ó', 'ö', 'ő', 'ú', 'ü', 'ű'])(
+    'gives the Hungarian voice a pronunciation boundary for %s',
+    (letter) => {
+      expect(getLetterSpeechText(letter.toLocaleUpperCase('hu-HU'), 'hu-HU')).toBe(`${letter}.`);
+    },
+  );
+
+  it('leaves plain Hungarian and non-Hungarian letters unchanged', () => {
+    expect(getLetterSpeechText('B', 'hu-HU')).toBe('b');
+    expect(getLetterSpeechText('É', 'en-GB')).toBe('é');
   });
 });

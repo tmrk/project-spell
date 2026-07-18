@@ -25,7 +25,13 @@ import {
   createEmptyProgress,
   normaliseProgress,
 } from './progress';
-import { LOCALE_OPTIONS, detectDefaultLocale, formatMessage, getLocale } from './locales';
+import {
+  LOCALE_OPTIONS,
+  detectDefaultLocale,
+  formatMessage,
+  getLetterSpeechText,
+  getLocale,
+} from './locales';
 import croc from './assets/croc.svg';
 import bgMusic from './sounds/bgmusic.mp3';
 import doneSfx from './sounds/done.mp3';
@@ -37,23 +43,23 @@ import star3Sfx from './sounds/star3.mp3';
 import './App.scss';
 
 const WORD_COMPLETION_PAUSE = 760;
-const WORD_PRAISE_FALLBACK = 1800;
+const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
 
 const CONFETTI_PIECES = Object.freeze(
   [
-    [-86, 68, '#20b967'],
-    [-62, 84, '#f5b942'],
-    [-38, 72, '#ef5263'],
-    [-14, 92, '#ffffff'],
-    [10, 78, '#20b967'],
-    [34, 88, '#f5b942'],
-    [58, 74, '#ef5263'],
-    [82, 90, '#ffffff'],
-    [118, 70, '#20b967'],
-    [150, 82, '#f5b942'],
-    [210, 76, '#ef5263'],
-    [242, 86, '#ffffff'],
+    [-86, 84, '#20b967'],
+    [-62, 104, '#f5b942'],
+    [-38, 90, '#ef5263'],
+    [-14, 114, '#ffffff'],
+    [10, 98, '#20b967'],
+    [34, 110, '#f5b942'],
+    [58, 92, '#ef5263'],
+    [82, 112, '#ffffff'],
+    [118, 88, '#20b967'],
+    [150, 102, '#f5b942'],
+    [210, 96, '#ef5263'],
+    [242, 108, '#ffffff'],
   ].map(([angle, distance, colour], index) =>
     Object.freeze({ angle, distance, colour, delay: (index % 3) * 24 }),
   ),
@@ -65,6 +71,10 @@ function pickVaried(list, lastIndexRef) {
   if (list.length > 1 && index === lastIndexRef.current) index = (index + 1) % list.length;
   lastIndexRef.current = index;
   return list[index];
+}
+
+function randomWordPraiseGap() {
+  return Math.random() < 0.5 ? 2 : 3;
 }
 
 function loadSettings() {
@@ -435,6 +445,8 @@ export default function App() {
   const speechBusyUntilRef = useRef(0);
   const speechTokenRef = useRef(0);
   const pendingPromptRef = useRef(null);
+  const wordsSincePraiseRef = useRef(0);
+  const wordPraiseGapRef = useRef(2);
   const appRef = useRef(null);
   const currentWord = roundWords[wordIndex] ?? '';
   const currentWordLetters = useMemo(() => [...currentWord], [currentWord]);
@@ -565,6 +577,8 @@ export default function App() {
     resetHintLadder();
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
+    wordsSincePraiseRef.current = 0;
+    wordPraiseGapRef.current = randomWordPraiseGap();
     wordStarsRef.current = [];
     const now = performance.now();
     roundStartRef.current = now;
@@ -597,10 +611,10 @@ export default function App() {
 
   const speakLetter = useCallback(
     (letter) => {
-      say(letter.toLowerCase(), { rate: 0.65, pitch: 1.08 });
+      say(getLetterSpeechText(letter, settings.locale), { rate: 0.65, pitch: 1.08 });
       window.requestAnimationFrame(focusInput);
     },
-    [focusInput, say],
+    [focusInput, say, settings.locale],
   );
 
   const releaseWordPraise = useCallback((token) => {
@@ -613,13 +627,13 @@ export default function App() {
   }, []);
 
   const speakWordPraise = useCallback(
-    (word) => {
+    () => {
       const praise = pickVaried(copy.wordFinishedSpeeches, lastWordPraiseIndexRef);
       if (!praise) return;
       const token = speechTokenRef.current + 1;
       speechTokenRef.current = token;
       speechBusyUntilRef.current = performance.now() + WORD_PRAISE_FALLBACK;
-      const started = say(formatMessage(praise, { word }), {
+      const started = say(praise, {
         onEnd: () => releaseWordPraise(token),
       });
       if (!started) releaseWordPraise(token);
@@ -782,9 +796,15 @@ export default function App() {
         window.clearTimeout(advanceTimerRef.current);
         cancelSpeech();
         celebrateWord();
-        speakWordPraise(currentWord);
+        wordsSincePraiseRef.current += 1;
+        const isLastWord = wordIndex === roundWords.length - 1;
+        if (!isLastWord && wordsSincePraiseRef.current >= wordPraiseGapRef.current) {
+          wordsSincePraiseRef.current = 0;
+          wordPraiseGapRef.current = randomWordPraiseGap();
+          speakWordPraise();
+        }
 
-        if (wordIndex === roundWords.length - 1) {
+        if (isLastWord) {
           playEffect(doneSfx, 0.7, () => {
             advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
           });

@@ -74,32 +74,70 @@ describe('Project Spell', () => {
     expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
 
-  it('lets word praise finish before speaking the next prompt', () => {
+  it('speaks short praise after two words and lets it finish before the next prompt', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
 
     expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
-    const cancellationsBeforeCompletion = window.speechSynthesis.cancel.mock.calls.length;
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'cat' },
+    });
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
+
+    act(() => vi.advanceTimersByTime(760));
+    expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(2);
 
     fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
       target: { value: 'cat' },
     });
 
     const praise = window.speechSynthesis.speak.mock.calls.at(-1)[0];
-    expect(praise.text).toBe('cat! Well done!');
-    expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+    expect(praise.text).toBe('Great!');
+    expect(praise.text).not.toMatch(/cat/iu);
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(3);
     act(() => vi.advanceTimersByTime(760));
-    expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
-    expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(
-      cancellationsBeforeCompletion,
-    );
-    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Word 3 of 3')).toBeInTheDocument();
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(3);
 
     act(() => praise.onend());
-    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(3);
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(4);
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
+  });
+
+  it('sometimes waits three completed words before speaking word praise', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 4,
+        music: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+
+    fireEvent.input(input, { target: { value: 'cat' } });
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(760));
+
+    fireEvent.input(input, { target: { value: 'cat' } });
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(2);
+    act(() => vi.advanceTimersByTime(760));
+
+    fireEvent.input(input, { target: { value: 'cat' } });
+    const praise = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(4);
+    expect(praise.text).toBe('Fantastic!');
+    expect(praise.text).not.toMatch(/cat/iu);
   });
 
   it('keeps an incorrect attempt on the current letter and clears feedback after one second', () => {
@@ -194,7 +232,7 @@ describe('Project Spell', () => {
     {
       code: 'hu-HU',
       play: 'Játék',
-      prompt: 'Betűzd ezt a szót: cat',
+      prompt: 'Betűzd azt a szót, hogy cat',
       voice: { lang: 'hu-HU', name: 'Eszter' },
     },
   ])('uses localized copy and a matching $code voice', ({ code, play, prompt, voice }) => {
@@ -216,6 +254,28 @@ describe('Project Spell', () => {
     expect(utterance.lang).toBe(code);
     expect(utterance.voice).toBe(voice);
     expect(document.documentElement).toHaveAttribute('lang', code);
+  });
+
+  it('pronounces a clicked Hungarian accented letter without describing the glyph', () => {
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        locale: 'hu-HU',
+        customWords: 'éva',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Játék' }));
+    fireEvent.click(screen.getByRole('button', { name: 'é, aktuális betű' }));
+
+    const utterance = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    expect(utterance.text).toBe('é.');
+    expect(utterance.lang).toBe('hu-HU');
   });
 
   it('requires confirmation before a settings language change restarts the game', () => {
@@ -585,7 +645,7 @@ describe('Project Spell', () => {
     }
   });
 
-  it('adds perfect-word stars, speaks varied praise, and shows the round ceremony', () => {
+  it('adds perfect-word stars and shows the round ceremony', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     window.localStorage.setItem(
@@ -608,7 +668,6 @@ describe('Project Spell', () => {
         target: { value: 'cat' },
       });
       expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).totalStars).toBe(word * 3);
-      expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toMatch(/cat/u);
       act(() => vi.advanceTimersByTime(760));
     }
 
