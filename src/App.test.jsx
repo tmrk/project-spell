@@ -28,13 +28,14 @@ describe('Project Spell', () => {
     fireEvent.input(input, { target: { value: 'cat' } });
 
     await act(async () => {
-      vi.advanceTimersByTime(750);
+      vi.advanceTimersByTime(1050);
     });
 
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
   });
 
-  it('keeps an incorrect attempt on the current letter', () => {
+  it('keeps an incorrect attempt on the current letter and clears feedback after one second', () => {
+    vi.useFakeTimers();
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     const input = screen.getByRole('textbox', { name: 'Type the next letter' });
@@ -43,6 +44,18 @@ describe('Project Spell', () => {
 
     expect(screen.getByRole('button', { name: 'c, current letter' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Try once more');
+    expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'error');
+
+    act(() => vi.advanceTimersByTime(151));
+    expect(screen.getByRole('status')).toHaveTextContent('Try once more');
+    expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
+
+    act(() => vi.advanceTimersByTime(848));
+    expect(screen.getByRole('status')).toHaveTextContent('Try once more');
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
 
   it('opens the parent settings without adding controls to the play flow', () => {

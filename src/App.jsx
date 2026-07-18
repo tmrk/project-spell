@@ -129,10 +129,10 @@ export default function App() {
   const [feedback, setFeedback] = useState('idle');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const inputRef = useRef(null);
   const feedbackTimerRef = useRef(null);
+  const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
   const transitioningRef = useRef(false);
   const currentWord = roundWords[wordIndex] ?? '';
@@ -167,6 +167,7 @@ export default function App() {
   useEffect(
     () => () => {
       window.clearTimeout(feedbackTimerRef.current);
+      window.clearTimeout(feedbackColorTimerRef.current);
       window.clearTimeout(advanceTimerRef.current);
       cancelSpeech();
     },
@@ -185,6 +186,7 @@ export default function App() {
 
   const clearRoundTimers = useCallback(() => {
     window.clearTimeout(feedbackTimerRef.current);
+    window.clearTimeout(feedbackColorTimerRef.current);
     window.clearTimeout(advanceTimerRef.current);
   }, []);
 
@@ -203,7 +205,6 @@ export default function App() {
     setMistakes(0);
     setFeedback('idle');
     setFeedbackMessage('');
-    setIsTransitioning(false);
     setPhase('playing');
     if (settings.music) playMusic();
   }, [clearRoundTimers, playMusic, settings]);
@@ -221,12 +222,15 @@ export default function App() {
     [focusInput, say],
   );
 
-  const resetFeedbackSoon = useCallback((delay = 260) => {
+  const resetFeedbackSoon = useCallback((messageDelay = 1000, colorDelay = 150) => {
     window.clearTimeout(feedbackTimerRef.current);
-    feedbackTimerRef.current = window.setTimeout(() => {
+    window.clearTimeout(feedbackColorTimerRef.current);
+    feedbackColorTimerRef.current = window.setTimeout(() => {
       setFeedback('idle');
+    }, colorDelay);
+    feedbackTimerRef.current = window.setTimeout(() => {
       setFeedbackMessage('');
-    }, delay);
+    }, messageDelay);
   }, []);
 
   const completeWord = useCallback(() => {
@@ -235,7 +239,6 @@ export default function App() {
       setFeedback('idle');
       setFeedbackMessage('');
       setPhase('complete');
-      setIsTransitioning(false);
       transitioningRef.current = false;
       pauseMusic();
       playEffect(doneSfx, 0.75);
@@ -247,7 +250,6 @@ export default function App() {
     setLetterIndex(0);
     setFeedback('idle');
     setFeedbackMessage('');
-    setIsTransitioning(false);
     transitioningRef.current = false;
   }, [pauseMusic, playEffect, roundWords.length, say, wordIndex]);
 
@@ -262,12 +264,13 @@ export default function App() {
       for (const attempt of attempts) {
         const expected = currentWord[nextLetterIndex]?.toLowerCase();
         if (attempt !== expected) {
+          playEffect(badSfx, 0.55);
+
           if (nextLetterIndex !== letterIndex) setLetterIndex(nextLetterIndex);
           setMistakes((count) => count + 1);
           setFeedback('error');
           setFeedbackMessage('Try once more');
-          playEffect(badSfx, 0.55);
-          resetFeedbackSoon(360);
+          resetFeedbackSoon();
           return;
         }
 
@@ -278,17 +281,16 @@ export default function App() {
       playEffect(popSfx, 0.7);
       setFeedback('success');
       setFeedbackMessage(CORRECT_MESSAGES[(nextLetterIndex - 1) % CORRECT_MESSAGES.length]);
+      resetFeedbackSoon();
 
       if (nextLetterIndex === currentWord.length) {
         transitioningRef.current = true;
-        setIsTransitioning(true);
         setLetterIndex(currentWord.length);
         setFeedbackMessage('That’s the word!');
         window.clearTimeout(advanceTimerRef.current);
-        advanceTimerRef.current = window.setTimeout(completeWord, 700);
+        advanceTimerRef.current = window.setTimeout(completeWord, 1000);
       } else {
         setLetterIndex(nextLetterIndex);
-        resetFeedbackSoon();
       }
     },
     [completeWord, currentWord, letterIndex, phase, playEffect, resetFeedbackSoon],
@@ -343,7 +345,6 @@ export default function App() {
     setLetterIndex(0);
     setFeedback('idle');
     setFeedbackMessage('');
-    setIsTransitioning(false);
     setPhase('welcome');
     setSettingsOpen(false);
   };
@@ -396,7 +397,7 @@ export default function App() {
             className="word"
             style={{
               '--letter-count': currentWord.length,
-              '--letter-size': `${Math.min(12, 80 / currentWord.length)}vw`,
+              '--letter-size': `${Math.min(15, 94 / currentWord.length)}vw`,
             }}
             aria-label={`${currentWord.length} letter word`}
           >
@@ -410,9 +411,11 @@ export default function App() {
             ))}
           </div>
 
-          <p className={`game-hint${feedbackMessage ? ' game-hint--visible' : ''}`} aria-hidden="true">
-            {feedbackMessage || (isTransitioning ? 'That’s the word!' : 'Type the next letter')}
-          </p>
+          {feedbackMessage && (
+            <p className="game-hint" aria-hidden="true">
+              {feedbackMessage}
+            </p>
+          )}
 
           <input
             ref={inputRef}

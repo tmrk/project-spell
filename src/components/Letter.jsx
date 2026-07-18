@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye } from 'cartoon-eyes';
 import getEyeStyle from './EyeStyle';
 
-function PositionedEye({ className, style, isActive }) {
+const BLINK_START_MIN = 300;
+const BLINK_START_RANGE = 2200;
+const BLINK_FREQUENCY_MIN = 2600;
+const BLINK_FREQUENCY_RANGE = 2600;
+
+function PositionedEye({ className, style, isActive, isBlinking, blinkFrequency }) {
   return (
     <span className={`eye-position ${className}`} style={style}>
       <Eye
@@ -12,7 +17,9 @@ function PositionedEye({ className, style, isActive }) {
         irisSize={62}
         pupilSize={54}
         lidSize={12}
-        blinking={isActive ? 2600 : false}
+        blinking={isBlinking}
+        blinkSpeed={90}
+        blinkFrequency={blinkFrequency}
         lensMovement={isActive ? 1700 : false}
       />
     </span>
@@ -21,8 +28,18 @@ function PositionedEye({ className, style, isActive }) {
 
 export default function Letter({ letter, state, onSpeak }) {
   const [isWobbling, setIsWobbling] = useState(false);
+  const [blinkTiming] = useState(() => ({
+    startDelay: BLINK_START_MIN + Math.floor(Math.random() * BLINK_START_RANGE),
+    frequency: BLINK_FREQUENCY_MIN + Math.floor(Math.random() * BLINK_FREQUENCY_RANGE),
+  }));
+  const [isBlinking, setIsBlinking] = useState(false);
   const eyeStyle = getEyeStyle(letter);
   const stateLabel = state === 'done' ? 'completed' : state === 'active' ? 'current letter' : 'next';
+
+  useEffect(() => {
+    const blinkTimer = window.setTimeout(() => setIsBlinking(true), blinkTiming.startDelay);
+    return () => window.clearTimeout(blinkTimer);
+  }, [blinkTiming]);
 
   const handleClick = () => {
     onSpeak(letter);
@@ -39,8 +56,20 @@ export default function Letter({ letter, state, onSpeak }) {
     >
       <span className="letter__visual" aria-hidden="true">
         <span className="eyes">
-          <PositionedEye className="eye--left" style={eyeStyle.left} isActive={state === 'active'} />
-          <PositionedEye className="eye--right" style={eyeStyle.right} isActive={state === 'active'} />
+          <PositionedEye
+            className="eye--left"
+            style={eyeStyle.left}
+            isActive={state === 'active'}
+            isBlinking={isBlinking}
+            blinkFrequency={blinkTiming.frequency}
+          />
+          <PositionedEye
+            className="eye--right"
+            style={eyeStyle.right}
+            isActive={state === 'active'}
+            isBlinking={isBlinking}
+            blinkFrequency={blinkTiming.frequency}
+          />
         </span>
         {letter}
       </span>

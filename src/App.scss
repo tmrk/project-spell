@@ -1,6 +1,6 @@
 :root {
   color: #20302b;
-  background: #fff0ad;
+  background: #ffee99;
   font-family: ui-rounded, "SF Pro Rounded", "Nunito Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -51,7 +51,7 @@ input:focus-visible {
 }
 
 .app {
-  --page-background: #fff0ad;
+  --page-background: #ffee99;
   position: relative;
   display: grid;
   width: 100%;
@@ -59,16 +59,15 @@ input:focus-visible {
   min-height: 100dvh;
   overflow: hidden;
   background: var(--page-background);
-  transition: background-color 180ms ease;
   isolation: isolate;
 }
 
 .app[data-feedback="success"] {
-  --page-background: #dff6bf;
+  --page-background: #33ff66;
 }
 
 .app[data-feedback="error"] {
-  --page-background: #ffd2c9;
+  --page-background: #ff2222;
 }
 
 .app-controls {
@@ -209,21 +208,21 @@ input:focus-visible {
   top: max(78px, calc(env(safe-area-inset-top) + 72px));
   left: 50%;
   display: grid;
-  width: min(62vw, 620px);
+  width: min(74vw, 760px);
   transform: translateX(-50%);
   gap: 10px;
 }
 
 .round-progress__count {
   color: rgba(32, 48, 43, 0.55);
-  font-size: 0.77rem;
+  font-size: 0.86rem;
   font-weight: 850;
   letter-spacing: 0.08em;
   text-align: center;
 }
 
 .round-progress__track {
-  height: 7px;
+  height: clamp(10px, 1vw, 16px);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.48);
 }
@@ -241,8 +240,8 @@ input:focus-visible {
   position: absolute;
   top: 50%;
   right: 0;
-  width: 44px;
-  height: 44px;
+  width: clamp(58px, 6vw, 78px);
+  height: clamp(58px, 6vw, 78px);
   transform: translate(50%, -50%);
   animation: croc-walk 2.8s ease-in-out infinite;
 }
@@ -251,8 +250,8 @@ input:focus-visible {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: min(94vw, 1280px);
-  gap: clamp(1px, 0.55vw, 8px);
+  width: min(100%, 1500px);
+  gap: clamp(1px, 0.35vw, 6px);
 }
 
 .letter {
@@ -266,7 +265,7 @@ input:focus-visible {
   border-radius: 0.16em;
   color: rgba(32, 48, 43, 0.12);
   background: transparent;
-  font-size: clamp(1.1rem, var(--letter-size), 8.5rem);
+  font-size: clamp(1.1rem, var(--letter-size), 11.5rem);
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -326,15 +325,11 @@ input:focus-visible {
   left: 50%;
   min-height: 1.5em;
   margin: 0;
-  color: rgba(32, 48, 43, 0.48);
+  color: rgba(32, 48, 43, 0.72);
   font-size: clamp(0.9rem, 2vw, 1rem);
   font-weight: 750;
   transform: translateX(-50%);
   white-space: nowrap;
-}
-
-.game-hint--visible {
-  color: rgba(32, 48, 43, 0.72);
 }
 
 .typing-input {
@@ -630,12 +625,12 @@ input:focus-visible {
 
   .round-progress {
     top: max(68px, calc(env(safe-area-inset-top) + 62px));
-    width: 66vw;
+    width: 78vw;
   }
 
   .round-progress__value img {
-    width: 38px;
-    height: 38px;
+    width: 50px;
+    height: 50px;
   }
 
   .settings-panel {

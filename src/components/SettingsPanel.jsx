@@ -43,7 +43,6 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
       >
         <header className="settings-panel__header">
           <div>
-            <p className="eyebrow">For parents</p>
             <h2 id="settings-title">Grown-ups</h2>
           </div>
           <button
