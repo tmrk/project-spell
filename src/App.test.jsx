@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
+import { PROGRESS_KEY } from './progress';
 import { STATS_KEY } from './stats';
 
 describe('Project Spell', () => {
@@ -47,7 +48,8 @@ describe('Project Spell', () => {
     languagesSpy.mockRestore();
   });
 
-  it('advances immediately without waiting for the word-completion ding', () => {
+  it('shows a brief word celebration before advancing without waiting for the ding', () => {
+    vi.useFakeTimers();
     const playSpy = vi.spyOn(Audio.prototype, 'play');
     render(<App />);
 
@@ -58,11 +60,23 @@ describe('Project Spell', () => {
     fireEvent.input(input, { target: { value: 'cat' } });
 
     expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
+    expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+    expect(document.querySelector('.word')).toHaveClass('word--celebrating');
+    expect(document.querySelectorAll('.confetti span')).toHaveLength(12);
+
+    act(() => vi.advanceTimersByTime(759));
+    expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+    expect(document.querySelector('.confetti')).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(document.querySelector('.confetti')).not.toBeInTheDocument();
     expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
 
-  it('cuts the old prompt and speaks the next one while the ding is still playing', () => {
+  it('lets word praise finish before speaking the next prompt', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
 
@@ -73,11 +87,18 @@ describe('Project Spell', () => {
       target: { value: 'cat' },
     });
 
+    const praise = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    expect(praise.text).toBe('cat! Well done!');
+    expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(760));
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(
       cancellationsBeforeCompletion,
     );
     expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(2);
+
+    act(() => praise.onend());
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(3);
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
   });
 
@@ -248,6 +269,7 @@ describe('Project Spell', () => {
   });
 
   it('requires accents by default and accepts plain equivalents only when enabled', () => {
+    vi.useFakeTimers();
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
@@ -289,6 +311,7 @@ describe('Project Spell', () => {
       target: { value: 'tarta' },
     });
 
+    act(() => vi.advanceTimersByTime(760));
     expect(screen.getByLabelText('Ord 2 av 3')).toBeInTheDocument();
   });
 
@@ -319,6 +342,9 @@ describe('Project Spell', () => {
         expect.stringMatching(/\/pop\.mp3$/u),
         expect.stringMatching(/\/bad\.mp3$/u),
         expect.stringMatching(/\/done\.mp3$/u),
+        expect.stringMatching(/\/star1\.mp3$/u),
+        expect.stringMatching(/\/star2\.mp3$/u),
+        expect.stringMatching(/\/star3\.mp3$/u),
       ]),
     );
     expect(loadSpy.mock.contexts.every((audio) => audio.preload === 'auto')).toBe(true);
@@ -372,7 +398,7 @@ describe('Project Spell', () => {
     const fallbackPlaySpy = vi.spyOn(Audio.prototype, 'play');
 
     const view = render(<App />);
-    await waitFor(() => expect(contexts[0].decodeAudioData).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(contexts[0].decodeAudioData).toHaveBeenCalledTimes(6));
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     const input = screen.getByRole('textbox', { name: 'Type the next letter' });
@@ -401,43 +427,33 @@ describe('Project Spell', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-    act(() => vi.advanceTimersByTime(121));
-    window.speechSynthesis.speak.mockClear();
 
-    for (let word = 1; word <= 3; word += 1) {
-      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
-        target: { value: 'cat' },
-      });
-      const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
+    const finishRound = () => {
+      for (let word = 1; word <= 3; word += 1) {
+        fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+          target: { value: 'cat' },
+        });
+        const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
 
-      if (word < 3) {
-        expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
-        window.speechSynthesis.speak.mockClear();
-      } else {
-        expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
-        act(() => ding.dispatchEvent(new Event('ended')));
-        expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
-        act(() => vi.advanceTimersByTime(120));
+        if (word < 3) {
+          act(() => vi.advanceTimersByTime(760));
+        } else {
+          expect(screen.queryByRole('button', { name: 'Play again' })).not.toBeInTheDocument();
+          act(() => ding.dispatchEvent(new Event('ended')));
+          act(() => vi.advanceTimersByTime(759));
+          expect(screen.queryByRole('button', { name: 'Play again' })).not.toBeInTheDocument();
+          act(() => vi.advanceTimersByTime(1));
+        }
       }
-    }
+    };
+
+    finishRound();
 
     const firstPraise = window.speechSynthesis.speak.mock.calls.at(-1)[0].text;
     expect(firstPraise).toBe('Amazing! You finished the round!');
 
     fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
-    window.speechSynthesis.speak.mockClear();
-    for (let word = 1; word <= 3; word += 1) {
-      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
-        target: { value: 'cat' },
-      });
-      const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
-      if (word < 3) {
-        window.speechSynthesis.speak.mockClear();
-      } else {
-        act(() => ding.dispatchEvent(new Event('ended')));
-        act(() => vi.advanceTimersByTime(120));
-      }
-    }
+    finishRound();
 
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe(
       'Brilliant work! You finished the round!',
@@ -473,7 +489,7 @@ describe('Project Spell', () => {
 
     fireEvent.keyDown(input, { key: 'x' });
     expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toHaveClass('letter--hint-ghost');
-    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('a');
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toMatch(/Almost.+A\.$/u);
 
     fireEvent.keyDown(input, { key: 'x' });
     expect(screen.getByRole('button', { name: 'a, current letter' })).not.toHaveClass('letter--hidden');
@@ -482,7 +498,7 @@ describe('Project Spell', () => {
     fireEvent.keyDown(input, { key: 't' });
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
 
-    act(() => vi.advanceTimersByTime(651));
+    act(() => vi.advanceTimersByTime(760));
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toBeInTheDocument();
   });
@@ -503,6 +519,7 @@ describe('Project Spell', () => {
     expect(stored.confusions['c→x']).toBe(1);
     expect(stored.words['en-GB/cat']).toMatchObject({ completed: 1, perfect: false });
     expect(stored.recentEvents.length).toBeGreaterThan(0);
+    expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({ totalStars: 2 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
     expect(screen.getByText('1 words practised')).toBeInTheDocument();
@@ -512,7 +529,112 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear everything' }));
 
     expect(window.localStorage.getItem(STATS_KEY)).toBeNull();
+    expect(window.localStorage.getItem(PROGRESS_KEY)).toBeNull();
     expect(screen.getByText(/No play data yet/)).toBeInTheDocument();
+  });
+
+  it('exports valid local stats and reward progress as dated JSON', async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const createObjectURL = vi.fn(() => 'blob:project-spell-test');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Download data' }));
+
+      const blob = createObjectURL.mock.calls[0][0];
+      const json = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener('load', () => resolve(reader.result), { once: true });
+        reader.addEventListener('error', () => reject(reader.error), { once: true });
+        reader.readAsText(blob);
+      });
+      const payload = JSON.parse(json);
+
+      expect(payload.stats.totals).toMatchObject({ attempts: 3, wordsCompleted: 1 });
+      expect(payload.progress).toMatchObject({ version: 1, totalStars: 3 });
+      expect(clickSpy.mock.contexts[0].download).toMatch(/^project-spell-data-\d{4}-\d{2}-\d{2}\.json$/u);
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:project-spell-test');
+    } finally {
+      clickSpy.mockRestore();
+      if (originalCreateObjectURL) {
+        Object.defineProperty(URL, 'createObjectURL', {
+          configurable: true,
+          value: originalCreateObjectURL,
+        });
+      } else {
+        delete URL.createObjectURL;
+      }
+      if (originalRevokeObjectURL) {
+        Object.defineProperty(URL, 'revokeObjectURL', {
+          configurable: true,
+          value: originalRevokeObjectURL,
+        });
+      } else {
+        delete URL.revokeObjectURL;
+      }
+    }
+  });
+
+  it('adds perfect-word stars, speaks varied praise, and shows the round ceremony', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+        soundEffects: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    for (let word = 1; word <= 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).totalStars).toBe(word * 3);
+      expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toMatch(/cat/u);
+      act(() => vi.advanceTimersByTime(760));
+    }
+
+    expect(screen.getByRole('img', { name: '3 stars for this round' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.star-ceremony__star--filled')).toHaveLength(3);
+    expect(screen.getByText('★ 9 stars in your jar')).toBeInTheDocument();
+  });
+
+  it('does not create confetti when reduced motion is requested', () => {
+    vi.useFakeTimers();
+    window.matchMedia.mockReturnValue({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'cat' },
+    });
+
+    expect(document.querySelector('.word')).toHaveClass('word--celebrating');
+    expect(document.querySelector('.confetti')).not.toBeInTheDocument();
   });
 
   it('lets grown-ups pick normal mode and reminds them it needs speech', () => {

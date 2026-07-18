@@ -143,11 +143,19 @@ input:focus-visible {
   line-height: 0.98;
 }
 
-.complete-screen > p:not(.eyebrow) {
-  margin: 22px 0 30px;
+.complete-summary {
+  margin: 22px 0 6px;
   color: rgba(32, 48, 43, 0.67);
   font-size: clamp(1rem, 2.2vw, 1.2rem);
   line-height: 1.45;
+}
+
+.star-jar-line {
+  margin: 0 0 30px;
+  color: rgba(32, 48, 43, 0.72);
+  font-size: clamp(0.96rem, 2vw, 1.12rem);
+  font-weight: 800;
+  line-height: 1.4;
 }
 
 .welcome-language {
@@ -290,11 +298,49 @@ input:focus-visible {
 }
 
 .word {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   width: min(100%, 1500px);
   gap: clamp(1px, 0.35vw, 6px);
+}
+
+.word--celebrating .letter {
+  animation: letter-hop 220ms cubic-bezier(0.2, 0.85, 0.32, 1.25) var(--hop-delay, 0ms) both;
+}
+
+.word--celebrating .letter:nth-child(2) { --hop-delay: 40ms; }
+.word--celebrating .letter:nth-child(3) { --hop-delay: 80ms; }
+.word--celebrating .letter:nth-child(4) { --hop-delay: 120ms; }
+.word--celebrating .letter:nth-child(5) { --hop-delay: 160ms; }
+.word--celebrating .letter:nth-child(6) { --hop-delay: 200ms; }
+.word--celebrating .letter:nth-child(7) { --hop-delay: 240ms; }
+.word--celebrating .letter:nth-child(8) { --hop-delay: 280ms; }
+.word--celebrating .letter:nth-child(9) { --hop-delay: 320ms; }
+.word--celebrating .letter:nth-child(10) { --hop-delay: 360ms; }
+.word--celebrating .letter:nth-child(11) { --hop-delay: 400ms; }
+.word--celebrating .letter:nth-child(12) { --hop-delay: 440ms; }
+.word--celebrating .letter:nth-child(13) { --hop-delay: 480ms; }
+.word--celebrating .letter:nth-child(14) { --hop-delay: 520ms; }
+
+.confetti {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.confetti span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(6px, 0.8vw, 11px);
+  height: clamp(9px, 1.2vw, 16px);
+  border-radius: 2px;
+  background: var(--confetti-colour);
+  animation: confetti-burst 700ms ease-out var(--confetti-delay) both;
 }
 
 .letter {
@@ -404,19 +450,30 @@ input:focus-visible {
   caret-color: transparent;
 }
 
-.complete-screen__mark {
-  display: grid;
-  width: 82px;
-  height: 82px;
-  margin-bottom: 24px;
-  border-radius: 50%;
-  color: #fff;
-  background: #20b967;
-  box-shadow: 0 7px 0 #178d4f;
-  font-size: 2.8rem;
-  font-weight: 900;
-  place-items: center;
-  animation: finish-pop 520ms cubic-bezier(0.2, 0.9, 0.25, 1.25) both;
+.star-ceremony {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 22px;
+  color: rgba(32, 48, 43, 0.17);
+  gap: clamp(5px, 1.2vw, 12px);
+}
+
+.star-ceremony__star {
+  display: block;
+  width: clamp(58px, 8vw, 78px);
+  height: clamp(58px, 8vw, 78px);
+}
+
+.star-ceremony__star svg {
+  width: 100%;
+  height: 100%;
+}
+
+.star-ceremony__star--filled {
+  color: #f5b942;
+  filter: drop-shadow(0 5px 0 rgba(190, 129, 24, 0.24));
+  animation: finish-pop 480ms cubic-bezier(0.2, 0.9, 0.25, 1.25) var(--star-delay) both;
 }
 
 .settings-backdrop {
@@ -833,6 +890,23 @@ input:focus-visible {
   100% { transform: rotate(0); }
 }
 
+@keyframes letter-hop {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  48% { transform: translateY(-0.13em) rotate(-2deg); }
+}
+
+@keyframes confetti-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--confetti-angle)) translateY(0) rotate(0);
+  }
+  12% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--confetti-angle)) translateY(calc(0px - var(--confetti-distance))) rotate(var(--confetti-spin));
+  }
+}
+
 @keyframes finish-pop {
   from { opacity: 0; transform: scale(0.6) rotate(-8deg); }
   to { opacity: 1; transform: scale(1) rotate(0); }
@@ -903,8 +977,21 @@ input:focus-visible {
     margin-bottom: 8px;
   }
 
-  .complete-screen > p:not(.eyebrow) {
-    margin: 10px 0 14px;
+  .complete-summary {
+    margin-top: 10px;
+  }
+
+  .star-jar-line {
+    margin-bottom: 14px;
+  }
+
+  .star-ceremony {
+    margin-bottom: 10px;
+  }
+
+  .star-ceremony__star {
+    width: 52px;
+    height: 52px;
   }
 
   .welcome-language {

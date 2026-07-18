@@ -44,3 +44,15 @@ export function CloseIcon() {
     </svg>
   );
 }
+
+export function StarIcon({ filled = false }) {
+  return (
+    <svg
+      {...sharedProps}
+      fill={filled ? 'currentColor' : 'none'}
+      strokeWidth={filled ? 1.5 : sharedProps.strokeWidth}
+    >
+      <path d="m12 2.8 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 16.83l-5.5 2.89 1.05-6.12L3.1 9.27l6.15-.9L12 2.8Z" />
+    </svg>
+  );
+}

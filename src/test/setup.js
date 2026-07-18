@@ -58,6 +58,19 @@ Object.defineProperty(window, 'speechSynthesis', {
   },
 });
 
+const matchMediaResult = (query) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+});
+
+Object.defineProperty(window, 'matchMedia', {
+  configurable: true,
+  value: vi.fn(matchMediaResult),
+});
+
 window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
 window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
 
@@ -65,5 +78,6 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.clearAllMocks();
+  window.matchMedia.mockImplementation(matchMediaResult);
   vi.useRealTimers();
 });

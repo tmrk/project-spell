@@ -6,6 +6,8 @@ import {
   recordAttempt,
   recordRoundCompleted,
   recordWordCompleted,
+  starsForRound,
+  starsForWord,
   trickiestLetters,
 } from './stats';
 
@@ -187,5 +189,22 @@ describe('summaries', () => {
     let stats = recordAttempt(createEmptyStats(), attempt({ latencyMs: 100 }));
     stats = recordAttempt(stats, attempt({ latencyMs: 300 }));
     expect(averageLetterMs(stats)).toBe(200);
+  });
+
+  it('awards one to three stars for a word without ever returning zero', () => {
+    expect(starsForWord(0)).toBe(3);
+    expect(starsForWord(1)).toBe(2);
+    expect(starsForWord(2)).toBe(2);
+    expect(starsForWord(3)).toBe(1);
+    expect(starsForWord(Number.NaN)).toBe(1);
+  });
+
+  it('summarises a round from its perfect-word share', () => {
+    expect(starsForRound([3, 3, 3])).toBe(3);
+    expect(starsForRound([3, 3, 2])).toBe(2);
+    expect(starsForRound([3, 2])).toBe(2);
+    expect(starsForRound([3, 2, 2])).toBe(1);
+    expect(starsForRound([2, 2, 1])).toBe(1);
+    expect(starsForRound([])).toBe(1);
   });
 });

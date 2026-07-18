@@ -161,3 +161,14 @@ export function averageLetterMs(stats) {
   if (!attempts) return null;
   return entries.reduce((sum, entry) => sum + entry.totalMs, 0) / attempts;
 }
+
+export function starsForWord(mistakes) {
+  if (mistakes === 0) return 3;
+  return Number.isFinite(mistakes) && mistakes <= 2 ? 2 : 1;
+}
+
+export function starsForRound(wordStars) {
+  if (!Array.isArray(wordStars) || wordStars.length === 0) return 1;
+  if (wordStars.every((stars) => stars === 3)) return 3;
+  return wordStars.filter((stars) => stars === 3).length >= wordStars.length / 2 ? 2 : 1;
+}
