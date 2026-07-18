@@ -1,14 +1,16 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Letter from './Letter';
+import { EYE_OFFSETS } from './EyeStyle';
 
 vi.mock('cartoon-eyes', () => ({
-  Eye: ({ blinking, blinkFrequency, blinkSpeed }) => (
+  Eye: ({ blinking, blinkFrequency, blinkSpeed, lensPosition }) => (
     <span
       data-testid="cartoon-eye"
       data-blinking={String(blinking)}
       data-blink-frequency={blinkFrequency}
       data-blink-speed={blinkSpeed}
+      data-lens-position={lensPosition.join(',')}
     />
   ),
 }));
@@ -38,5 +40,34 @@ describe('Letter eyes', () => {
 
     act(() => vi.advanceTimersByTime(1));
     eyes.forEach((eye) => expect(eye).toHaveAttribute('data-blinking', 'true'));
+  });
+
+  it('defines shape-aware positions for the whole alphabet and gives I one eye', () => {
+    expect(Object.keys(EYE_OFFSETS).sort().join('')).toBe('abcdefghijklmnopqrstuvwxyz');
+    expect(Object.values(EYE_OFFSETS).every((offsets) => offsets.length >= 1 && offsets.length <= 2)).toBe(true);
+
+    render(<Letter letter="i" state="waiting" onSpeak={vi.fn()} />);
+    expect(screen.getAllByTestId('cartoon-eye')).toHaveLength(1);
+  });
+
+  it('moves both pupils to the same shared gaze position', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.25)
+      .mockReturnValueOnce(0.75);
+
+    render(<Letter letter="m" state="active" onSpeak={vi.fn()} />);
+    const eyes = screen.getAllByTestId('cartoon-eye');
+    eyes.forEach((eye) => expect(eye).toHaveAttribute('data-lens-position', '0,0'));
+
+    act(() => vi.advanceTimersByTime(1700));
+    eyes.forEach((eye) => expect(eye).toHaveAttribute('data-lens-position', '-45,45'));
+  });
+
+  it('does not render eye components when eyes are switched off', () => {
+    render(<Letter letter="a" state="active" onSpeak={vi.fn()} showEyes={false} />);
+    expect(screen.queryByTestId('cartoon-eye')).not.toBeInTheDocument();
   });
 });

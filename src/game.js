@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   music: true,
   soundEffects: true,
   speech: true,
+  eyes: true,
 });
 
 export const PRESETS = Object.freeze({
@@ -196,6 +197,7 @@ export function normaliseSettings(value = {}) {
     soundEffects:
       typeof value.soundEffects === 'boolean' ? value.soundEffects : DEFAULT_SETTINGS.soundEffects,
     speech: typeof value.speech === 'boolean' ? value.speech : DEFAULT_SETTINGS.speech,
+    eyes: typeof value.eyes === 'boolean' ? value.eyes : DEFAULT_SETTINGS.eyes,
   };
 }
 

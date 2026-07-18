@@ -137,6 +137,14 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
           </fieldset>
 
           <fieldset className="settings-section settings-section--compact">
+            <legend>Letters</legend>
+            <label className="toggle-row">
+              <span>Cartoon eyes</span>
+              <input type="checkbox" checked={draft.eyes} onChange={(event) => setValue('eyes', event.target.checked)} />
+            </label>
+          </fieldset>
+
+          <fieldset className="settings-section settings-section--compact">
             <legend>Sound</legend>
             <label className="toggle-row">
               <span>Say each word</span>

@@ -29,10 +29,15 @@ describe('settings', () => {
   });
 
   it('keeps valid boolean preferences', () => {
-    expect(normaliseSettings({ ...DEFAULT_SETTINGS, music: false, speech: false })).toMatchObject({
+    expect(normaliseSettings({ ...DEFAULT_SETTINGS, music: false, speech: false, eyes: false })).toMatchObject({
       music: false,
       speech: false,
+      eyes: false,
     });
+  });
+
+  it('enables eyes when loading settings saved before the preference existed', () => {
+    expect(normaliseSettings({ music: false })).toMatchObject({ music: false, eyes: true });
   });
 });
 

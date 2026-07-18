@@ -25,6 +25,7 @@ npm run check
 - A curated bank of more than 350 English words grouped across one through five syllables.
 - Configurable minimum/maximum word length, syllable count, and words per round.
 - Custom words, stored only in the browser.
+- Shape-aware animated letter eyes that can be switched off in the grown-ups panel.
 - Optional spoken prompts, sound effects, and background music.
 - A fixed-length round with progress, completion feedback, and replay.
 - Responsive layouts for touch devices, iPad portrait/landscape, and desktop.

@@ -65,4 +65,27 @@ describe('Project Spell', () => {
     expect(screen.getByRole('dialog', { name: 'Grown-ups' })).toBeInTheDocument();
     expect(screen.getByLabelText('Words in a row')).toHaveValue('3');
   });
+
+  it('lets grown-ups switch the letter eyes off', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Cartoon eyes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    expect(document.querySelector('.eyes')).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({ eyes: false });
+  });
+
+  it('plays the original done sound as soon as a word is completed', () => {
+    const playSpy = vi.spyOn(Audio.prototype, 'play');
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'cat' },
+    });
+
+    expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
+  });
 });

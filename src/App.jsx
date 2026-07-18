@@ -241,7 +241,6 @@ export default function App() {
       setPhase('complete');
       transitioningRef.current = false;
       pauseMusic();
-      playEffect(doneSfx, 0.75);
       say('Amazing! You finished the round!');
       return;
     }
@@ -251,7 +250,7 @@ export default function App() {
     setFeedback('idle');
     setFeedbackMessage('');
     transitioningRef.current = false;
-  }, [pauseMusic, playEffect, roundWords.length, say, wordIndex]);
+  }, [pauseMusic, roundWords.length, say, wordIndex]);
 
   const handleAttempt = useCallback(
     (value) => {
@@ -278,7 +277,8 @@ export default function App() {
         if (nextLetterIndex === currentWord.length) break;
       }
 
-      playEffect(popSfx, 0.7);
+      const wordIsComplete = nextLetterIndex === currentWord.length;
+      playEffect(wordIsComplete ? doneSfx : popSfx, wordIsComplete ? 0.8 : 0.7);
       setFeedback('success');
       setFeedbackMessage(CORRECT_MESSAGES[(nextLetterIndex - 1) % CORRECT_MESSAGES.length]);
       resetFeedbackSoon();
@@ -407,6 +407,7 @@ export default function App() {
                 letter={letter}
                 state={index < letterIndex ? 'done' : index === letterIndex ? 'active' : 'waiting'}
                 onSpeak={speakLetter}
+                showEyes={settings.eyes}
               />
             ))}
           </div>

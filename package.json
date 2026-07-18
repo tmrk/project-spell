@@ -21,7 +21,7 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "cartoon-eyes": "2.0.0",
+    "cartoon-eyes": "2.0.1",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

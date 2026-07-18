@@ -6,10 +6,14 @@ const BLINK_START_MIN = 300;
 const BLINK_START_RANGE = 2200;
 const BLINK_FREQUENCY_MIN = 2600;
 const BLINK_FREQUENCY_RANGE = 2600;
+const GAZE_FREQUENCY = 1700;
+const CENTRED_GAZE = Object.freeze([0, 0]);
 
-function PositionedEye({ className, style, isActive, isBlinking, blinkFrequency }) {
+const randomGazePosition = () => Math.floor(Math.random() * 181) - 90;
+
+function PositionedEye({ style, gaze, isBlinking, blinkFrequency }) {
   return (
-    <span className={`eye-position ${className}`} style={style}>
+    <span className="eye-position" style={style}>
       <Eye
         className="letter-eye"
         size="0.14em"
@@ -20,26 +24,38 @@ function PositionedEye({ className, style, isActive, isBlinking, blinkFrequency 
         blinking={isBlinking}
         blinkSpeed={90}
         blinkFrequency={blinkFrequency}
-        lensMovement={isActive ? 1700 : false}
+        lensPosition={gaze}
+        lensSpeed={500}
       />
     </span>
   );
 }
 
-export default function Letter({ letter, state, onSpeak }) {
+export default function Letter({ letter, state, onSpeak, showEyes = true }) {
   const [isWobbling, setIsWobbling] = useState(false);
   const [blinkTiming] = useState(() => ({
     startDelay: BLINK_START_MIN + Math.floor(Math.random() * BLINK_START_RANGE),
     frequency: BLINK_FREQUENCY_MIN + Math.floor(Math.random() * BLINK_FREQUENCY_RANGE),
   }));
   const [isBlinking, setIsBlinking] = useState(false);
-  const eyeStyle = getEyeStyle(letter);
+  const [gaze, setGaze] = useState(CENTRED_GAZE);
+  const eyeStyles = getEyeStyle(letter);
   const stateLabel = state === 'done' ? 'completed' : state === 'active' ? 'current letter' : 'next';
 
   useEffect(() => {
+    if (!showEyes) return undefined;
     const blinkTimer = window.setTimeout(() => setIsBlinking(true), blinkTiming.startDelay);
     return () => window.clearTimeout(blinkTimer);
-  }, [blinkTiming]);
+  }, [blinkTiming, showEyes]);
+
+  useEffect(() => {
+    if (!showEyes || state !== 'active') return undefined;
+
+    const gazeTimer = window.setInterval(() => {
+      setGaze([randomGazePosition(), randomGazePosition()]);
+    }, GAZE_FREQUENCY);
+    return () => window.clearInterval(gazeTimer);
+  }, [showEyes, state]);
 
   const handleClick = () => {
     onSpeak(letter);
@@ -55,22 +71,19 @@ export default function Letter({ letter, state, onSpeak }) {
       aria-label={`${letter}, ${stateLabel}`}
     >
       <span className="letter__visual" aria-hidden="true">
-        <span className="eyes">
-          <PositionedEye
-            className="eye--left"
-            style={eyeStyle.left}
-            isActive={state === 'active'}
-            isBlinking={isBlinking}
-            blinkFrequency={blinkTiming.frequency}
-          />
-          <PositionedEye
-            className="eye--right"
-            style={eyeStyle.right}
-            isActive={state === 'active'}
-            isBlinking={isBlinking}
-            blinkFrequency={blinkTiming.frequency}
-          />
-        </span>
+        {showEyes && (
+          <span className="eyes">
+            {eyeStyles.map((style, index) => (
+              <PositionedEye
+                key={index}
+                style={style}
+                gaze={state === 'active' ? gaze : CENTRED_GAZE}
+                isBlinking={isBlinking}
+                blinkFrequency={blinkTiming.frequency}
+              />
+            ))}
+          </span>
+        )}
         {letter}
       </span>
     </button>
