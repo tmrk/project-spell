@@ -458,7 +458,7 @@ describe('Project Spell', () => {
     const fallbackPlaySpy = vi.spyOn(Audio.prototype, 'play');
 
     const view = render(<App />);
-    await waitFor(() => expect(contexts[0].decodeAudioData).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(contexts[0].decodeAudioData).toHaveBeenCalledTimes(7));
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     const input = screen.getByRole('textbox', { name: 'Type the next letter' });
@@ -711,5 +711,113 @@ describe('Project Spell', () => {
       gameMode: 'normal',
       speech: false,
     });
+  });
+
+  it('opens the sticker book from the welcome screen and closes it with Escape', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+    const book = screen.getByRole('dialog', { name: 'My sticker book' });
+    expect(book).toBeInTheDocument();
+    expect(within(book).getByText('0 stickers')).toBeInTheDocument();
+
+    fireEvent.keyDown(book, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'My sticker book' })).not.toBeInTheDocument();
+  });
+
+  it('awards one round sticker, earns quiet badges, and speaks stickers from the book', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+        soundEffects: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    for (let word = 0; word < 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      act(() => vi.advanceTimersByTime(760));
+    }
+
+    expect(screen.getByText('A new sticker for your book!')).toBeInTheDocument();
+    expect(screen.getByText('New badge: First round')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({
+      stickers: ['en-GB/cat'],
+      badges: expect.arrayContaining(['first-round', 'perfect-round']),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+    const book = screen.getByRole('dialog', { name: 'My sticker book' });
+    expect(within(book).getByText('1 stickers')).toBeInTheDocument();
+    fireEvent.click(within(book).getByRole('button', { name: 'cat' }));
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('cat');
+    expect(within(book).getByText('First round')).toBeInTheDocument();
+  });
+
+  it('shows the app version and asset licences in the grown-ups About section', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Grown-ups' });
+    expect(within(dialog).getByText('v1.0.0')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Noto Emoji colour SVG artwork' }))
+      .toHaveAttribute('href', 'https://github.com/googlefonts/noto-emoji');
+    expect(within(dialog).getByText(/Children's March Theme/u)).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/Provenance unknown/u)).toHaveLength(2);
+  });
+
+  it('selects a background track at round start and ducks it while speech is active', () => {
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: true,
+      }),
+    );
+    const loadSpy = vi.spyOn(Audio.prototype, 'load');
+    const playSpy = vi.spyOn(Audio.prototype, 'play');
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    const music = playSpy.mock.contexts.find((audio) => audio.loop);
+    expect(music.src).toMatch(/\/bgmusic(?:2|3)?\.mp3$/u);
+    expect(loadSpy.mock.contexts).toContain(music);
+    expect(music.volume).toBe(0.05);
+
+    const prompt = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    act(() => prompt.onend());
+    expect(music.volume).toBe(0.12);
+  });
+
+  it('plays the round fanfare through the reusable effect path', () => {
+    vi.useFakeTimers();
+    const playSpy = vi.spyOn(Audio.prototype, 'play');
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    for (let word = 1; word <= 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
+      if (word === 3) act(() => ding.dispatchEvent(new Event('ended')));
+      act(() => vi.advanceTimersByTime(760));
+    }
+
+    expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/fanfare.mp3'))).toBe(true);
+    expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/fanfare.mp3'))).toHaveLength(1);
   });
 });

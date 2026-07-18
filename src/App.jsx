@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Letter from './components/Letter';
 import SettingsPanel from './components/SettingsPanel';
-import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
+import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
+import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon, StickerIcon } from './components/Icons';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
@@ -21,10 +22,15 @@ import {
 } from './stats';
 import {
   PROGRESS_KEY,
+  addBadges,
+  addSticker,
   addStars,
   createEmptyProgress,
+  newBadges,
   normaliseProgress,
+  pickStickerAward,
 } from './progress';
+import { getStickerDetails } from './stickers/map';
 import {
   LOCALE_OPTIONS,
   detectDefaultLocale,
@@ -34,7 +40,10 @@ import {
 } from './locales';
 import croc from './assets/croc.svg';
 import bgMusic from './sounds/bgmusic.mp3';
+import bgMusic2 from './sounds/bgmusic2.mp3';
+import bgMusic3 from './sounds/bgmusic3.mp3';
 import doneSfx from './sounds/done.mp3';
+import fanfareSfx from './sounds/fanfare.mp3';
 import popSfx from './sounds/pop.mp3';
 import badSfx from './sounds/bad.mp3';
 import star1Sfx from './sounds/star1.mp3';
@@ -45,6 +54,16 @@ import './App.scss';
 const WORD_COMPLETION_PAUSE = 760;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
+const MUSIC_VOLUME = 0.12;
+const MUSIC_DUCKED_VOLUME = 0.05;
+const TRACKS = Object.freeze([bgMusic, bgMusic2, bgMusic3]);
+
+const emptyRoundReward = () => ({
+  badge: null,
+  stars: 0,
+  sticker: null,
+  totalStars: 0,
+});
 
 const CONFETTI_PIECES = Object.freeze(
   [
@@ -108,8 +127,9 @@ function loadProgress() {
   }
 }
 
-function useSpeech(enabled, locale) {
+function useSpeech(enabled, locale, setSpeechDucking) {
   const voiceRef = useRef(null);
+  const activeFinishRef = useRef(null);
   const { code, voiceNamePattern } = getLocale(locale);
 
   useEffect(() => {
@@ -140,6 +160,7 @@ function useSpeech(enabled, locale) {
   }, [code, voiceNamePattern]);
 
   const cancel = useCallback(() => {
+    activeFinishRef.current?.(false);
     window.speechSynthesis?.cancel();
   }, []);
 
@@ -147,20 +168,43 @@ function useSpeech(enabled, locale) {
     (text, options = {}) => {
       if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false;
 
+      activeFinishRef.current?.(false);
       window.speechSynthesis.cancel();
       const utterance = new window.SpeechSynthesisUtterance(text);
-      utterance.lang = code;
-      utterance.voice = voiceRef.current;
+      const utteranceCode = options.locale ? getLocale(options.locale).code : code;
+      utterance.lang = utteranceCode;
+      utterance.voice = utteranceCode === code ? voiceRef.current : null;
       utterance.rate = options.rate ?? 0.82;
       utterance.pitch = options.pitch ?? 1.04;
-      if (options.onEnd) {
-        utterance.onend = options.onEnd;
-        utterance.onerror = options.onEnd;
+      let finished = false;
+      let fallbackTimer = null;
+      const start = () => setSpeechDucking?.(true);
+      const finish = (notify = true) => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(fallbackTimer);
+        if (activeFinishRef.current === finish) activeFinishRef.current = null;
+        setSpeechDucking?.(false);
+        if (notify) options.onEnd?.();
+      };
+      utterance.onstart = start;
+      utterance.onend = () => finish(true);
+      utterance.onerror = () => finish(true);
+      activeFinishRef.current = finish;
+      start();
+      fallbackTimer = window.setTimeout(
+        () => finish(true),
+        options.fallbackMs ?? Math.max(1200, String(text).length * 90),
+      );
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        finish(true);
+        return false;
       }
-      window.speechSynthesis.speak(utterance);
       return true;
     },
-    [code, enabled],
+    [code, enabled, setSpeechDucking],
   );
 
   return { cancel, say };
@@ -168,6 +212,7 @@ function useSpeech(enabled, locale) {
 
 function useGameAudio(soundEffectsEnabled) {
   const musicRef = useRef(null);
+  const trackIndexRef = useRef(0);
   const effectsRef = useRef(new Map());
   const audioContextRef = useRef(null);
   const effectBuffersRef = useRef(new Map());
@@ -175,8 +220,9 @@ function useGameAudio(soundEffectsEnabled) {
   const [musicIsPlaying, setMusicIsPlaying] = useState(false);
 
   useEffect(() => {
-    const music = new Audio(bgMusic);
-    const effectSources = [popSfx, badSfx, doneSfx, star1Sfx, star2Sfx, star3Sfx];
+    trackIndexRef.current = Math.floor(Math.random() * TRACKS.length);
+    const music = new Audio(TRACKS[0]);
+    const effectSources = [popSfx, badSfx, doneSfx, fanfareSfx, star1Sfx, star2Sfx, star3Sfx];
     const effectBuffers = effectBuffersRef.current;
     const activeBufferSources = activeBufferSourcesRef.current;
     const effects = new Map(
@@ -189,7 +235,7 @@ function useGameAudio(soundEffectsEnabled) {
     );
     music.loop = true;
     music.preload = 'auto';
-    music.volume = 0.12;
+    music.volume = MUSIC_VOLUME;
     musicRef.current = music;
     effectsRef.current = effects;
 
@@ -275,6 +321,27 @@ function useGameAudio(soundEffectsEnabled) {
   const pauseMusic = useCallback(() => {
     musicRef.current?.pause();
     setMusicIsPlaying(false);
+  }, []);
+
+  const selectNextMusicTrack = useCallback(() => {
+    const music = musicRef.current;
+    if (!music) return null;
+    const source = TRACKS[trackIndexRef.current];
+    trackIndexRef.current = (trackIndexRef.current + 1) % TRACKS.length;
+    music.pause();
+    music.src = source;
+    try {
+      music.currentTime = 0;
+    } catch {
+      // Some browsers do not expose currentTime until metadata is ready.
+    }
+    music.load?.();
+    return source;
+  }, []);
+
+  const setMusicDucked = useCallback((ducked) => {
+    if (!musicRef.current) return;
+    musicRef.current.volume = ducked ? MUSIC_DUCKED_VOLUME : MUSIC_VOLUME;
   }, []);
 
   const playEffect = useCallback(
@@ -399,7 +466,15 @@ function useGameAudio(soundEffectsEnabled) {
     [soundEffectsEnabled],
   );
 
-  return { musicIsPlaying, pauseMusic, playEffect, playMusic, primeEffects };
+  return {
+    musicIsPlaying,
+    pauseMusic,
+    playEffect,
+    playMusic,
+    primeEffects,
+    selectNextMusicTrack,
+    setMusicDucked,
+  };
 }
 
 export default function App() {
@@ -414,7 +489,9 @@ export default function App() {
   const [hintLevel, setHintLevel] = useState('none');
   const [celebratingWord, setCelebratingWord] = useState(false);
   const [confettiVisible, setConfettiVisible] = useState(false);
-  const [roundReward, setRoundReward] = useState({ stars: 0, totalStars: 0 });
+  const [roundReward, setRoundReward] = useState(emptyRoundReward);
+  const [stickerBookOpen, setStickerBookOpen] = useState(false);
+  const [stickerBookProgress, setStickerBookProgress] = useState(createEmptyProgress);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
@@ -432,6 +509,7 @@ export default function App() {
   const wordMissesRef = useRef(0);
   const roundMissesRef = useRef(0);
   const wordStarsRef = useRef([]);
+  const roundAwardRef = useRef({ badge: null, sticker: null });
   const feedbackTimerRef = useRef(null);
   const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
@@ -454,9 +532,19 @@ export default function App() {
   const copy = locale.messages;
   const earnedRoundStars = phase === 'complete' ? roundReward.stars : 0;
 
-  const { cancel: cancelSpeech, say } = useSpeech(settings.speech, settings.locale);
-  const { musicIsPlaying, pauseMusic, playEffect, playMusic, primeEffects } = useGameAudio(
-    settings.soundEffects,
+  const {
+    musicIsPlaying,
+    pauseMusic,
+    playEffect,
+    playMusic,
+    primeEffects,
+    selectNextMusicTrack,
+    setMusicDucked,
+  } = useGameAudio(settings.soundEffects);
+  const { cancel: cancelSpeech, say } = useSpeech(
+    settings.speech,
+    settings.locale,
+    setMusicDucked,
   );
 
   useEffect(() => {
@@ -499,8 +587,9 @@ export default function App() {
   useEffect(() => {
     if (phase !== 'complete') return undefined;
     const sounds = [star1Sfx, star2Sfx, star3Sfx];
+    playEffect(fanfareSfx, 0.5);
     const timers = sounds.slice(0, earnedRoundStars).map((source, index) =>
-      window.setTimeout(() => playEffect(source, 0.42), index * 250),
+      window.setTimeout(() => playEffect(source, 0.38), 320 + index * 250),
     );
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [earnedRoundStars, phase, playEffect]);
@@ -580,6 +669,7 @@ export default function App() {
     wordsSincePraiseRef.current = 0;
     wordPraiseGapRef.current = randomWordPraiseGap();
     wordStarsRef.current = [];
+    roundAwardRef.current = { badge: null, sticker: null };
     const now = performance.now();
     roundStartRef.current = now;
     wordStartRef.current = now;
@@ -594,11 +684,12 @@ export default function App() {
     setFeedbackMessage('');
     setCelebratingWord(false);
     setConfettiVisible(false);
-    setRoundReward({ stars: 0, totalStars: 0 });
+    setRoundReward(emptyRoundReward());
     setPhase('playing');
     primeEffects();
+    selectNextMusicTrack();
     if (settings.music) playMusic();
-  }, [clearRoundTimers, playMusic, primeEffects, resetHintLadder, settings]);
+  }, [clearRoundTimers, playMusic, primeEffects, resetHintLadder, selectNextMusicTrack, settings]);
 
   const repeatWord = useCallback(() => {
     speechTokenRef.current += 1;
@@ -687,8 +778,11 @@ export default function App() {
     setConfettiVisible(false);
     const isLastWord = wordIndex === roundWords.length - 1;
     if (isLastWord) {
+      const stars = starsForRound(wordStarsRef.current);
       setRoundReward({
-        stars: starsForRound(wordStarsRef.current),
+        badge: roundAwardRef.current.badge,
+        stars,
+        sticker: roundAwardRef.current.sticker,
         totalStars: progressRef.current.totalStars,
       });
       signalFeedback('idle');
@@ -696,7 +790,13 @@ export default function App() {
       setPhase('complete');
       transitioningRef.current = false;
       pauseMusic();
-      say(pickVaried(copy.roundFinishedSpeeches, lastRoundPraiseIndexRef));
+      const praise = pickVaried(copy.roundFinishedSpeeches, lastRoundPraiseIndexRef);
+      const sticker = roundAwardRef.current.sticker;
+      say(praise, {
+        onEnd: sticker
+          ? () => say(sticker.word, { locale: sticker.locale, rate: 0.78, pitch: 1.04 })
+          : undefined,
+      });
       return;
     }
 
@@ -781,13 +881,26 @@ export default function App() {
           durationMs: completionTime - wordStartRef.current,
           mode: settings.gameMode,
         });
-        if (wordIndex === roundWords.length - 1) {
+        const isLastWord = wordIndex === roundWords.length - 1;
+        if (isLastWord) {
           statsRef.current = recordRoundCompleted(statsRef.current, {
             length: roundWords.length,
             mistakes: roundMissesRef.current,
             durationMs: completionTime - roundStartRef.current,
             mode: settings.gameMode,
           });
+          const roundStars = starsForRound(wordStarsRef.current);
+          const stickerId = pickStickerAward(progressRef.current, roundWords, settings.locale);
+          if (stickerId) progressRef.current = addSticker(progressRef.current, stickerId);
+          const badges = newBadges(progressRef.current, statsRef.current, {
+            mode: settings.gameMode,
+            stars: roundStars,
+          });
+          progressRef.current = addBadges(progressRef.current, badges);
+          roundAwardRef.current = {
+            badge: badges[0] ?? null,
+            sticker: stickerId ? getStickerDetails(stickerId) : null,
+          };
         }
         persistStats();
         persistProgress();
@@ -797,7 +910,6 @@ export default function App() {
         cancelSpeech();
         celebrateWord();
         wordsSincePraiseRef.current += 1;
-        const isLastWord = wordIndex === roundWords.length - 1;
         if (!isLastWord && wordsSincePraiseRef.current >= wordPraiseGapRef.current) {
           wordsSincePraiseRef.current = 0;
           wordPraiseGapRef.current = randomWordPraiseGap();
@@ -833,7 +945,7 @@ export default function App() {
       playEffect,
       resetFeedbackSoon,
       resetHintLadder,
-      roundWords.length,
+      roundWords,
       signalFeedback,
       settings.acceptUnaccented,
       settings.gameMode,
@@ -871,6 +983,22 @@ export default function App() {
     focusInput();
   };
 
+  const openStickerBook = () => {
+    cancelSpeech();
+    pauseMusic();
+    setStickerBookProgress(progressRef.current);
+    setStickerBookOpen(true);
+  };
+
+  const closeStickerBook = () => {
+    cancelSpeech();
+    setStickerBookOpen(false);
+  };
+
+  const speakSticker = (word, stickerLocale) => {
+    say(word, { locale: stickerLocale, rate: 0.78, pitch: 1.04 });
+  };
+
   const openSettings = () => {
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
@@ -894,6 +1022,7 @@ export default function App() {
     progressRef.current = createEmptyProgress();
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);
+    setStickerBookProgress(progressRef.current);
   }, []);
 
   const closeSettings = () => {
@@ -914,7 +1043,8 @@ export default function App() {
     setFeedbackMessage('');
     setCelebratingWord(false);
     setConfettiVisible(false);
-    setRoundReward({ stars: 0, totalStars: 0 });
+    setRoundReward(emptyRoundReward());
+    setStickerBookOpen(false);
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
     wordStarsRef.current = [];
@@ -940,6 +1070,16 @@ export default function App() {
         {phase === 'playing' && (
           <button type="button" className="icon-button" onClick={repeatWord} aria-label={copy.hearAgain}>
             <RepeatIcon />
+          </button>
+        )}
+        {(phase === 'welcome' || phase === 'complete') && (
+          <button
+            type="button"
+            className="icon-button"
+            onClick={openStickerBook}
+            aria-label={copy.openStickerBook}
+          >
+            <StickerIcon />
           </button>
         )}
         <button
@@ -1090,6 +1230,20 @@ export default function App() {
           <p className="star-jar-line">
             {formatMessage(copy.starJarLine, { count: roundReward.totalStars })}
           </p>
+          {roundReward.sticker && (
+            <div className="round-sticker-award">
+              <StickerPicture codepoint={roundReward.sticker.codepoint} />
+              <p>{copy.newStickerLine}</p>
+              <strong>{roundReward.sticker.word}</strong>
+            </div>
+          )}
+          {roundReward.badge && BADGE_LABEL_KEYS[roundReward.badge] && (
+            <p className="badge-earned-line">
+              {formatMessage(copy.badgeEarnedLine, {
+                badge: copy[BADGE_LABEL_KEYS[roundReward.badge]],
+              })}
+            </p>
+          )}
           <button type="button" className="primary-button" onClick={startRound}>
             {copy.playAgain}
           </button>
@@ -1108,6 +1262,15 @@ export default function App() {
           onEraseProgress={eraseProgress}
           onClose={closeSettings}
           onSave={saveSettings}
+        />
+      )}
+
+      {stickerBookOpen && (
+        <StickerBook
+          copy={copy}
+          progress={stickerBookProgress}
+          onClose={closeStickerBook}
+          onSpeak={speakSticker}
         />
       )}
     </div>

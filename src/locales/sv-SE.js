@@ -50,6 +50,19 @@ const messages = Object.freeze({
   completePerfect: ' — alla på första försöket.',
   roundStarsEarned: '{count} stjärnor för den här rundan',
   starJarLine: '★ {count} stjärnor i din burk',
+  stickerBookHeading: 'Min klistermärkesbok',
+  stickerBookCount: '{count} klistermärken',
+  openStickerBook: 'Öppna klistermärkesboken',
+  closeStickerBook: 'Stäng klistermärkesboken',
+  newStickerLine: 'Ett nytt klistermärke till din bok!',
+  badgeEarnedLine: 'Nytt märke: {badge}',
+  badgesHeading: 'Märken',
+  badgeFirstRound: 'Första rundan',
+  badgeWords10: '10 ord',
+  badgeWords50: '50 ord',
+  badgeWords100: '100 ord',
+  badgePerfectRound: 'Perfekt runda',
+  badgeNormalRound: 'Stavningsstjärna',
   playAgain: 'Spela igen',
   letterCompleted: 'klar',
   letterCurrent: 'aktuell bokstav',
@@ -120,6 +133,8 @@ const messages = Object.freeze({
   clearProgressWarning: 'Detta raderar all lokalt sparad spelstatistik och alla belöningar. Det går inte att ångra.',
   clearProgressConfirm: 'Rensa allt',
   clearProgressCancel: 'Behåll min data',
+  aboutHeading: 'Om spelet',
+  aboutCredits: 'Medverkande och licenser',
 });
 
 export default Object.freeze({

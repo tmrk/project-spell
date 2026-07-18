@@ -56,3 +56,13 @@ export function StarIcon({ filled = false }) {
     </svg>
   );
 }
+
+export function StickerIcon() {
+  return (
+    <svg {...sharedProps}>
+      <path d="M5 3.5h11.5A2.5 2.5 0 0 1 19 6v12.5H7.5A2.5 2.5 0 0 1 5 16V3.5Z" />
+      <path d="M8.5 3.5v15" />
+      <path d="m13.7 7 .9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3.9-1.8Z" />
+    </svg>
+  );
+}

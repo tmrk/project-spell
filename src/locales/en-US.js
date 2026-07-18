@@ -50,6 +50,19 @@ const messages = Object.freeze({
   completePerfect: ' — all on the first try.',
   roundStarsEarned: '{count} stars for this round',
   starJarLine: '★ {count} stars in your jar',
+  stickerBookHeading: 'My sticker book',
+  stickerBookCount: '{count} stickers',
+  openStickerBook: 'Open sticker book',
+  closeStickerBook: 'Close sticker book',
+  newStickerLine: 'A new sticker for your book!',
+  badgeEarnedLine: 'New badge: {badge}',
+  badgesHeading: 'Badges',
+  badgeFirstRound: 'First round',
+  badgeWords10: '10 words',
+  badgeWords50: '50 words',
+  badgeWords100: '100 words',
+  badgePerfectRound: 'Perfect round',
+  badgeNormalRound: 'Spelling star',
   playAgain: 'Play again',
   letterCompleted: 'completed',
   letterCurrent: 'current letter',
@@ -120,6 +133,8 @@ const messages = Object.freeze({
   clearProgressWarning: 'This erases all locally stored play statistics and rewards. It cannot be undone.',
   clearProgressConfirm: 'Clear everything',
   clearProgressCancel: 'Keep my data',
+  aboutHeading: 'About',
+  aboutCredits: 'Credits and licenses',
 });
 
 export default Object.freeze({

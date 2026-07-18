@@ -3,6 +3,8 @@ import { CloseIcon } from './Icons';
 import { DEFAULT_SETTINGS, PRESETS, getEligibleWords, normaliseSettings } from '../game';
 import { createEmptyStats, trickiestLetters } from '../stats';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
+import { CREDITS } from '../credits';
+import packageInfo from '../../package.json';
 
 const EMPTY_STATS = createEmptyStats();
 
@@ -419,6 +421,25 @@ export default function SettingsPanel({
                 {copy.clearProgress}
               </button>
             </div>
+          </fieldset>
+
+          <fieldset className="settings-section settings-section--compact about-section">
+            <legend>{copy.aboutHeading}</legend>
+            <p className="about-section__app">
+              <a href="https://github.com/tmrk/project-spell" target="_blank" rel="noreferrer">
+                {copy.projectName}
+              </a>{' '}
+              <span>v{packageInfo.version}</span>
+            </p>
+            <p className="about-section__label">{copy.aboutCredits}</p>
+            <ul className="credits-list">
+              {CREDITS.map((credit) => (
+                <li key={credit.title}>
+                  <a href={credit.source} target="_blank" rel="noreferrer">{credit.title}</a>
+                  {' — '}{credit.author}, {credit.licence}
+                </li>
+              ))}
+            </ul>
           </fieldset>
 
           <footer className="settings-footer">

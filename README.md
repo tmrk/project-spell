@@ -39,13 +39,14 @@ These coordination files may be intentionally untracked. Read them and inspect `
 - Custom words, stored only in the browser.
 - An optional parent setting to accept an unaccented key for an accented letter; exact accents are required by default.
 - Shape-aware animated letter eyes that can be switched off in the grown-ups panel.
-- Optional spoken prompts, sound effects, and background music.
-- A fixed-length round with progress, completion feedback, and replay.
+- Gentle stars, milestone badges, and a child-facing sticker book whose collected word pictures can be tapped to hear them again.
+- Optional spoken prompts, reusable sound effects, and rotating background music that ducks under speech.
+- A fixed-length round with progress, completion feedback, a short fanfare, and replay.
 - Responsive layouts for touch devices, iPad portrait/landscape, and desktop.
 - Installable PWA support with offline app, word, sound, and icon assets.
 - Reduced-motion and keyboard-focus support.
 
-Settings are persisted in `localStorage` under `project-spell:settings:v1`. No account, backend, analytics, or network storage is used. Speech uses the browser's Web Speech API. The app requests a voice matching the selected region, while the exact available voice depends on the device.
+Settings are persisted in `localStorage` under `project-spell:settings:v1`. Anonymous play statistics and additive rewards use their own versioned, size-capped local keys; grown-ups can view a summary, export the data, or erase it in the app. No account, backend, analytics, personal data, or network storage is used. Speech uses the browser's Web Speech API. The app requests a voice matching the selected region, while the exact available voice depends on the device.
 
 ## Architecture
 
@@ -55,6 +56,10 @@ Settings are persisted in `localStorage` under `project-spell:settings:v1`. No a
 - `src/word-lists/` contains the regional entries and exclusions used to build each locale's word bank.
 - `src/components/Letter.jsx` renders one animated letter character.
 - `src/components/SettingsPanel.jsx` is the grown-ups configuration dialog.
+- `src/components/StickerBook.jsx` is the child-facing collection overlay.
+- `src/stats.js` and `src/progress.js` contain pure local play and reward aggregation.
+- `src/stickers/map.js` maps concrete words in each locale to shared Noto Emoji artwork.
+- `src/credits.js` is the in-app asset and dependency attribution catalogue.
 - `src/App.scss` contains the visual system and responsive behaviour.
 - `src/assets/app-icon*.svg` are the source artwork for generated PWA icons.
 - `src/game.test.js` and `src/App.test.jsx` cover the pure rules and primary user flow.

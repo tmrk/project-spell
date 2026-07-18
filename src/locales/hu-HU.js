@@ -50,6 +50,19 @@ const messages = Object.freeze({
   completePerfect: ' — mind elsőre.',
   roundStarsEarned: '{count} csillag ezért a körért',
   starJarLine: '★ {count} csillag van az üvegedben',
+  stickerBookHeading: 'A matricás könyvem',
+  stickerBookCount: '{count} matrica',
+  openStickerBook: 'Matricás könyv megnyitása',
+  closeStickerBook: 'Matricás könyv bezárása',
+  newStickerLine: 'Új matrica került a könyvedbe!',
+  badgeEarnedLine: 'Új jelvény: {badge}',
+  badgesHeading: 'Jelvények',
+  badgeFirstRound: 'Első kör',
+  badgeWords10: '10 szó',
+  badgeWords50: '50 szó',
+  badgeWords100: '100 szó',
+  badgePerfectRound: 'Hibátlan kör',
+  badgeNormalRound: 'Betűző csillag',
   playAgain: 'Újra',
   letterCompleted: 'kész',
   letterCurrent: 'aktuális betű',
@@ -120,6 +133,8 @@ const messages = Object.freeze({
   clearProgressWarning: 'Ez töröl minden helyben tárolt játékstatisztikát és jutalmat. Nem vonható vissza.',
   clearProgressConfirm: 'Törlés',
   clearProgressCancel: 'Adatok megtartása',
+  aboutHeading: 'Névjegy',
+  aboutCredits: 'Közreműködők és licencek',
 });
 
 export default Object.freeze({
