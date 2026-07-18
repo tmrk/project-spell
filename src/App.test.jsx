@@ -90,6 +90,31 @@ describe('Project Spell', () => {
     expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
 
+  it('applies the background signal before starting keydown audio', () => {
+    const signalsAtPlayback = [];
+    vi.spyOn(Audio.prototype, 'play').mockImplementation(function playImmediately() {
+      if (this.src.endsWith('/pop.mp3') || this.src.endsWith('/bad.mp3')) {
+        signalsAtPlayback.push({
+          feedback: document.querySelector('.app').dataset.feedback,
+          source: this.src,
+        });
+      }
+      return Promise.resolve();
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+
+    fireEvent.keyDown(input, { key: 'c' });
+    fireEvent.keyDown(input, { key: 'x' });
+
+    expect(signalsAtPlayback).toEqual([
+      { feedback: 'success', source: expect.stringMatching(/\/pop\.mp3$/u) },
+      { feedback: 'error', source: expect.stringMatching(/\/bad\.mp3$/u) },
+    ]);
+  });
+
   it('opens the parent settings without adding controls to the play flow', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
@@ -266,7 +291,22 @@ describe('Project Spell', () => {
 
     expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
     expect(letterSoundsBeforeFinalLetter).toHaveLength(2);
+    expect(letterSoundsBeforeFinalLetter[0]).toBe(letterSoundsBeforeFinalLetter[1]);
     expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/pop.mp3'))).toHaveLength(2);
+  });
+
+  it('preloads each reusable feedback sound before play begins', () => {
+    const loadSpy = vi.spyOn(Audio.prototype, 'load');
+    render(<App />);
+
+    expect(loadSpy.mock.contexts.map((audio) => audio.src)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/\/pop\.mp3$/u),
+        expect.stringMatching(/\/bad\.mp3$/u),
+        expect.stringMatching(/\/done\.mp3$/u),
+      ]),
+    );
+    expect(loadSpy.mock.contexts.every((audio) => audio.preload === 'auto')).toBe(true);
   });
 
   it('waits for the final ding to finish before giving varied spoken praise', () => {

@@ -23,7 +23,10 @@ class AudioMock extends EventTarget {
     this.loop = false;
     this.preload = '';
     this.volume = 1;
+    this.currentTime = 0;
   }
+
+  load() {}
 
   play() {
     return Promise.resolve();

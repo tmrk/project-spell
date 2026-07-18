@@ -87,20 +87,31 @@ function useSpeech(enabled, locale) {
 
 function useGameAudio(soundEffectsEnabled) {
   const musicRef = useRef(null);
-  const effectsRef = useRef(new Set());
+  const effectsRef = useRef(new Map());
   const [musicIsPlaying, setMusicIsPlaying] = useState(false);
 
   useEffect(() => {
     const music = new Audio(bgMusic);
-    const activeEffects = effectsRef.current;
+    const effects = new Map(
+      [popSfx, badSfx, doneSfx].map((source) => {
+        const sound = new Audio(source);
+        sound.preload = 'auto';
+        sound.load?.();
+        return [source, { cancelFinish: null, sound }];
+      }),
+    );
     music.loop = true;
     music.preload = 'auto';
     music.volume = 0.12;
     musicRef.current = music;
+    effectsRef.current = effects;
     return () => {
       music.pause();
-      activeEffects.forEach((sound) => sound.pause());
-      activeEffects.clear();
+      effects.forEach((effect) => {
+        effect.cancelFinish?.();
+        effect.sound.pause();
+      });
+      effects.clear();
       musicRef.current = null;
     };
   }, []);
@@ -126,26 +137,48 @@ function useGameAudio(soundEffectsEnabled) {
         return;
       }
 
-      const sound = new Audio(source);
-      sound.volume = volume;
-      effectsRef.current.add(sound);
-      let finished = false;
-      const release = () => {
-        if (finished) return;
-        finished = true;
-        effectsRef.current.delete(sound);
+      const effect = effectsRef.current.get(source);
+      if (!effect) {
         onFinished?.();
-      };
-      const canTrackPlayback = typeof sound.addEventListener === 'function';
-      sound.addEventListener?.('ended', release, { once: true });
-      sound.addEventListener?.('error', release, { once: true });
+        return;
+      }
+
+      const { sound } = effect;
+      effect.cancelFinish?.();
+      effect.cancelFinish = null;
+      sound.pause();
+      try {
+        sound.currentTime = 0;
+      } catch {
+        // Some browsers do not expose currentTime until metadata is ready.
+      }
+      sound.volume = volume;
+
+      let finish = null;
+      if (onFinished) {
+        let finished = false;
+        finish = () => {
+          if (finished) return;
+          finished = true;
+          sound.removeEventListener?.('ended', finish);
+          sound.removeEventListener?.('error', finish);
+          effect.cancelFinish = null;
+          onFinished();
+        };
+        effect.cancelFinish = () => {
+          finished = true;
+          sound.removeEventListener?.('ended', finish);
+          sound.removeEventListener?.('error', finish);
+        };
+        sound.addEventListener?.('ended', finish, { once: true });
+        sound.addEventListener?.('error', finish, { once: true });
+      }
 
       try {
         const playback = sound.play();
-        if (canTrackPlayback) playback?.catch(release);
-        else Promise.resolve(playback).then(release, release);
+        playback?.catch(finish ?? (() => {}));
       } catch {
-        release();
+        finish?.();
       }
     },
     [soundEffectsEnabled],
@@ -171,6 +204,7 @@ export default function App() {
   const advanceTimerRef = useRef(null);
   const transitioningRef = useRef(false);
   const lastPraiseIndexRef = useRef(-1);
+  const appRef = useRef(null);
   const currentWord = roundWords[wordIndex] ?? '';
   const currentWordLetters = useMemo(() => [...currentWord], [currentWord]);
   const locale = getLocale(settings.locale);
@@ -279,6 +313,12 @@ export default function App() {
     }, messageDelay);
   }, []);
 
+  const signalFeedback = useCallback((nextFeedback) => {
+    // Let CSS react within the key event; state keeps React's rendered value in sync.
+    appRef.current?.setAttribute('data-feedback', nextFeedback);
+    setFeedback(nextFeedback);
+  }, []);
+
   const completeWord = useCallback(() => {
     const isLastWord = wordIndex === roundWords.length - 1;
     if (isLastWord) {
@@ -317,11 +357,11 @@ export default function App() {
       for (const attempt of attempts) {
         const expected = currentWordLetters[nextLetterIndex];
         if (!lettersMatch(expected, attempt, settings.acceptUnaccented)) {
+          signalFeedback('error');
           playEffect(badSfx, 0.55);
 
           if (nextLetterIndex !== letterIndex) setLetterIndex(nextLetterIndex);
           setMistakes((count) => count + 1);
-          setFeedback('error');
           setFeedbackMessage(copy.tryAgain);
           resetFeedbackSoon();
           return;
@@ -332,7 +372,7 @@ export default function App() {
       }
 
       const wordIsComplete = nextLetterIndex === currentWordLetters.length;
-      setFeedback('success');
+      signalFeedback('success');
       setFeedbackMessage(copy.correctMessages[(nextLetterIndex - 1) % copy.correctMessages.length]);
       resetFeedbackSoon();
 
@@ -359,6 +399,7 @@ export default function App() {
       phase,
       playEffect,
       resetFeedbackSoon,
+      signalFeedback,
       settings.acceptUnaccented,
     ],
   );
@@ -428,7 +469,7 @@ export default function App() {
   };
 
   return (
-    <div className="app" data-feedback={feedback} data-phase={phase}>
+    <div ref={appRef} className="app" data-feedback={feedback} data-phase={phase}>
       <header className="app-controls" aria-label={copy.appControls}>
         {phase === 'playing' && (
           <button type="button" className="icon-button" onClick={repeatWord} aria-label={copy.hearAgain}>
