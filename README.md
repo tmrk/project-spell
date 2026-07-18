@@ -24,6 +24,7 @@ npm run check
 
 - Separate British-English and US-English banks, each with more than 350 words grouped across one through five syllables.
 - Locale-aware interface copy and Web Speech voice selection, with language choice on the start screen and in grown-ups settings.
+- A privacy-safe first-visit default based on the browser's regional locale; saved language choices always take precedence.
 - Configurable minimum/maximum word length, syllable count, and words per round.
 - Custom words, stored only in the browser.
 - Shape-aware animated letter eyes that can be switched off in the grown-ups panel.

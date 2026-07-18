@@ -9,6 +9,19 @@ import {
   normaliseSettings,
   parseCustomWords,
 } from './game';
+import { detectDefaultLocale } from './locales';
+
+describe('regional default', () => {
+  it('uses US English for US-spelling browser regions', () => {
+    ['en-US', 'en_US', 'es-US', 'en-AS', 'en-FM', 'en-GU', 'en-LR', 'en-MH', 'en-MP', 'en-PH', 'fil-PH', 'en-PR', 'en-PW', 'en-UM', 'en-VI']
+      .forEach((locale) => expect(detectDefaultLocale(locale)).toBe('en-US'));
+  });
+
+  it('uses British English for every other or unknown region', () => {
+    ['en-GB', 'en-AU', 'en-CA', 'en-IE', 'sv-SE', 'en', '', 'not-a-locale']
+      .forEach((locale) => expect(detectDefaultLocale(locale)).toBe('en-GB'));
+  });
+});
 
 describe('settings', () => {
   it('normalises unsafe and out-of-range values', () => {

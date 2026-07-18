@@ -8,7 +8,7 @@ import {
   createRound,
   normaliseSettings,
 } from './game';
-import { LOCALE_OPTIONS, formatMessage, getLocale } from './locales';
+import { LOCALE_OPTIONS, detectDefaultLocale, formatMessage, getLocale } from './locales';
 import croc from './assets/croc.svg';
 import bgMusic from './sounds/bgmusic.mp3';
 import doneSfx from './sounds/done.mp3';
@@ -17,11 +17,15 @@ import badSfx from './sounds/bad.mp3';
 import './App.scss';
 
 function loadSettings() {
+  const detectedLocale = detectDefaultLocale();
+
   try {
     const stored = window.localStorage.getItem(SETTINGS_KEY);
-    return stored ? normaliseSettings(JSON.parse(stored)) : DEFAULT_SETTINGS;
+    return stored
+      ? normaliseSettings({ locale: detectedLocale, ...JSON.parse(stored) })
+      : normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
   } catch {
-    return DEFAULT_SETTINGS;
+    return normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
   }
 }
 

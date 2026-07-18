@@ -29,6 +29,21 @@ describe('Project Spell', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
   });
 
+  it('uses the browser region on a first visit and preserves saved choices afterwards', () => {
+    window.localStorage.clear();
+    const languagesSpy = vi.spyOn(window.navigator, 'languages', 'get').mockReturnValue(['es-US']);
+
+    const firstVisit = render(<App />);
+    expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-US');
+    firstVisit.unmount();
+
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...DEFAULT_SETTINGS, locale: 'en-GB' }));
+    render(<App />);
+    expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-GB');
+
+    languagesSpy.mockRestore();
+  });
+
   it('starts a round and advances through a correctly typed word', async () => {
     vi.useFakeTimers();
     render(<App />);
