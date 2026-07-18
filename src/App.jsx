@@ -9,6 +9,14 @@ import {
   lettersMatch,
   normaliseSettings,
 } from './game';
+import {
+  STATS_KEY,
+  createEmptyStats,
+  normaliseStats,
+  recordAttempt,
+  recordRoundCompleted,
+  recordWordCompleted,
+} from './stats';
 import { LOCALE_OPTIONS, detectDefaultLocale, formatMessage, getLocale } from './locales';
 import croc from './assets/croc.svg';
 import bgMusic from './sounds/bgmusic.mp3';
@@ -31,6 +39,15 @@ function loadSettings() {
       : normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
   } catch {
     return normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
+  }
+}
+
+function loadStats() {
+  try {
+    const stored = window.localStorage.getItem(STATS_KEY);
+    return stored ? normaliseStats(JSON.parse(stored)) : createEmptyStats();
+  } catch {
+    return createEmptyStats();
   }
 }
 
@@ -334,9 +351,18 @@ export default function App() {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [hintLevel, setHintLevel] = useState('none');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsStats, setSettingsStats] = useState(null);
 
   const inputRef = useRef(null);
   const missCountRef = useRef(0);
+  // Stats live in refs so per-key bookkeeping never causes re-renders during play.
+  const statsRef = useRef(null);
+  if (statsRef.current === null) statsRef.current = loadStats();
+  const letterStartRef = useRef(0);
+  const wordStartRef = useRef(0);
+  const roundStartRef = useRef(0);
+  const wordMissesRef = useRef(0);
+  const roundMissesRef = useRef(0);
   const feedbackTimerRef = useRef(null);
   const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
@@ -413,6 +439,14 @@ export default function App() {
     setHintLevel('none');
   }, []);
 
+  const persistStats = useCallback(() => {
+    try {
+      window.localStorage.setItem(STATS_KEY, JSON.stringify(statsRef.current));
+    } catch {
+      // Statistics are best-effort; the game works without storage.
+    }
+  }, []);
+
   const startRound = useCallback(() => {
     const words = createRound(settings);
     if (!words.length) {
@@ -423,6 +457,12 @@ export default function App() {
     clearRoundTimers();
     transitioningRef.current = false;
     resetHintLadder();
+    const now = performance.now();
+    roundStartRef.current = now;
+    wordStartRef.current = now;
+    letterStartRef.current = now;
+    wordMissesRef.current = 0;
+    roundMissesRef.current = 0;
     setRoundWords(words);
     setWordIndex(0);
     setLetterIndex(0);
@@ -488,6 +528,10 @@ export default function App() {
     signalFeedback('idle');
     setFeedbackMessage('');
     transitioningRef.current = false;
+    const advanceTime = performance.now();
+    wordStartRef.current = advanceTime;
+    letterStartRef.current = advanceTime;
+    wordMissesRef.current = 0;
   }, [copy.roundFinishedSpeeches, pauseMusic, resetHintLadder, roundWords.length, say, signalFeedback, wordIndex]);
 
   const handleAttempt = useCallback(
@@ -502,9 +546,22 @@ export default function App() {
       let nextLetterIndex = letterIndex;
       for (const attempt of attempts) {
         const expected = currentWordLetters[nextLetterIndex];
-        if (!lettersMatch(expected, attempt, settings.acceptUnaccented)) {
+        const attemptTime = performance.now();
+        const correct = lettersMatch(expected, attempt, settings.acceptUnaccented);
+        statsRef.current = recordAttempt(statsRef.current, {
+          expected,
+          typed: attempt,
+          correct,
+          latencyMs: attemptTime - letterStartRef.current,
+          locale: settings.locale,
+          mode: settings.gameMode,
+        });
+        letterStartRef.current = attemptTime;
+        if (!correct) {
           signalFeedback('error');
           playEffect(badSfx, 0.55);
+          wordMissesRef.current += 1;
+          roundMissesRef.current += 1;
 
           if (nextLetterIndex !== letterIndex) {
             setLetterIndex(nextLetterIndex);
@@ -536,6 +593,23 @@ export default function App() {
 
       if (wordIsComplete) {
         transitioningRef.current = true;
+        const completionTime = performance.now();
+        statsRef.current = recordWordCompleted(statsRef.current, {
+          word: currentWord,
+          locale: settings.locale,
+          mistakes: wordMissesRef.current,
+          durationMs: completionTime - wordStartRef.current,
+          mode: settings.gameMode,
+        });
+        if (wordIndex === roundWords.length - 1) {
+          statsRef.current = recordRoundCompleted(statsRef.current, {
+            length: roundWords.length,
+            mistakes: roundMissesRef.current,
+            durationMs: completionTime - roundStartRef.current,
+            mode: settings.gameMode,
+          });
+        }
+        persistStats();
         setLetterIndex(currentWordLetters.length);
         setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
@@ -568,6 +642,7 @@ export default function App() {
       currentWordLetters,
       letterIndex,
       locale.code,
+      persistStats,
       phase,
       playEffect,
       resetFeedbackSoon,
@@ -576,6 +651,7 @@ export default function App() {
       signalFeedback,
       settings.acceptUnaccented,
       settings.gameMode,
+      settings.locale,
       speakLetter,
       wordIndex,
     ],
@@ -611,8 +687,19 @@ export default function App() {
   const openSettings = () => {
     cancelSpeech();
     pauseMusic();
+    setSettingsStats(statsRef.current);
     setSettingsOpen(true);
   };
+
+  const eraseProgress = useCallback(() => {
+    try {
+      window.localStorage.removeItem(STATS_KEY);
+    } catch {
+      // Nothing stored means nothing to erase.
+    }
+    statsRef.current = createEmptyStats();
+    setSettingsStats(statsRef.current);
+  }, []);
 
   const closeSettings = () => {
     setSettingsOpen(false);
@@ -773,7 +860,13 @@ export default function App() {
       </p>
 
       {settingsOpen && (
-        <SettingsPanel settings={settings} onClose={closeSettings} onSave={saveSettings} />
+        <SettingsPanel
+          settings={settings}
+          stats={settingsStats}
+          onEraseProgress={eraseProgress}
+          onClose={closeSettings}
+          onSave={saveSettings}
+        />
       )}
     </div>
   );

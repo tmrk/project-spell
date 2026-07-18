@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CloseIcon } from './Icons';
 import { DEFAULT_SETTINGS, PRESETS, getEligibleWords, normaliseSettings } from '../game';
+import { createEmptyStats, trickiestLetters } from '../stats';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
+
+const EMPTY_STATS = createEmptyStats();
 
 const NUMBER_OPTIONS = Array.from({ length: 13 }, (_, index) => index + 2);
 const ROUND_OPTIONS = [3, 5, 8, 10, 12, 15, 20];
@@ -58,13 +61,71 @@ function LanguageChangeDialog({ copy, onCancel, onConfirm }) {
   );
 }
 
-export default function SettingsPanel({ settings, onClose, onSave }) {
+function ClearProgressDialog({ copy, onCancel, onConfirm }) {
+  const confirmButtonRef = useRef(null);
+
+  useEffect(() => {
+    confirmButtonRef.current?.focus();
+  }, []);
+
+  return (
+    <div
+      className="confirmation-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <section
+        className="confirmation-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="clear-progress-title"
+        aria-describedby="clear-progress-warning"
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onCancel();
+        }}
+      >
+        <h3 id="clear-progress-title">{copy.clearProgressTitle}</h3>
+        <p id="clear-progress-warning">{copy.clearProgressWarning}</p>
+        <div className="confirmation-dialog__actions">
+          <button type="button" className="text-button" onClick={onCancel}>
+            {copy.clearProgressCancel}
+          </button>
+          <button
+            ref={confirmButtonRef}
+            type="button"
+            className="primary-button primary-button--small primary-button--danger"
+            onClick={onConfirm}
+          >
+            {copy.clearProgressConfirm}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export default function SettingsPanel({
+  settings,
+  stats = null,
+  progress = null,
+  onEraseProgress,
+  onClose,
+  onSave,
+}) {
   const [draft, setDraft] = useState(settings);
   const [pendingSettings, setPendingSettings] = useState(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const closeButtonRef = useRef(null);
   const languageSelectRef = useRef(null);
   const copy = getLocale(draft.locale).messages;
   const eligibleCount = useMemo(() => getEligibleWords(draft).length, [draft]);
+  const statsData = stats ?? EMPTY_STATS;
+  const hasPlayData = statsData.totals.attempts > 0 || statsData.totals.wordsCompleted > 0;
+  const trickyLetters = trickiestLetters(statsData);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -108,6 +169,27 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
         unit: eligibleCount === 1 ? copy.wordSingular : copy.wordPlural,
       })
     : copy.noWordsMatch;
+
+  const downloadData = () => {
+    try {
+      const payload = JSON.stringify({ stats: statsData, progress }, null, 2);
+      const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `project-spell-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Downloading is a convenience; some embedded browsers block blob URLs.
+    }
+  };
+
+  const confirmClearProgress = () => {
+    onEraseProgress?.();
+    setConfirmingClear(false);
+  };
 
   return (
     <div className="settings-backdrop" role="presentation" onPointerDown={onClose}>
@@ -304,6 +386,41 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
             </label>
           </fieldset>
 
+          <fieldset className="settings-section settings-section--compact">
+            <legend>{copy.progressHeading}</legend>
+            {hasPlayData ? (
+              <ul className="progress-summary">
+                <li>{formatMessage(copy.progressWordsPractised, { count: statsData.totals.wordsCompleted })}</li>
+                <li>{formatMessage(copy.progressRoundsFinished, { count: statsData.totals.roundsCompleted })}</li>
+                <li>{formatMessage(copy.progressPlayTime, { minutes: Math.round(statsData.totals.playMs / 60000) })}</li>
+                {trickyLetters.length > 0 && (
+                  <li>
+                    {formatMessage(copy.progressTrickyLetters, {
+                      letters: trickyLetters
+                        .map((letter) => letter.toLocaleUpperCase(draft.locale))
+                        .join(', '),
+                    })}
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <p className="progress-empty">{copy.progressNoData}</p>
+            )}
+            <div className="progress-actions">
+              <button type="button" className="text-button" onClick={downloadData} disabled={!hasPlayData}>
+                {copy.downloadData}
+              </button>
+              <button
+                type="button"
+                className="text-button text-button--danger"
+                onClick={() => setConfirmingClear(true)}
+                disabled={!hasPlayData}
+              >
+                {copy.clearProgress}
+              </button>
+            </div>
+          </fieldset>
+
           <footer className="settings-footer">
             <button type="button" className="text-button" onClick={resetSettings}>
               {copy.reset}
@@ -323,6 +440,14 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
           copy={copy}
           onCancel={cancelLanguageChange}
           onConfirm={() => onSave(pendingSettings)}
+        />
+      )}
+
+      {confirmingClear && (
+        <ClearProgressDialog
+          copy={copy}
+          onCancel={() => setConfirmingClear(false)}
+          onConfirm={confirmClearProgress}
         />
       )}
     </div>

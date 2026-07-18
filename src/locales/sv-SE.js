@@ -83,6 +83,18 @@ const messages = Object.freeze({
   languageChangeWarning: 'Spelet startas om och går tillbaka till startsidan.',
   keepLanguage: 'Behåll nuvarande språk',
   changeAndRestart: 'Byt och starta om',
+  progressHeading: 'Framsteg',
+  progressWordsPractised: '{count} övade ord',
+  progressRoundsFinished: '{count} avklarade rundor',
+  progressPlayTime: '{minutes} minuters spel',
+  progressTrickyLetters: 'Kluriga bokstäver: {letters}',
+  progressNoData: 'Ingen speldata ännu — statistik visas efter de första stavade orden.',
+  downloadData: 'Ladda ner data',
+  clearProgress: 'Rensa framsteg',
+  clearProgressTitle: 'Rensa framsteg?',
+  clearProgressWarning: 'Detta raderar all lokalt sparad spelstatistik och alla belöningar. Det går inte att ångra.',
+  clearProgressConfirm: 'Rensa allt',
+  clearProgressCancel: 'Behåll min data',
 });
 
 export default Object.freeze({

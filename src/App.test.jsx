@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
+import { STATS_KEY } from './stats';
 
 describe('Project Spell', () => {
   beforeEach(() => {
@@ -484,6 +485,34 @@ describe('Project Spell', () => {
     act(() => vi.advanceTimersByTime(651));
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toBeInTheDocument();
+  });
+
+  it('records play statistics on word completion and lets grown-ups erase them', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'xcat' },
+    });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'cat' },
+    });
+
+    const stored = JSON.parse(window.localStorage.getItem(STATS_KEY));
+    expect(stored.totals).toMatchObject({ attempts: 4, misses: 1, wordsCompleted: 1 });
+    expect(stored.letters.c.attempts).toBe(2);
+    expect(stored.confusions['c→x']).toBe(1);
+    expect(stored.words['en-GB/cat']).toMatchObject({ completed: 1, perfect: false });
+    expect(stored.recentEvents.length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    expect(screen.getByText('1 words practised')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear progress' }));
+    expect(screen.getByRole('alertdialog', { name: 'Clear progress?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear everything' }));
+
+    expect(window.localStorage.getItem(STATS_KEY)).toBeNull();
+    expect(screen.getByText(/No play data yet/)).toBeInTheDocument();
   });
 
   it('lets grown-ups pick normal mode and reminds them it needs speech', () => {

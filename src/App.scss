@@ -737,6 +737,54 @@ input:focus-visible {
   text-underline-offset: 3px;
 }
 
+.text-button--danger {
+  color: #b53645;
+}
+
+.text-button:disabled {
+  color: rgba(32, 48, 43, 0.32);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.primary-button--danger {
+  background: #ef5263;
+  box-shadow: 0 5px 0 #c23648;
+}
+
+.primary-button--danger:hover {
+  background: #e94a5b;
+}
+
+.primary-button--danger:active {
+  box-shadow: 0 3px 0 #c23648;
+}
+
+.progress-summary {
+  display: grid;
+  margin: 0 0 10px;
+  padding: 0;
+  color: rgba(32, 48, 43, 0.72);
+  font-size: 0.86rem;
+  font-weight: 700;
+  list-style: none;
+  gap: 8px;
+}
+
+.progress-empty {
+  margin: 0 0 10px;
+  color: rgba(32, 48, 43, 0.52);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.progress-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

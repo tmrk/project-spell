@@ -83,6 +83,18 @@ const messages = Object.freeze({
   languageChangeWarning: 'A játék újraindul, és visszatér a kezdőoldalra.',
   keepLanguage: 'Maradjon a jelenlegi nyelv',
   changeAndRestart: 'Módosítás és újraindítás',
+  progressHeading: 'Haladás',
+  progressWordsPractised: '{count} gyakorolt szó',
+  progressRoundsFinished: '{count} befejezett kör',
+  progressPlayTime: '{minutes} perc játék',
+  progressTrickyLetters: 'Nehéz betűk: {letters}',
+  progressNoData: 'Még nincs játékadat — a statisztika az első leírt szavak után jelenik meg.',
+  downloadData: 'Adatok letöltése',
+  clearProgress: 'Haladás törlése',
+  clearProgressTitle: 'Törlöd a haladást?',
+  clearProgressWarning: 'Ez töröl minden helyben tárolt játékstatisztikát és jutalmat. Nem vonható vissza.',
+  clearProgressConfirm: 'Törlés',
+  clearProgressCancel: 'Adatok megtartása',
 });
 
 export default Object.freeze({

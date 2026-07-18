@@ -83,6 +83,18 @@ const messages = Object.freeze({
   languageChangeWarning: 'This will restart the game and return to the start page.',
   keepLanguage: 'Keep current language',
   changeAndRestart: 'Change & restart',
+  progressHeading: 'Progress',
+  progressWordsPractised: '{count} words practised',
+  progressRoundsFinished: '{count} rounds finished',
+  progressPlayTime: '{minutes} minutes of play',
+  progressTrickyLetters: 'Tricky letters: {letters}',
+  progressNoData: 'No play data yet — statistics appear after the first words are spelled.',
+  downloadData: 'Download data',
+  clearProgress: 'Clear progress',
+  clearProgressTitle: 'Clear progress?',
+  clearProgressWarning: 'This erases all locally stored play statistics and rewards. It cannot be undone.',
+  clearProgressConfirm: 'Clear everything',
+  clearProgressCancel: 'Keep my data',
 });
 
 export default Object.freeze({
