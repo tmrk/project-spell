@@ -16,6 +16,8 @@ import popSfx from './sounds/pop.mp3';
 import badSfx from './sounds/bad.mp3';
 import './App.scss';
 
+const WORD_COMPLETION_PAUSE = 120;
+
 function loadSettings() {
   const detectedLocale = detectDefaultLocale();
 
@@ -110,15 +112,33 @@ function useGameAudio(soundEffectsEnabled) {
   }, []);
 
   const playEffect = useCallback(
-    (source, volume = 0.7) => {
-      if (!soundEffectsEnabled) return;
+    (source, volume = 0.7, onFinished) => {
+      if (!soundEffectsEnabled) {
+        onFinished?.();
+        return;
+      }
+
       const sound = new Audio(source);
       sound.volume = volume;
       effectsRef.current.add(sound);
-      const release = () => effectsRef.current.delete(sound);
+      let finished = false;
+      const release = () => {
+        if (finished) return;
+        finished = true;
+        effectsRef.current.delete(sound);
+        onFinished?.();
+      };
+      const canTrackPlayback = typeof sound.addEventListener === 'function';
       sound.addEventListener?.('ended', release, { once: true });
       sound.addEventListener?.('error', release, { once: true });
-      sound.play().catch(release);
+
+      try {
+        const playback = sound.play();
+        if (canTrackPlayback) playback?.catch(release);
+        else Promise.resolve(playback).then(release, release);
+      } catch {
+        release();
+      }
     },
     [soundEffectsEnabled],
   );
@@ -142,6 +162,7 @@ export default function App() {
   const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
   const transitioningRef = useRef(false);
+  const lastPraiseIndexRef = useRef(-1);
   const currentWord = roundWords[wordIndex] ?? '';
   const locale = getLocale(settings.locale);
   const copy = locale.messages;
@@ -257,7 +278,13 @@ export default function App() {
       setPhase('complete');
       transitioningRef.current = false;
       pauseMusic();
-      say(copy.roundFinishedSpeech);
+      const praises = copy.roundFinishedSpeeches;
+      let praiseIndex = Math.floor(Math.random() * praises.length);
+      if (praises.length > 1 && praiseIndex === lastPraiseIndexRef.current) {
+        praiseIndex = (praiseIndex + 1) % praises.length;
+      }
+      lastPraiseIndexRef.current = praiseIndex;
+      say(praises[praiseIndex]);
       return;
     }
 
@@ -266,7 +293,7 @@ export default function App() {
     setFeedback('idle');
     setFeedbackMessage('');
     transitioningRef.current = false;
-  }, [copy.roundFinishedSpeech, pauseMusic, roundWords.length, say, wordIndex]);
+  }, [copy.roundFinishedSpeeches, pauseMusic, roundWords.length, say, wordIndex]);
 
   const handleAttempt = useCallback(
     (value) => {
@@ -294,18 +321,20 @@ export default function App() {
       }
 
       const wordIsComplete = nextLetterIndex === currentWord.length;
-      playEffect(wordIsComplete ? doneSfx : popSfx, wordIsComplete ? 0.8 : 0.7);
       setFeedback('success');
       setFeedbackMessage(copy.correctMessages[(nextLetterIndex - 1) % copy.correctMessages.length]);
       resetFeedbackSoon();
 
-      if (nextLetterIndex === currentWord.length) {
+      if (wordIsComplete) {
         transitioningRef.current = true;
         setLetterIndex(currentWord.length);
         setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
-        advanceTimerRef.current = window.setTimeout(completeWord, 1000);
+        playEffect(doneSfx, 0.8, () => {
+          advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
+        });
       } else {
+        playEffect(popSfx, 0.7);
         setLetterIndex(nextLetterIndex);
       }
     },

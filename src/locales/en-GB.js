@@ -8,7 +8,12 @@ const messages = Object.freeze({
   language: 'Language',
   play: 'Play',
   spellPrompt: 'Spell the word {word}',
-  roundFinishedSpeech: 'Amazing! You finished the round!',
+  roundFinishedSpeeches: Object.freeze([
+    'Amazing! You finished the round!',
+    'Brilliant work! You finished the round!',
+    'Wonderful spelling! You finished the round!',
+    'Fantastic! You finished the round!',
+  ]),
   tryAgain: 'Try once more',
   wordFinished: 'That’s the word!',
   correctMessages: Object.freeze(['Nice!', 'Yes!', 'Brilliant!', 'You got it!']),

@@ -42,11 +42,16 @@ describe('Letter eyes', () => {
     eyes.forEach((eye) => expect(eye).toHaveAttribute('data-blinking', 'true'));
   });
 
-  it('defines shape-aware positions for the whole alphabet and gives I one eye', () => {
+  it('keeps every letter\'s eyes on one horizontal stroke', () => {
     expect(Object.keys(EYE_OFFSETS).sort().join('')).toBe('abcdefghijklmnopqrstuvwxyz');
     expect(Object.values(EYE_OFFSETS).every((offsets) => offsets.length >= 1 && offsets.length <= 2)).toBe(true);
+    expect(
+      Object.values(EYE_OFFSETS).every((offsets) => new Set(offsets.map(([, y]) => y)).size === 1),
+    ).toBe(true);
+  });
 
-    render(<Letter letter="i" state="waiting" onSpeak={vi.fn()} />);
+  it.each(['i', 'j'])('gives the narrow letter %s one centred eye', (letter) => {
+    render(<Letter letter={letter} state="waiting" onSpeak={vi.fn()} />);
     expect(screen.getAllByTestId('cartoon-eye')).toHaveLength(1);
   });
 

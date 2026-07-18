@@ -16,8 +16,9 @@ const localStorageMock = {
 
 Object.defineProperty(window, 'localStorage', { configurable: true, value: localStorageMock });
 
-class AudioMock {
+class AudioMock extends EventTarget {
   constructor(source) {
+    super();
     this.src = source;
     this.loop = false;
     this.preload = '';

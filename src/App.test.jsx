@@ -46,6 +46,7 @@ describe('Project Spell', () => {
 
   it('starts a round and advances through a correctly typed word', async () => {
     vi.useFakeTimers();
+    const playSpy = vi.spyOn(Audio.prototype, 'play');
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
@@ -53,9 +54,11 @@ describe('Project Spell', () => {
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
 
     fireEvent.input(input, { target: { value: 'cat' } });
+    const ding = playSpy.mock.contexts.find((audio) => audio.src.endsWith('/done.mp3'));
+    act(() => ding.dispatchEvent(new Event('ended')));
 
     await act(async () => {
-      vi.advanceTimersByTime(1050);
+      vi.advanceTimersByTime(120);
     });
 
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
@@ -155,15 +158,59 @@ describe('Project Spell', () => {
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({ eyes: false });
   });
 
-  it('plays the original done sound as soon as a word is completed', () => {
+  it('replaces the final letter sound with the word-completion ding', () => {
     const playSpy = vi.spyOn(Audio.prototype, 'play');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    const input = screen.getByRole('textbox', { name: 'Type the next letter' });
 
-    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
-      target: { value: 'cat' },
-    });
+    fireEvent.input(input, { target: { value: 'c' } });
+    fireEvent.input(input, { target: { value: 'a' } });
+    const letterSoundsBeforeFinalLetter = playSpy.mock.contexts.filter((audio) =>
+      audio.src.endsWith('/pop.mp3'));
+    fireEvent.input(input, { target: { value: 't' } });
 
     expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
+    expect(letterSoundsBeforeFinalLetter).toHaveLength(2);
+    expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/pop.mp3'))).toHaveLength(2);
+  });
+
+  it('waits for the final ding to finish before giving varied spoken praise', () => {
+    vi.useFakeTimers();
+    const playSpy = vi.spyOn(Audio.prototype, 'play');
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    act(() => vi.advanceTimersByTime(121));
+    window.speechSynthesis.speak.mockClear();
+
+    for (let word = 1; word <= 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
+
+      expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+      act(() => ding.dispatchEvent(new Event('ended')));
+      expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(120));
+    }
+
+    const firstPraise = window.speechSynthesis.speak.mock.calls.at(-1)[0].text;
+    expect(firstPraise).toBe('Amazing! You finished the round!');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    for (let word = 1; word <= 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
+      act(() => ding.dispatchEvent(new Event('ended')));
+      act(() => vi.advanceTimersByTime(120));
+    }
+
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe(
+      'Brilliant work! You finished the round!',
+    );
   });
 });
