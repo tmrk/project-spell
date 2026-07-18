@@ -8,6 +8,12 @@ const BLINK_FREQUENCY_MIN = 2600;
 const BLINK_FREQUENCY_RANGE = 2600;
 const GAZE_FREQUENCY = 1700;
 const CENTRED_GAZE = Object.freeze([0, 0]);
+const DEFAULT_LABELS = Object.freeze({
+  completed: 'completed',
+  current: 'current letter',
+  next: 'next',
+  template: '{letter}, {state}',
+});
 
 const randomGazePosition = () => Math.floor(Math.random() * 181) - 90;
 
@@ -31,7 +37,7 @@ function PositionedEye({ style, gaze, isBlinking, blinkFrequency }) {
   );
 }
 
-export default function Letter({ letter, state, onSpeak, showEyes = true }) {
+export default function Letter({ letter, state, onSpeak, showEyes = true, labels = DEFAULT_LABELS }) {
   const [isWobbling, setIsWobbling] = useState(false);
   const [blinkTiming] = useState(() => ({
     startDelay: BLINK_START_MIN + Math.floor(Math.random() * BLINK_START_RANGE),
@@ -40,7 +46,7 @@ export default function Letter({ letter, state, onSpeak, showEyes = true }) {
   const [isBlinking, setIsBlinking] = useState(false);
   const [gaze, setGaze] = useState(CENTRED_GAZE);
   const eyeStyles = getEyeStyle(letter);
-  const stateLabel = state === 'done' ? 'completed' : state === 'active' ? 'current letter' : 'next';
+  const stateLabel = state === 'done' ? labels.completed : state === 'active' ? labels.current : labels.next;
 
   useEffect(() => {
     if (!showEyes) return undefined;
@@ -68,7 +74,9 @@ export default function Letter({ letter, state, onSpeak, showEyes = true }) {
       className={`letter letter--${state}${isWobbling ? ' letter--wobbling' : ''}`}
       onClick={handleClick}
       onAnimationEnd={() => setIsWobbling(false)}
-      aria-label={`${letter}, ${stateLabel}`}
+      aria-label={labels.template
+        .replace('{letter}', letter)
+        .replace('{state}', stateLabel)}
     >
       <span className="letter__visual" aria-hidden="true">
         {showEyes && (

@@ -66,6 +66,54 @@ describe('Project Spell', () => {
     expect(screen.getByLabelText('Words in a row')).toHaveValue('3');
   });
 
+  it('offers language selection on the start page and uses an American voice for US English', () => {
+    vi.useFakeTimers();
+    const britishVoice = { lang: 'en-GB', name: 'Google UK English Female' };
+    const usVoice = { lang: 'en-US', name: 'Samantha' };
+    window.speechSynthesis.getVoices.mockReturnValue([britishVoice, usVoice]);
+
+    render(<App />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
+      target: { value: 'en-US' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    act(() => vi.advanceTimersByTime(121));
+
+    const utterance = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    expect(utterance.lang).toBe('en-US');
+    expect(utterance.voice).toBe(usVoice);
+    expect(document.documentElement).toHaveAttribute('lang', 'en-US');
+  });
+
+  it('requires confirmation before a settings language change restarts the game', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
+      target: { value: 'en-US' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+
+    expect(screen.getByRole('alertdialog', { name: 'Change language?' })).toBeInTheDocument();
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep current language' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Grown-ups' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-GB');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
+      target: { value: 'en-US' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change & restart' }));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
+    expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-US');
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({ locale: 'en-US' });
+  });
+
   it('lets grown-ups switch the letter eyes off', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));

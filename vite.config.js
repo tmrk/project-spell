@@ -14,7 +14,7 @@ export default defineConfig({
         name: 'Project Spell',
         short_name: 'Spell',
         description: 'A calm, playful spelling game for children.',
-        lang: 'en-GB',
+        lang: 'en',
         start_url: '/project-spell/',
         scope: '/project-spell/',
         display: 'standalone',

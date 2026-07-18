@@ -22,7 +22,8 @@ npm run check
 
 ## What is included
 
-- A curated bank of more than 350 English words grouped across one through five syllables.
+- Separate British-English and US-English banks, each with more than 350 words grouped across one through five syllables.
+- Locale-aware interface copy and Web Speech voice selection, with language choice on the start screen and in grown-ups settings.
 - Configurable minimum/maximum word length, syllable count, and words per round.
 - Custom words, stored only in the browser.
 - Shape-aware animated letter eyes that can be switched off in the grown-ups panel.
@@ -32,12 +33,14 @@ npm run check
 - Installable PWA support with offline app, word, sound, and icon assets.
 - Reduced-motion and keyboard-focus support.
 
-Settings are persisted in `localStorage` under `project-spell:settings:v1`. No account, backend, analytics, or network storage is used. Speech uses the browser's Web Speech API, so the exact voice depends on the device.
+Settings are persisted in `localStorage` under `project-spell:settings:v1`. No account, backend, analytics, or network storage is used. Speech uses the browser's Web Speech API. The app requests a voice matching the selected region, while the exact available voice depends on the device.
 
 ## Architecture
 
 - `src/App.jsx` owns the round state and browser integrations (speech, audio, persistence).
 - `src/game.js` contains the word bank and pure selection/settings helpers.
+- `src/locales/` contains the display and spoken copy for each supported locale.
+- `src/word-lists/` contains the regional entries and exclusions used to build each locale's word bank.
 - `src/components/Letter.jsx` renders one animated letter character.
 - `src/components/SettingsPanel.jsx` is the grown-ups configuration dialog.
 - `src/App.scss` contains the visual system and responsive behaviour.

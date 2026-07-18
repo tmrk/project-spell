@@ -8,14 +8,13 @@ import {
   createRound,
   normaliseSettings,
 } from './game';
+import { LOCALE_OPTIONS, formatMessage, getLocale } from './locales';
 import croc from './assets/croc.svg';
 import bgMusic from './sounds/bgmusic.mp3';
 import doneSfx from './sounds/done.mp3';
 import popSfx from './sounds/pop.mp3';
 import badSfx from './sounds/bad.mp3';
 import './App.scss';
-
-const CORRECT_MESSAGES = ['Nice!', 'Yes!', 'Great!', 'You got it!'];
 
 function loadSettings() {
   try {
@@ -26,25 +25,29 @@ function loadSettings() {
   }
 }
 
-function useSpeech(enabled) {
+function useSpeech(enabled, locale) {
   const voiceRef = useRef(null);
+  const { code, voiceNamePattern } = getLocale(locale);
 
   useEffect(() => {
+    voiceRef.current = null;
     if (!('speechSynthesis' in window)) return undefined;
 
     const chooseVoice = () => {
       const voices = window.speechSynthesis.getVoices();
+      const regionalVoices = voices.filter(
+        (voice) => voice.lang?.replace('_', '-').toLowerCase() === code.toLowerCase(),
+      );
       voiceRef.current =
-        voices.find((voice) => voice.lang === 'en-GB' && /female|serena|samantha|kate/iu.test(voice.name)) ??
-        voices.find((voice) => voice.lang === 'en-GB') ??
-        voices.find((voice) => voice.lang.startsWith('en')) ??
+        regionalVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
+        regionalVoices[0] ??
         null;
     };
 
     chooseVoice();
     window.speechSynthesis.addEventListener?.('voiceschanged', chooseVoice);
     return () => window.speechSynthesis.removeEventListener?.('voiceschanged', chooseVoice);
-  }, []);
+  }, [code, voiceNamePattern]);
 
   const cancel = useCallback(() => {
     window.speechSynthesis?.cancel();
@@ -56,13 +59,13 @@ function useSpeech(enabled) {
 
       window.speechSynthesis.cancel();
       const utterance = new window.SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-GB';
+      utterance.lang = code;
       utterance.voice = voiceRef.current;
       utterance.rate = options.rate ?? 0.82;
       utterance.pitch = options.pitch ?? 1.04;
       window.speechSynthesis.speak(utterance);
     },
-    [enabled],
+    [code, enabled],
   );
 
   return { cancel, say };
@@ -136,8 +139,10 @@ export default function App() {
   const advanceTimerRef = useRef(null);
   const transitioningRef = useRef(false);
   const currentWord = roundWords[wordIndex] ?? '';
+  const locale = getLocale(settings.locale);
+  const copy = locale.messages;
 
-  const { cancel: cancelSpeech, say } = useSpeech(settings.speech);
+  const { cancel: cancelSpeech, say } = useSpeech(settings.speech, settings.locale);
   const { musicIsPlaying, pauseMusic, playEffect, playMusic } = useGameAudio(settings.soundEffects);
 
   useEffect(() => {
@@ -149,14 +154,21 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
+    document.documentElement.lang = locale.code;
+  }, [locale.code]);
+
+  useEffect(() => {
     if (!settings.music) pauseMusic();
   }, [pauseMusic, settings.music]);
 
   useEffect(() => {
     if (phase !== 'playing' || !currentWord || settingsOpen) return undefined;
-    const timer = window.setTimeout(() => say(`Spell the word ${currentWord}`), 120);
+    const timer = window.setTimeout(
+      () => say(formatMessage(copy.spellPrompt, { word: currentWord })),
+      120,
+    );
     return () => window.clearTimeout(timer);
-  }, [currentWord, phase, say, settingsOpen]);
+  }, [copy.spellPrompt, currentWord, phase, say, settingsOpen]);
 
   useEffect(() => {
     if (phase !== 'playing' || settingsOpen) return undefined;
@@ -210,9 +222,9 @@ export default function App() {
   }, [clearRoundTimers, playMusic, settings]);
 
   const repeatWord = useCallback(() => {
-    if (currentWord) say(`Spell the word ${currentWord}`);
+    if (currentWord) say(formatMessage(copy.spellPrompt, { word: currentWord }));
     focusInput();
-  }, [currentWord, focusInput, say]);
+  }, [copy.spellPrompt, currentWord, focusInput, say]);
 
   const speakLetter = useCallback(
     (letter) => {
@@ -241,7 +253,7 @@ export default function App() {
       setPhase('complete');
       transitioningRef.current = false;
       pauseMusic();
-      say('Amazing! You finished the round!');
+      say(copy.roundFinishedSpeech);
       return;
     }
 
@@ -250,7 +262,7 @@ export default function App() {
     setFeedback('idle');
     setFeedbackMessage('');
     transitioningRef.current = false;
-  }, [pauseMusic, roundWords.length, say, wordIndex]);
+  }, [copy.roundFinishedSpeech, pauseMusic, roundWords.length, say, wordIndex]);
 
   const handleAttempt = useCallback(
     (value) => {
@@ -268,7 +280,7 @@ export default function App() {
           if (nextLetterIndex !== letterIndex) setLetterIndex(nextLetterIndex);
           setMistakes((count) => count + 1);
           setFeedback('error');
-          setFeedbackMessage('Try once more');
+          setFeedbackMessage(copy.tryAgain);
           resetFeedbackSoon();
           return;
         }
@@ -280,20 +292,20 @@ export default function App() {
       const wordIsComplete = nextLetterIndex === currentWord.length;
       playEffect(wordIsComplete ? doneSfx : popSfx, wordIsComplete ? 0.8 : 0.7);
       setFeedback('success');
-      setFeedbackMessage(CORRECT_MESSAGES[(nextLetterIndex - 1) % CORRECT_MESSAGES.length]);
+      setFeedbackMessage(copy.correctMessages[(nextLetterIndex - 1) % copy.correctMessages.length]);
       resetFeedbackSoon();
 
       if (nextLetterIndex === currentWord.length) {
         transitioningRef.current = true;
         setLetterIndex(currentWord.length);
-        setFeedbackMessage('That’s the word!');
+        setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
         advanceTimerRef.current = window.setTimeout(completeWord, 1000);
       } else {
         setLetterIndex(nextLetterIndex);
       }
     },
-    [completeWord, currentWord, letterIndex, phase, playEffect, resetFeedbackSoon],
+    [completeWord, copy, currentWord, letterIndex, phase, playEffect, resetFeedbackSoon],
   );
 
   const handleInput = useCallback(
@@ -349,11 +361,22 @@ export default function App() {
     setSettingsOpen(false);
   };
 
+  const changeWelcomeLanguage = (event) => {
+    setSettings((current) => normaliseSettings({ ...current, locale: event.target.value }));
+  };
+
+  const letterLabels = {
+    completed: copy.letterCompleted,
+    current: copy.letterCurrent,
+    next: copy.letterNext,
+    template: copy.letterLabel,
+  };
+
   return (
     <div className="app" data-feedback={feedback} data-phase={phase}>
-      <header className="app-controls" aria-label="Game controls">
+      <header className="app-controls" aria-label={copy.appControls}>
         {phase === 'playing' && (
-          <button type="button" className="icon-button" onClick={repeatWord} aria-label="Hear the word again">
+          <button type="button" className="icon-button" onClick={repeatWord} aria-label={copy.hearAgain}>
             <RepeatIcon />
           </button>
         )}
@@ -361,11 +384,11 @@ export default function App() {
           type="button"
           className="icon-button"
           onClick={toggleMusic}
-          aria-label={settings.music && musicIsPlaying ? 'Turn music off' : 'Turn music on'}
+          aria-label={settings.music && musicIsPlaying ? copy.turnMusicOff : copy.turnMusicOn}
         >
           <MusicIcon muted={!settings.music || !musicIsPlaying} />
         </button>
-        <button type="button" className="icon-button" onClick={openSettings} aria-label="Open grown-ups settings">
+        <button type="button" className="icon-button" onClick={openSettings} aria-label={copy.openSettings}>
           <SettingsIcon />
         </button>
       </header>
@@ -373,19 +396,32 @@ export default function App() {
       {phase === 'welcome' && (
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
-          <p className="eyebrow">Project Spell</p>
-          <h1>Ready to spell?</h1>
-          <p className="welcome-screen__hint">Listen, then type one letter at a time.</p>
-          <button type="button" className="primary-button" onClick={startRound}>
-            Play
+          <p className="eyebrow">{copy.projectName}</p>
+          <h1>{copy.welcomeHeading}</h1>
+          <p className="welcome-screen__hint">{copy.welcomeHint}</p>
+          <label className="welcome-language">
+            <span>{copy.language}</span>
+            <select value={settings.locale} onChange={changeWelcomeLanguage}>
+              {LOCALE_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="primary-button welcome-play-button" onClick={startRound}>
+            {copy.play}
           </button>
         </main>
       )}
 
       {phase === 'playing' && (
         <main className="play-screen" onClick={focusInput}>
-          <div className="round-progress" aria-label={`Word ${wordIndex + 1} of ${roundWords.length}`}>
-            <span className="round-progress__count">{wordIndex + 1} / {roundWords.length}</span>
+          <div
+            className="round-progress"
+            aria-label={formatMessage(copy.progress, { current: wordIndex + 1, total: roundWords.length })}
+          >
+            <span className="round-progress__count">
+              {formatMessage(copy.progressCount, { current: wordIndex + 1, total: roundWords.length })}
+            </span>
             <div className="round-progress__track">
               <div className="round-progress__value" style={{ width: `${progress}%` }}>
                 <img src={croc} alt="" />
@@ -399,7 +435,7 @@ export default function App() {
               '--letter-count': currentWord.length,
               '--letter-size': `${Math.min(15, 94 / currentWord.length)}vw`,
             }}
-            aria-label={`${currentWord.length} letter word`}
+            aria-label={formatMessage(copy.letterWord, { count: currentWord.length })}
           >
             {[...currentWord].map((letter, index) => (
               <Letter
@@ -408,6 +444,7 @@ export default function App() {
                 state={index < letterIndex ? 'done' : index === letterIndex ? 'active' : 'waiting'}
                 onSpeak={speakLetter}
                 showEyes={settings.eyes}
+                labels={letterLabels}
               />
             ))}
           </div>
@@ -423,7 +460,7 @@ export default function App() {
             className="typing-input"
             type="text"
             inputMode="text"
-            aria-label="Type the next letter"
+            aria-label={copy.typeNextLetter}
             defaultValue=""
             onInput={handleInput}
             onKeyDown={handleKeyDown}
@@ -438,13 +475,16 @@ export default function App() {
       {phase === 'complete' && (
         <main className="complete-screen">
           <div className="complete-screen__mark" aria-hidden="true">✓</div>
-          <p className="eyebrow">Round complete</p>
-          <h1>Brilliant spelling!</h1>
+          <p className="eyebrow">{copy.roundComplete}</p>
+          <h1>{copy.completeHeading}</h1>
           <p>
-            {roundWords.length} words finished{mistakes === 0 ? ' — all first try.' : '.'}
+            {formatMessage(copy.completeSummary, {
+              count: roundWords.length,
+              perfect: mistakes === 0 ? copy.completePerfect : '.',
+            })}
           </p>
           <button type="button" className="primary-button" onClick={startRound}>
-            Play again
+            {copy.playAgain}
           </button>
         </main>
       )}

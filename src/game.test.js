@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   WORD_BANK,
+  WORD_BANKS,
   createRound,
   estimateSyllables,
   getEligibleWords,
@@ -20,6 +21,7 @@ describe('settings', () => {
         wordSource: 'unexpected',
       }),
     ).toMatchObject({
+      locale: 'en-GB',
       minLetters: 12,
       maxLetters: 12,
       roundLength: 20,
@@ -37,7 +39,16 @@ describe('settings', () => {
   });
 
   it('enables eyes when loading settings saved before the preference existed', () => {
-    expect(normaliseSettings({ music: false })).toMatchObject({ music: false, eyes: true });
+    expect(normaliseSettings({ music: false })).toMatchObject({
+      locale: 'en-GB',
+      music: false,
+      eyes: true,
+    });
+  });
+
+  it('keeps supported locales and falls back to British English', () => {
+    expect(normaliseSettings({ locale: 'en-US' })).toMatchObject({ locale: 'en-US' });
+    expect(normaliseSettings({ locale: 'fr-FR' })).toMatchObject({ locale: 'en-GB' });
   });
 });
 
@@ -55,6 +66,41 @@ describe('word lists', () => {
     expect(counts[1]).toBeGreaterThan(100);
     expect(counts[2]).toBeGreaterThan(100);
     expect((counts[3] ?? 0) + (counts[4] ?? 0) + (counts[5] ?? 0)).toBeGreaterThan(80);
+  });
+
+  it('keeps independent British and US word lists with regional spellings', () => {
+    const britishWords = new Set(WORD_BANKS['en-GB'].map(({ word }) => word));
+    const usWords = new Set(WORD_BANKS['en-US'].map(({ word }) => word));
+
+    expect(britishWords.has('colour')).toBe(true);
+    expect(britishWords.has('favourite')).toBe(true);
+    expect(britishWords.has('color')).toBe(false);
+    expect(britishWords.has('favorite')).toBe(false);
+    expect(usWords.has('color')).toBe(true);
+    expect(usWords.has('favorite')).toBe(true);
+    expect(usWords.has('colour')).toBe(false);
+    expect(usWords.has('favourite')).toBe(false);
+    expect(usWords.size).toBe(WORD_BANKS['en-US'].length);
+  });
+
+  it('selects built-in words from the chosen regional list', () => {
+    const britishWords = getEligibleWords({
+      ...DEFAULT_SETTINGS,
+      locale: 'en-GB',
+      minLetters: 6,
+      maxLetters: 6,
+      syllables: '2',
+    }).map(({ word }) => word);
+    const usWords = getEligibleWords({
+      ...DEFAULT_SETTINGS,
+      locale: 'en-US',
+      minLetters: 5,
+      maxLetters: 5,
+      syllables: '2',
+    }).map(({ word }) => word);
+
+    expect(britishWords).toContain('colour');
+    expect(usWords).toContain('color');
   });
 
   it('cleans, de-duplicates, and estimates custom words', () => {

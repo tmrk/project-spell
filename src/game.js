@@ -1,6 +1,17 @@
+import { DEFAULT_LOCALE, normaliseLocale } from './locales';
+import {
+  excludedWords as britishExcludedWords,
+  regionalWords as britishRegionalWords,
+} from './word-lists/en-GB';
+import {
+  excludedWords as usExcludedWords,
+  regionalWords as usRegionalWords,
+} from './word-lists/en-US';
+
 export const SETTINGS_KEY = 'project-spell:settings:v1';
 
 export const DEFAULT_SETTINGS = Object.freeze({
+  locale: DEFAULT_LOCALE,
   minLetters: 3,
   maxLetters: 8,
   syllables: 'any',
@@ -15,18 +26,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 export const PRESETS = Object.freeze({
   starter: {
-    label: 'Starter',
-    description: 'Short, one-beat words',
     settings: { minLetters: 3, maxLetters: 5, syllables: '1', roundLength: 5 },
   },
   explorer: {
-    label: 'Explorer',
-    description: 'A friendly mix',
     settings: { minLetters: 3, maxLetters: 8, syllables: 'any', roundLength: 8 },
   },
   challenge: {
-    label: 'Challenge',
-    description: 'Longer words',
     settings: { minLetters: 6, maxLetters: 12, syllables: 'any', roundLength: 10 },
   },
 });
@@ -161,12 +166,26 @@ const EXTRA_WORDS_BY_SYLLABLE = Object.freeze({
   5: ['electricity', 'hippopotamus', 'imagination', 'opportunity', 'refrigerator'],
 });
 
-export const WORD_BANK = Object.freeze([
+const BASE_WORD_BANK = Object.freeze([
   ...CORE_WORD_BANK,
   ...Object.entries(EXTRA_WORDS_BY_SYLLABLE).flatMap(([syllables, words]) =>
     words.map((word) => ({ word, syllables: Number(syllables) })),
   ),
 ]);
+
+function buildWordBank(excludedWords, regionalWords) {
+  const excluded = new Set(excludedWords);
+  const words = [...BASE_WORD_BANK.filter(({ word }) => !excluded.has(word)), ...regionalWords];
+  return Object.freeze([...new Map(words.map((entry) => [entry.word, entry])).values()]);
+}
+
+export const WORD_BANKS = Object.freeze({
+  'en-GB': buildWordBank(britishExcludedWords, britishRegionalWords),
+  'en-US': buildWordBank(usExcludedWords, usRegionalWords),
+});
+
+// Kept as the British-English default for existing imports.
+export const WORD_BANK = WORD_BANKS[DEFAULT_LOCALE];
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -187,6 +206,7 @@ export function normaliseSettings(value = {}) {
     : DEFAULT_SETTINGS.syllables;
 
   return {
+    locale: normaliseLocale(value.locale),
     minLetters,
     maxLetters,
     syllables,
@@ -229,7 +249,9 @@ export function parseCustomWords(value = '') {
 export function getEligibleWords(value = DEFAULT_SETTINGS) {
   const settings = normaliseSettings(value);
   const customWords = parseCustomWords(settings.customWords);
-  const source = settings.wordSource === 'custom' ? customWords : [...WORD_BANK, ...customWords];
+  const source = settings.wordSource === 'custom'
+    ? customWords
+    : [...WORD_BANKS[settings.locale], ...customWords];
   const unique = new Map(source.map((entry) => [entry.word, entry]));
 
   return [...unique.values()].filter(({ word, syllables }) => {
