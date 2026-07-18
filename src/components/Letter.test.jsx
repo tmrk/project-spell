@@ -1,7 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Letter from './Letter';
-import { EYE_OFFSETS } from './EyeStyle';
+import getEyeStyle, { EYE_OFFSETS } from './EyeStyle';
 
 vi.mock('cartoon-eyes', () => ({
   Eye: ({ blinking, blinkFrequency, blinkSpeed, lensPosition }) => (
@@ -59,6 +59,12 @@ describe('Letter eyes', () => {
     expect(EYE_OFFSETS.a).toEqual([[-0.105, -0.1], [0.105, -0.1]]);
     expect(EYE_OFFSETS.j[0][0]).toBeGreaterThan(0);
     expect(EYE_OFFSETS.j[0][1]).toBe(EYE_OFFSETS.i[0][1]);
+  });
+
+  it('uses the base letter eye placement for accented letters', () => {
+    expect(getEyeStyle('å')).toEqual(getEyeStyle('a'));
+    expect(getEyeStyle('ő')).toEqual(getEyeStyle('o'));
+    expect(getEyeStyle('ű')).toEqual(getEyeStyle('u'));
   });
 
   it('moves both pupils to the same shared gaze position', () => {

@@ -31,6 +31,10 @@ const transform = ([x = 0, y = 0]) =>
   `translate(calc(-50% + ${x}em), calc(-50% + ${y}em))`;
 
 export default function getEyeStyle(letter) {
-  const offsets = EYE_OFFSETS[letter.toLowerCase()] ?? [[-0.065, 0], [0.065, 0]];
+  const baseLetter = letter
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+  const offsets = EYE_OFFSETS[baseLetter] ?? [[-0.065, 0], [0.065, 0]];
   return offsets.map((offset) => ({ transform: transform(offset) }));
 }

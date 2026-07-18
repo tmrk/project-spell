@@ -23,6 +23,8 @@ describe('Project Spell', () => {
     const languageSelect = screen.getByRole('combobox', { name: 'Language' });
     expect(within(languageSelect).getByRole('option', { name: '🇬🇧 British English' })).toBeInTheDocument();
     expect(within(languageSelect).getByRole('option', { name: '🇺🇸 US English' })).toBeInTheDocument();
+    expect(within(languageSelect).getByRole('option', { name: '🇸🇪 Svenska' })).toBeInTheDocument();
+    expect(within(languageSelect).getByRole('option', { name: '🇭🇺 Magyar' })).toBeInTheDocument();
     expect(screen.queryByText('Ready to spell?')).not.toBeInTheDocument();
     expect(screen.queryByText('Listen, then type one letter at a time.')).not.toBeInTheDocument();
     expect(screen.queryByText('Language')).not.toBeInTheDocument();
@@ -96,6 +98,8 @@ describe('Project Spell', () => {
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByRole('option', { name: '🇬🇧 British English' })).toBeInTheDocument();
     expect(within(dialog).getByRole('option', { name: '🇺🇸 US English' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: '🇸🇪 Svenska' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: '🇭🇺 Magyar' })).toBeInTheDocument();
     expect(screen.getByLabelText('Words in a row')).toHaveValue('3');
   });
 
@@ -117,6 +121,40 @@ describe('Project Spell', () => {
     expect(utterance.lang).toBe('en-US');
     expect(utterance.voice).toBe(usVoice);
     expect(document.documentElement).toHaveAttribute('lang', 'en-US');
+  });
+
+  it.each([
+    {
+      code: 'sv-SE',
+      play: 'Spela',
+      prompt: 'Stava ordet cat',
+      voice: { lang: 'sv-SE', name: 'Alva' },
+    },
+    {
+      code: 'hu-HU',
+      play: 'Játék',
+      prompt: 'Betűzd ezt a szót: cat',
+      voice: { lang: 'hu-HU', name: 'Eszter' },
+    },
+  ])('uses localized copy and a matching $code voice', ({ code, play, prompt, voice }) => {
+    vi.useFakeTimers();
+    window.speechSynthesis.getVoices.mockReturnValue([
+      { lang: 'en-GB', name: 'Serena' },
+      voice,
+    ]);
+
+    render(<App />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
+      target: { value: code },
+    });
+    fireEvent.click(screen.getByRole('button', { name: play }));
+    act(() => vi.advanceTimersByTime(121));
+
+    const utterance = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    expect(utterance.text).toBe(prompt);
+    expect(utterance.lang).toBe(code);
+    expect(utterance.voice).toBe(voice);
+    expect(document.documentElement).toHaveAttribute('lang', code);
   });
 
   it('requires confirmation before a settings language change restarts the game', () => {
@@ -156,6 +194,62 @@ describe('Project Spell', () => {
 
     expect(document.querySelector('.eyes')).not.toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({ eyes: false });
+  });
+
+  it('lets grown-ups enable unaccented typing and persists the preference', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Accept unaccented typing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({
+      acceptUnaccented: true,
+    });
+  });
+
+  it('requires accents by default and accepts plain equivalents only when enabled', () => {
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        locale: 'sv-SE',
+        customWords: 'tårta',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      }),
+    );
+
+    const exactRound = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Spela' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Skriv nästa bokstav' }), {
+      target: { value: 'tarta' },
+    });
+
+    expect(screen.getByRole('button', { name: 'å, aktuell bokstav' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Försök en gång till');
+    exactRound.unmount();
+
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        locale: 'sv-SE',
+        acceptUnaccented: true,
+        customWords: 'tårta',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Spela' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Skriv nästa bokstav' }), {
+      target: { value: 'tarta' },
+    });
+
+    expect(screen.getAllByRole('button', { name: /, klar$/u })).toHaveLength(5);
   });
 
   it('replaces the final letter sound with the word-completion ding', () => {

@@ -22,11 +22,12 @@ npm run check
 
 ## What is included
 
-- Separate British-English and US-English banks, each with more than 350 words grouped across one through five syllables.
+- British-English, US-English, Swedish, and Hungarian word banks with explicit syllable metadata.
 - Locale-aware interface copy and Web Speech voice selection, with language choice on the start screen and in grown-ups settings.
 - A privacy-safe first-visit default based on the browser's regional locale; saved language choices always take precedence.
 - Configurable minimum/maximum word length, syllable count, and words per round.
 - Custom words, stored only in the browser.
+- An optional parent setting to accept an unaccented key for an accented letter; exact accents are required by default.
 - Shape-aware animated letter eyes that can be switched off in the grown-ups panel.
 - Optional spoken prompts, sound effects, and background music.
 - A fixed-length round with progress, completion feedback, and replay.

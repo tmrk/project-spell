@@ -60,6 +60,8 @@ const messages = Object.freeze({
   customWordsOnly: 'Only my words',
   letters: 'Letters',
   cartoonEyes: 'Cartoon eyes',
+  acceptUnaccented: 'Accept unaccented typing',
+  acceptUnaccentedHelp: 'For example, let a match å, ä, or á.',
   sound: 'Sound',
   sayEachWord: 'Say each word',
   soundEffects: 'Sound effects',

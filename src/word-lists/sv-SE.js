@@ -1,0 +1,65 @@
+const WORDS_BY_SYLLABLE = Object.freeze({
+  1: [
+    'and', 'arm', 'ask', 'bad', 'bag', 'barn', 'ben', 'berg', 'bil', 'boll', 'bok',
+    'bord', 'brev', 'bro', 'bröd', 'bur', 'buss', 'båt', 'dag', 'deg', 'djur', 'dörr',
+    'eld', 'fisk', 'fjäll', 'flagg', 'flod', 'fot', 'frö', 'får', 'get', 'glas', 'glad',
+    'golv', 'gren', 'gräs', 'grön', 'gul', 'hand', 'hatt', 'hav', 'hjul', 'hund', 'hus',
+    'hår', 'häst', 'höst', 'is', 'jord', 'katt', 'klo', 'ko', 'kopp', 'kort', 'kran',
+    'krok', 'kropp', 'kung', 'kyl', 'lamm', 'lek', 'ljus', 'lok', 'lök', 'löv', 'mat',
+    'mjölk', 'moln', 'mus', 'natt', 'nos', 'nöt', 'orm', 'ost', 'park', 'pil', 'regn',
+    'ren', 'ring', 'röd', 'sand', 'sax', 'sjö', 'skal', 'skepp', 'sko', 'skog', 'skål',
+    'slott', 'snö', 'sol', 'spik', 'stol', 'strand', 'svan', 'svans', 'säng', 'tak',
+    'tall', 'tand', 'tåg', 'tält', 'träd', 'val', 'vas', 'vind', 'vit', 'vän', 'väg',
+    'vägg', 'ägg', 'älg', 'flöjt', 'kök', 'sked',
+  ],
+  2: [
+    'anka', 'apa', 'axel', 'bada', 'banan', 'bilar', 'björne', 'blomma', 'bulle',
+    'byxor', 'bäver', 'böcker', 'cirkus', 'cykel', 'dansa', 'docka', 'drake', 'duva',
+    'ballong', 'delfin', 'farmor', 'festlig', 'ficka', 'flicka', 'fluga', 'fotboll',
+    'fågel', 'färger', 'fönster', 'gitarr', 'guldfisk',
+    'gaffel', 'gata', 'glassar', 'granat', 'groda', 'gurka', 'gunga', 'gädda', 'hallon',
+    'hare', 'havre', 'hjärta', 'humla', 'hummer', 'höna', 'jacka', 'jordgubb',
+    'kaka', 'kamel', 'kanin', 'kanot', 'karta', 'kasse', 'kedja', 'kille', 'kjolar',
+    'klocka', 'koala', 'kompis', 'krita', 'kudde', 'kula', 'känga', 'kärra', 'lakan',
+    'lejon', 'lila', 'linjal', 'luva', 'läsa', 'magisk', 'mamma', 'matta', 'medalj',
+    'melon', 'morfar', 'morot', 'musik',
+    'muffin', 'mössa', 'nyckel', 'nalle', 'ninja', 'panda', 'pappa', 'penna', 'pensel',
+    'pizza', 'planka', 'pojke', 'pussel', 'päron', 'raket', 'rida', 'robot', 'rulla',
+    'pingvin', 'räka', 'saga', 'sallad', 'saxar', 'segel', 'simma', 'skelett',
+    'skidor', 'skola', 'skorpa',
+    'skriva', 'snigel', 'spade', 'spindel',
+    'stjärna', 'strumpa', 'syster', 'tavla', 'teckna', 'tidning', 'tiger', 'tomat', 'trappa',
+    'trevlig', 'trollkarl', 'trumma', 'tröja', 'tulpan', 'tvilling', 'utflykt', 'vantar',
+    'vatten', 'vinter', 'vulkan', 'våffla',
+    'väska', 'zebra', 'åska', 'äpple', 'ödla', 'öga',
+  ],
+  3: [
+    'ambulans', 'ananas', 'apelsin', 'astronaut', 'broccoli', 'diamant', 'domino',
+    'ekorre', 'elefant', 'fantasi', 'fotograf', 'fågelfrö', 'gorilla', 'grönsaker',
+    'hammare', 'igelkott', 'jordgubbe', 'kamera',
+    'karusell', 'kikare', 'krokodil', 'känguru', 'leksaker', 'lemonad',
+    'lärare', 'maskerad', 'mikrofon', 'orkester', 'paprika', 'potatis', 'prinsessa',
+    'radio', 'regnbåge', 'rullskridskor', 'rävunge', 'sandaler', 'semester',
+    'skottkärra', 'sköldpadda', 'sommarlov', 'spagetti', 'studsmatta', 'tandborste',
+    'telefon', 'teleskop', 'tivoli', 'toalett', 'tomtebloss', 'triangel', 'vattenfall',
+    'äventyr', 'kylskåpet',
+  ],
+  4: [
+    'akvarium', 'alfabetet', 'bibliotek', 'chokladkaka', 'födelsedag', 'hamburgare',
+    'helikopter', 'kameleont', 'kanelbulle', 'kastrullerna', 'krokodilen', 'lokomotiv',
+    'makaroner', 'matematik', 'motorcykel', 'pannkakorna', 'paraplyet', 'pepparkaka',
+    'pepparkakor', 'superhjälte', 'television', 'tusenfoting', 'universum', 'vattenmelon',
+  ],
+  5: [
+    'dinosaurie', 'födelsedagar', 'matematikbok',
+  ],
+  6: [
+    'laboratorium',
+  ],
+});
+
+export const wordBank = Object.freeze(
+  Object.entries(WORDS_BY_SYLLABLE).flatMap(([syllables, words]) =>
+    words.map((word) => Object.freeze({ word, syllables: Number(syllables) })),
+  ),
+);

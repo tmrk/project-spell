@@ -612,9 +612,23 @@ input:focus-visible {
 }
 
 .toggle-row input {
+  flex: 0 0 auto;
   width: 22px;
   height: 22px;
   accent-color: #20b967;
+}
+
+.toggle-copy {
+  display: grid;
+  padding-right: 18px;
+  gap: 3px;
+}
+
+.toggle-copy small {
+  color: rgba(32, 48, 43, 0.52);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .settings-footer {

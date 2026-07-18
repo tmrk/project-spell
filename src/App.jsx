@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
   createRound,
+  lettersMatch,
   normaliseSettings,
 } from './game';
 import { LOCALE_OPTIONS, detectDefaultLocale, formatMessage, getLocale } from './locales';
@@ -41,12 +42,19 @@ function useSpeech(enabled, locale) {
 
     const chooseVoice = () => {
       const voices = window.speechSynthesis.getVoices();
-      const regionalVoices = voices.filter(
-        (voice) => voice.lang?.replace('_', '-').toLowerCase() === code.toLowerCase(),
+      const normalisedCode = code.toLowerCase();
+      const language = normalisedCode.split('-')[0];
+      const languageVoices = voices.filter(
+        (voice) => voice.lang?.replace('_', '-').toLowerCase().split('-')[0] === language,
+      );
+      const regionalVoices = languageVoices.filter(
+        (voice) => voice.lang?.replace('_', '-').toLowerCase() === normalisedCode,
       );
       voiceRef.current =
         regionalVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
         regionalVoices[0] ??
+        languageVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
+        languageVoices[0] ??
         null;
     };
 
@@ -164,6 +172,7 @@ export default function App() {
   const transitioningRef = useRef(false);
   const lastPraiseIndexRef = useRef(-1);
   const currentWord = roundWords[wordIndex] ?? '';
+  const currentWordLetters = useMemo(() => [...currentWord], [currentWord]);
   const locale = getLocale(settings.locale);
   const copy = locale.messages;
 
@@ -213,9 +222,9 @@ export default function App() {
 
   const progress = useMemo(() => {
     if (!roundWords.length || !currentWord) return 0;
-    const currentWordProgress = Math.min(letterIndex / currentWord.length, 1);
+    const currentWordProgress = Math.min(letterIndex / currentWordLetters.length, 1);
     return ((wordIndex + currentWordProgress) / roundWords.length) * 100;
-  }, [currentWord, letterIndex, roundWords.length, wordIndex]);
+  }, [currentWord, currentWordLetters.length, letterIndex, roundWords.length, wordIndex]);
 
   const focusInput = useCallback(() => {
     if (phase === 'playing' && !settingsOpen) inputRef.current?.focus({ preventScroll: true });
@@ -299,13 +308,15 @@ export default function App() {
     (value) => {
       if (phase !== 'playing' || !currentWord || transitioningRef.current) return;
 
-      const attempts = [...value.toLowerCase()].filter((character) => /[a-z]/u.test(character));
+      const attempts = [
+        ...value.normalize('NFC').toLocaleLowerCase(locale.code),
+      ].filter((character) => /\p{L}/u.test(character));
       if (!attempts.length) return;
 
       let nextLetterIndex = letterIndex;
       for (const attempt of attempts) {
-        const expected = currentWord[nextLetterIndex]?.toLowerCase();
-        if (attempt !== expected) {
+        const expected = currentWordLetters[nextLetterIndex];
+        if (!lettersMatch(expected, attempt, settings.acceptUnaccented)) {
           playEffect(badSfx, 0.55);
 
           if (nextLetterIndex !== letterIndex) setLetterIndex(nextLetterIndex);
@@ -317,17 +328,17 @@ export default function App() {
         }
 
         nextLetterIndex += 1;
-        if (nextLetterIndex === currentWord.length) break;
+        if (nextLetterIndex === currentWordLetters.length) break;
       }
 
-      const wordIsComplete = nextLetterIndex === currentWord.length;
+      const wordIsComplete = nextLetterIndex === currentWordLetters.length;
       setFeedback('success');
       setFeedbackMessage(copy.correctMessages[(nextLetterIndex - 1) % copy.correctMessages.length]);
       resetFeedbackSoon();
 
       if (wordIsComplete) {
         transitioningRef.current = true;
-        setLetterIndex(currentWord.length);
+        setLetterIndex(currentWordLetters.length);
         setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
         playEffect(doneSfx, 0.8, () => {
@@ -338,7 +349,18 @@ export default function App() {
         setLetterIndex(nextLetterIndex);
       }
     },
-    [completeWord, copy, currentWord, letterIndex, phase, playEffect, resetFeedbackSoon],
+    [
+      completeWord,
+      copy,
+      currentWord,
+      currentWordLetters,
+      letterIndex,
+      locale.code,
+      phase,
+      playEffect,
+      resetFeedbackSoon,
+      settings.acceptUnaccented,
+    ],
   );
 
   const handleInput = useCallback(
@@ -352,7 +374,7 @@ export default function App() {
 
   const handleKeyDown = useCallback(
     (event) => {
-      if (!/^[a-z]$/iu.test(event.key)) return;
+      if (!/^\p{L}$/u.test(event.key)) return;
       event.preventDefault();
       event.currentTarget.value = '';
       handleAttempt(event.key);
@@ -468,12 +490,12 @@ export default function App() {
           <div
             className="word"
             style={{
-              '--letter-count': currentWord.length,
-              '--letter-size': `${Math.min(15, 94 / currentWord.length)}vw`,
+              '--letter-count': currentWordLetters.length,
+              '--letter-size': `${Math.min(15, 94 / currentWordLetters.length)}vw`,
             }}
-            aria-label={formatMessage(copy.letterWord, { count: currentWord.length })}
+            aria-label={formatMessage(copy.letterWord, { count: currentWordLetters.length })}
           >
-            {[...currentWord].map((letter, index) => (
+            {currentWordLetters.map((letter, index) => (
               <Letter
                 key={`${currentWord}-${index}`}
                 letter={letter}

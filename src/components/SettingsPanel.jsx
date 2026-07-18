@@ -247,6 +247,18 @@ export default function SettingsPanel({ settings, onClose, onSave }) {
               <span>{copy.cartoonEyes}</span>
               <input type="checkbox" checked={draft.eyes} onChange={(event) => setValue('eyes', event.target.checked)} />
             </label>
+            <label className="toggle-row">
+              <span className="toggle-copy">
+                <span>{copy.acceptUnaccented}</span>
+                <small>{copy.acceptUnaccentedHelp}</small>
+              </span>
+              <input
+                type="checkbox"
+                aria-label={copy.acceptUnaccented}
+                checked={draft.acceptUnaccented}
+                onChange={(event) => setValue('acceptUnaccented', event.target.checked)}
+              />
+            </label>
           </fieldset>
 
           <fieldset className="settings-section settings-section--compact">

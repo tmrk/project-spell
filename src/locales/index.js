@@ -1,5 +1,7 @@
 import britishEnglish from './en-GB';
 import usEnglish from './en-US';
+import hungarian from './hu-HU';
+import swedish from './sv-SE';
 
 export const DEFAULT_LOCALE = 'en-GB';
 
@@ -11,6 +13,8 @@ const US_ENGLISH_REGIONS = Object.freeze(
 export const LOCALES = Object.freeze({
   [britishEnglish.code]: britishEnglish,
   [usEnglish.code]: usEnglish,
+  [swedish.code]: swedish,
+  [hungarian.code]: hungarian,
 });
 
 export const LOCALE_OPTIONS = Object.freeze(
@@ -36,10 +40,24 @@ function getRegion(locale) {
   }
 }
 
+function getLanguage(locale) {
+  if (typeof locale !== 'string' || !locale.trim()) return null;
+  const normalisedLocale = locale.replaceAll('_', '-');
+
+  try {
+    return new Intl.Locale(normalisedLocale).language.toLowerCase();
+  } catch {
+    return normalisedLocale.split('-')[0]?.toLowerCase() ?? null;
+  }
+}
+
 export function detectDefaultLocale(language) {
   const browserLanguage = language
     ?? globalThis.navigator?.languages?.[0]
     ?? globalThis.navigator?.language;
+  const languageDefaults = { hu: 'hu-HU', sv: 'sv-SE' };
+  const detectedLanguage = getLanguage(browserLanguage);
+  if (Object.hasOwn(languageDefaults, detectedLanguage)) return languageDefaults[detectedLanguage];
   return US_ENGLISH_REGIONS.has(getRegion(browserLanguage)) ? 'en-US' : DEFAULT_LOCALE;
 }
 

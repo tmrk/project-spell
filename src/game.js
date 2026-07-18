@@ -7,6 +7,8 @@ import {
   excludedWords as usExcludedWords,
   regionalWords as usRegionalWords,
 } from './word-lists/en-US';
+import { wordBank as hungarianWordBank } from './word-lists/hu-HU';
+import { wordBank as swedishWordBank } from './word-lists/sv-SE';
 
 export const SETTINGS_KEY = 'project-spell:settings:v1';
 
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   soundEffects: true,
   speech: true,
   eyes: true,
+  acceptUnaccented: false,
 });
 
 export const PRESETS = Object.freeze({
@@ -182,6 +185,8 @@ function buildWordBank(excludedWords, regionalWords) {
 export const WORD_BANKS = Object.freeze({
   'en-GB': buildWordBank(britishExcludedWords, britishRegionalWords),
   'en-US': buildWordBank(usExcludedWords, usRegionalWords),
+  'sv-SE': swedishWordBank,
+  'hu-HU': hungarianWordBank,
 });
 
 // Kept as the British-English default for existing imports.
@@ -218,44 +223,78 @@ export function normaliseSettings(value = {}) {
       typeof value.soundEffects === 'boolean' ? value.soundEffects : DEFAULT_SETTINGS.soundEffects,
     speech: typeof value.speech === 'boolean' ? value.speech : DEFAULT_SETTINGS.speech,
     eyes: typeof value.eyes === 'boolean' ? value.eyes : DEFAULT_SETTINGS.eyes,
+    acceptUnaccented:
+      typeof value.acceptUnaccented === 'boolean'
+        ? value.acceptUnaccented
+        : DEFAULT_SETTINGS.acceptUnaccented,
   };
 }
 
-export function estimateSyllables(word) {
-  const cleaned = word.toLowerCase().replace(/[^a-z]/g, '');
+export function estimateSyllables(word, locale = DEFAULT_LOCALE) {
+  const normalisedLocale = normaliseLocale(locale);
+  const cleaned = String(word).normalize('NFC').toLocaleLowerCase(normalisedLocale);
   if (!cleaned) return 1;
   if (cleaned.length <= 3) return 1;
 
-  const withoutSilentEnd = cleaned
+  if (normalisedLocale === 'hu-HU') {
+    return Math.max(1, cleaned.match(/[aáeéiíoóöőuúüű]/gu)?.length ?? 1);
+  }
+
+  if (normalisedLocale === 'sv-SE') {
+    return Math.max(1, cleaned.match(/[aeiouyåäö]+/gu)?.length ?? 1);
+  }
+
+  const withoutSilentEnd = cleaned.replace(/[^a-z]/g, '')
     .replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/u, '')
     .replace(/^y/u, '');
   return Math.max(1, withoutSilentEnd.match(/[aeiouy]{1,2}/gu)?.length ?? 1);
 }
 
-export function parseCustomWords(value = '') {
+export function parseCustomWords(value = '', locale = DEFAULT_LOCALE) {
   const unique = new Map();
+  const normalisedLocale = normaliseLocale(locale);
 
   value
     .split(/[\n,]+/u)
-    .map((word) => word.trim().toLowerCase())
-    .filter((word) => /^[a-z]{2,14}$/u.test(word))
+    .map((word) => word.trim().normalize('NFC').toLocaleLowerCase(normalisedLocale))
+    .filter((word) => /^\p{L}{2,14}$/u.test(word))
     .forEach((word) => {
-      if (!unique.has(word)) unique.set(word, { word, syllables: estimateSyllables(word) });
+      if (!unique.has(word)) {
+        unique.set(word, { word, syllables: estimateSyllables(word, normalisedLocale) });
+      }
     });
 
   return [...unique.values()];
 }
 
+const stripAccents = (value) => value.normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC');
+
+export function lettersMatch(expected, attempt, acceptUnaccented = false) {
+  const expectedLetter = String(expected).normalize('NFC').toLocaleLowerCase();
+  const attemptedLetter = String(attempt).normalize('NFC').toLocaleLowerCase();
+  if (expectedLetter === attemptedLetter) return true;
+  if (!acceptUnaccented) return false;
+
+  const plainExpected = stripAccents(expectedLetter);
+  const plainAttempt = stripAccents(attemptedLetter);
+  return (
+    expectedLetter !== plainExpected &&
+    attemptedLetter === plainAttempt &&
+    plainExpected === plainAttempt
+  );
+}
+
 export function getEligibleWords(value = DEFAULT_SETTINGS) {
   const settings = normaliseSettings(value);
-  const customWords = parseCustomWords(settings.customWords);
+  const customWords = parseCustomWords(settings.customWords, settings.locale);
   const source = settings.wordSource === 'custom'
     ? customWords
     : [...WORD_BANKS[settings.locale], ...customWords];
   const unique = new Map(source.map((entry) => [entry.word, entry]));
 
   return [...unique.values()].filter(({ word, syllables }) => {
-    const isCorrectLength = word.length >= settings.minLetters && word.length <= settings.maxLetters;
+    const letterCount = [...word].length;
+    const isCorrectLength = letterCount >= settings.minLetters && letterCount <= settings.maxLetters;
     const isCorrectSyllableCount =
       settings.syllables === 'any' ||
       settings.syllables === String(syllables) ||

@@ -6,10 +6,11 @@ import {
   createRound,
   estimateSyllables,
   getEligibleWords,
+  lettersMatch,
   normaliseSettings,
   parseCustomWords,
 } from './game';
-import { detectDefaultLocale } from './locales';
+import { LOCALES, detectDefaultLocale } from './locales';
 
 describe('regional default', () => {
   it('uses US English for US-spelling browser regions', () => {
@@ -18,8 +19,15 @@ describe('regional default', () => {
   });
 
   it('uses British English for every other or unknown region', () => {
-    ['en-GB', 'en-AU', 'en-CA', 'en-IE', 'sv-SE', 'en', '', 'not-a-locale']
+    ['en-GB', 'en-AU', 'en-CA', 'en-IE', 'en', '', 'not-a-locale']
       .forEach((locale) => expect(detectDefaultLocale(locale)).toBe('en-GB'));
+  });
+
+  it('detects Swedish and Hungarian from language subtags before region fallbacks', () => {
+    expect(detectDefaultLocale('sv-SE')).toBe('sv-SE');
+    expect(detectDefaultLocale('sv-FI')).toBe('sv-SE');
+    expect(detectDefaultLocale('hu-HU')).toBe('hu-HU');
+    expect(detectDefaultLocale('hu-US')).toBe('hu-HU');
   });
 });
 
@@ -44,10 +52,17 @@ describe('settings', () => {
   });
 
   it('keeps valid boolean preferences', () => {
-    expect(normaliseSettings({ ...DEFAULT_SETTINGS, music: false, speech: false, eyes: false })).toMatchObject({
+    expect(normaliseSettings({
+      ...DEFAULT_SETTINGS,
       music: false,
       speech: false,
       eyes: false,
+      acceptUnaccented: true,
+    })).toMatchObject({
+      music: false,
+      speech: false,
+      eyes: false,
+      acceptUnaccented: true,
     });
   });
 
@@ -56,11 +71,14 @@ describe('settings', () => {
       locale: 'en-GB',
       music: false,
       eyes: true,
+      acceptUnaccented: false,
     });
   });
 
   it('keeps supported locales and falls back to British English', () => {
     expect(normaliseSettings({ locale: 'en-US' })).toMatchObject({ locale: 'en-US' });
+    expect(normaliseSettings({ locale: 'sv-SE' })).toMatchObject({ locale: 'sv-SE' });
+    expect(normaliseSettings({ locale: 'hu-HU' })).toMatchObject({ locale: 'hu-HU' });
     expect(normaliseSettings({ locale: 'fr-FR' })).toMatchObject({ locale: 'en-GB' });
   });
 });
@@ -96,6 +114,33 @@ describe('word lists', () => {
     expect(usWords.size).toBe(WORD_BANKS['en-US'].length);
   });
 
+  it('provides broad, valid Swedish and Hungarian banks with accented words', () => {
+    const expectations = {
+      'sv-SE': ['bröd', 'fågel', 'äventyr'],
+      'hu-HU': ['ágy', 'szőlő', 'tűz'],
+    };
+
+    Object.entries(expectations).forEach(([locale, examples]) => {
+      const bank = WORD_BANKS[locale];
+      const words = bank.map(({ word }) => word);
+
+      expect(bank.length).toBeGreaterThan(280);
+      expect(new Set(words).size).toBe(bank.length);
+      expect(bank.every(({ word }) => /^\p{L}{2,14}$/u.test(word))).toBe(true);
+      expect(bank.every(({ syllables }) => Number.isInteger(syllables) && syllables >= 1)).toBe(true);
+      examples.forEach((word) => expect(words).toContain(word));
+    });
+  });
+
+  it('keeps every locale message catalogue complete', () => {
+    const referenceKeys = Object.keys(LOCALES['en-GB'].messages).sort();
+    Object.values(LOCALES).forEach((locale) => {
+      expect(Object.keys(locale.messages).sort()).toEqual(referenceKeys);
+      expect(locale.messages.correctMessages.length).toBeGreaterThan(1);
+      expect(locale.messages.roundFinishedSpeeches.length).toBeGreaterThan(1);
+    });
+  });
+
   it('selects built-in words from the chosen regional list', () => {
     const britishWords = getEligibleWords({
       ...DEFAULT_SETTINGS,
@@ -120,6 +165,17 @@ describe('word lists', () => {
     expect(parseCustomWords('Banana, cat\nbanana\nnot a word\n42')).toEqual([
       { word: 'banana', syllables: 3 },
       { word: 'cat', syllables: 1 },
+    ]);
+  });
+
+  it('normalises accented custom words and uses locale-aware syllable estimates', () => {
+    expect(parseCustomWords(' TÅRTA, tårta\nfrö ', 'sv-SE')).toEqual([
+      { word: 'tårta', syllables: 2 },
+      { word: 'frö', syllables: 1 },
+    ]);
+    expect(parseCustomWords('SZŐLŐ, szőlő\nalma', 'hu-HU')).toEqual([
+      { word: 'szőlő', syllables: 2 },
+      { word: 'alma', syllables: 2 },
     ]);
   });
 
@@ -160,6 +216,24 @@ describe('word lists', () => {
     expect(estimateSyllables('cake')).toBe(1);
     expect(estimateSyllables('rabbit')).toBe(2);
     expect(estimateSyllables('banana')).toBe(3);
+    expect(estimateSyllables('tårta', 'sv-SE')).toBe(2);
+    expect(estimateSyllables('szőlő', 'hu-HU')).toBe(2);
+  });
+});
+
+describe('accent matching', () => {
+  it('requires exact accents by default', () => {
+    expect(lettersMatch('å', 'a')).toBe(false);
+    expect(lettersMatch('ő', 'o')).toBe(false);
+    expect(lettersMatch('á', 'á')).toBe(true);
+  });
+
+  it('directionally accepts plain input for accented expected letters when enabled', () => {
+    expect(lettersMatch('å', 'a', true)).toBe(true);
+    expect(lettersMatch('ő', 'o', true)).toBe(true);
+    expect(lettersMatch('ű', 'u', true)).toBe(true);
+    expect(lettersMatch('a', 'á', true)).toBe(false);
+    expect(lettersMatch('å', 'ä', true)).toBe(false);
   });
 });
 
