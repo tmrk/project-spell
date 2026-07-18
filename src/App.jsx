@@ -88,12 +88,18 @@ function useSpeech(enabled, locale) {
 function useGameAudio(soundEffectsEnabled) {
   const musicRef = useRef(null);
   const effectsRef = useRef(new Map());
+  const audioContextRef = useRef(null);
+  const effectBuffersRef = useRef(new Map());
+  const activeBufferSourcesRef = useRef(new Set());
   const [musicIsPlaying, setMusicIsPlaying] = useState(false);
 
   useEffect(() => {
     const music = new Audio(bgMusic);
+    const effectSources = [popSfx, badSfx, doneSfx];
+    const effectBuffers = effectBuffersRef.current;
+    const activeBufferSources = activeBufferSourcesRef.current;
     const effects = new Map(
-      [popSfx, badSfx, doneSfx].map((source) => {
+      effectSources.map((source) => {
         const sound = new Audio(source);
         sound.preload = 'auto';
         sound.load?.();
@@ -105,15 +111,75 @@ function useGameAudio(soundEffectsEnabled) {
     music.volume = 0.12;
     musicRef.current = music;
     effectsRef.current = effects;
+
+    const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
+    let context = null;
+    let cancelled = false;
+    if (AudioContextClass) {
+      try {
+        context = new AudioContextClass({ latencyHint: 'interactive' });
+      } catch {
+        try {
+          context = new AudioContextClass();
+        } catch {
+          context = null;
+        }
+      }
+    }
+
+    if (context) {
+      audioContextRef.current = context;
+      effectSources.forEach(async (source) => {
+        try {
+          const response = await fetch(source);
+          if (!response.ok) return;
+          const buffer = await response.arrayBuffer();
+          const decoded = await context.decodeAudioData(buffer);
+          if (!cancelled) effectBuffers.set(source, decoded);
+        } catch {
+          // The preloaded HTMLAudioElement remains a safe fallback.
+        }
+      });
+    }
+
     return () => {
+      cancelled = true;
       music.pause();
       effects.forEach((effect) => {
         effect.cancelFinish?.();
         effect.sound.pause();
       });
+      activeBufferSources.forEach((effect) => {
+        effect.cancelFinish();
+        try {
+          effect.source.stop();
+        } catch {
+          // The source may already have stopped naturally.
+        }
+      });
+      activeBufferSources.clear();
+      effectBuffers.clear();
       effects.clear();
       musicRef.current = null;
+      audioContextRef.current = null;
+      try {
+        const closeContext = context?.close?.();
+        closeContext?.catch?.(() => {});
+      } catch {
+        // Closing audio is best-effort during teardown.
+      }
     };
+  }, []);
+
+  const primeEffects = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context || context.state === 'running' || context.state === 'closed') return;
+    try {
+      const resume = context.resume();
+      resume?.catch?.(() => {});
+    } catch {
+      // Effects will fall back to HTMLAudioElement playback.
+    }
   }, []);
 
   const playMusic = useCallback(() => {
@@ -137,54 +203,122 @@ function useGameAudio(soundEffectsEnabled) {
         return;
       }
 
-      const effect = effectsRef.current.get(source);
-      if (!effect) {
-        onFinished?.();
-        return;
+      const playFallback = () => {
+        const effect = effectsRef.current.get(source);
+        if (!effect) {
+          onFinished?.();
+          return;
+        }
+
+        const { sound } = effect;
+        effect.cancelFinish?.();
+        effect.cancelFinish = null;
+        sound.pause();
+        try {
+          sound.currentTime = 0;
+        } catch {
+          // Some browsers do not expose currentTime until metadata is ready.
+        }
+        sound.volume = volume;
+
+        let finish = null;
+        if (onFinished) {
+          let finished = false;
+          finish = () => {
+            if (finished) return;
+            finished = true;
+            sound.removeEventListener?.('ended', finish);
+            sound.removeEventListener?.('error', finish);
+            effect.cancelFinish = null;
+            onFinished();
+          };
+          effect.cancelFinish = () => {
+            finished = true;
+            sound.removeEventListener?.('ended', finish);
+            sound.removeEventListener?.('error', finish);
+          };
+          sound.addEventListener?.('ended', finish, { once: true });
+          sound.addEventListener?.('error', finish, { once: true });
+        }
+
+        try {
+          const playback = sound.play();
+          playback?.catch(finish ?? (() => {}));
+        } catch {
+          finish?.();
+        }
+      };
+
+      const playBuffer = () => {
+        const context = audioContextRef.current;
+        const buffer = effectBuffersRef.current.get(source);
+        if (!context || !buffer || context.state !== 'running') return false;
+
+        try {
+          const bufferSource = context.createBufferSource();
+          const gain = context.createGain();
+          bufferSource.buffer = buffer;
+          gain.gain.value = volume;
+          bufferSource.connect(gain);
+          gain.connect(context.destination);
+
+          let finished = false;
+          let effect = null;
+          const cancelFinish = () => {
+            if (finished) return;
+            finished = true;
+            bufferSource.removeEventListener?.('ended', finish);
+            activeBufferSourcesRef.current.delete(effect);
+            bufferSource.disconnect?.();
+            gain.disconnect?.();
+          };
+          const finish = () => {
+            if (finished) return;
+            cancelFinish();
+            onFinished?.();
+          };
+          effect = { source: bufferSource, cancelFinish };
+          bufferSource.addEventListener?.('ended', finish, { once: true });
+          activeBufferSourcesRef.current.add(effect);
+          try {
+            bufferSource.start();
+          } catch {
+            cancelFinish();
+            return false;
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      const context = audioContextRef.current;
+      if (
+        context &&
+        context.state !== 'running' &&
+        context.state !== 'closed' &&
+        effectBuffersRef.current.has(source)
+      ) {
+        try {
+          const resume = context.resume();
+          if (resume?.then) {
+            resume.then(() => {
+              if (!playBuffer()) playFallback();
+            }).catch(playFallback);
+            return;
+          }
+        } catch {
+          playFallback();
+          return;
+        }
       }
 
-      const { sound } = effect;
-      effect.cancelFinish?.();
-      effect.cancelFinish = null;
-      sound.pause();
-      try {
-        sound.currentTime = 0;
-      } catch {
-        // Some browsers do not expose currentTime until metadata is ready.
-      }
-      sound.volume = volume;
-
-      let finish = null;
-      if (onFinished) {
-        let finished = false;
-        finish = () => {
-          if (finished) return;
-          finished = true;
-          sound.removeEventListener?.('ended', finish);
-          sound.removeEventListener?.('error', finish);
-          effect.cancelFinish = null;
-          onFinished();
-        };
-        effect.cancelFinish = () => {
-          finished = true;
-          sound.removeEventListener?.('ended', finish);
-          sound.removeEventListener?.('error', finish);
-        };
-        sound.addEventListener?.('ended', finish, { once: true });
-        sound.addEventListener?.('error', finish, { once: true });
-      }
-
-      try {
-        const playback = sound.play();
-        playback?.catch(finish ?? (() => {}));
-      } catch {
-        finish?.();
-      }
+      if (!playBuffer()) playFallback();
     },
     [soundEffectsEnabled],
   );
 
-  return { musicIsPlaying, pauseMusic, playEffect, playMusic };
+  return { musicIsPlaying, pauseMusic, playEffect, playMusic, primeEffects };
 }
 
 export default function App() {
@@ -211,7 +345,9 @@ export default function App() {
   const copy = locale.messages;
 
   const { cancel: cancelSpeech, say } = useSpeech(settings.speech, settings.locale);
-  const { musicIsPlaying, pauseMusic, playEffect, playMusic } = useGameAudio(settings.soundEffects);
+  const { musicIsPlaying, pauseMusic, playEffect, playMusic, primeEffects } = useGameAudio(
+    settings.soundEffects,
+  );
 
   useEffect(() => {
     try {
@@ -231,12 +367,9 @@ export default function App() {
 
   useEffect(() => {
     if (phase !== 'playing' || !currentWord || settingsOpen) return undefined;
-    const timer = window.setTimeout(
-      () => say(formatMessage(copy.spellPrompt, { word: currentWord })),
-      120,
-    );
-    return () => window.clearTimeout(timer);
-  }, [copy.spellPrompt, currentWord, phase, say, settingsOpen]);
+    say(formatMessage(copy.spellPrompt, { word: currentWord }));
+    return undefined;
+  }, [copy.spellPrompt, currentWord, phase, say, settingsOpen, wordIndex]);
 
   useEffect(() => {
     if (phase !== 'playing' || settingsOpen) return undefined;
@@ -286,8 +419,9 @@ export default function App() {
     setFeedback('idle');
     setFeedbackMessage('');
     setPhase('playing');
+    primeEffects();
     if (settings.music) playMusic();
-  }, [clearRoundTimers, playMusic, settings]);
+  }, [clearRoundTimers, playMusic, primeEffects, settings]);
 
   const repeatWord = useCallback(() => {
     if (currentWord) say(formatMessage(copy.spellPrompt, { word: currentWord }));
@@ -381,9 +515,16 @@ export default function App() {
         setLetterIndex(currentWordLetters.length);
         setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
-        playEffect(doneSfx, 0.8, () => {
-          advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
-        });
+        cancelSpeech();
+
+        if (wordIndex === roundWords.length - 1) {
+          playEffect(doneSfx, 0.8, () => {
+            advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
+          });
+        } else {
+          playEffect(doneSfx, 0.8);
+          completeWord();
+        }
       } else {
         playEffect(popSfx, 0.7);
         setLetterIndex(nextLetterIndex);
@@ -391,6 +532,7 @@ export default function App() {
     },
     [
       completeWord,
+      cancelSpeech,
       copy,
       currentWord,
       currentWordLetters,
@@ -399,8 +541,10 @@ export default function App() {
       phase,
       playEffect,
       resetFeedbackSoon,
+      roundWords.length,
       signalFeedback,
       settings.acceptUnaccented,
+      wordIndex,
     ],
   );
 

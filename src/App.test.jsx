@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
@@ -46,8 +46,7 @@ describe('Project Spell', () => {
     languagesSpy.mockRestore();
   });
 
-  it('starts a round and advances through a correctly typed word', async () => {
-    vi.useFakeTimers();
+  it('advances immediately without waiting for the word-completion ding', () => {
     const playSpy = vi.spyOn(Audio.prototype, 'play');
     render(<App />);
 
@@ -56,14 +55,28 @@ describe('Project Spell', () => {
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
 
     fireEvent.input(input, { target: { value: 'cat' } });
-    const ding = playSpy.mock.contexts.find((audio) => audio.src.endsWith('/done.mp3'));
-    act(() => ding.dispatchEvent(new Event('ended')));
 
-    await act(async () => {
-      vi.advanceTimersByTime(120);
+    expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
+    expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+  });
+
+  it('cuts the old prompt and speaks the next one while the ding is still playing', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    const cancellationsBeforeCompletion = window.speechSynthesis.cancel.mock.calls.length;
+
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'cat' },
     });
 
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(
+      cancellationsBeforeCompletion,
+    );
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(2);
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
   });
 
   it('keeps an incorrect attempt on the current letter and clears feedback after one second', () => {
@@ -274,7 +287,7 @@ describe('Project Spell', () => {
       target: { value: 'tarta' },
     });
 
-    expect(screen.getAllByRole('button', { name: /, klar$/u })).toHaveLength(5);
+    expect(screen.getByLabelText('Ord 2 av 3')).toBeInTheDocument();
   });
 
   it('replaces the final letter sound with the word-completion ding', () => {
@@ -309,6 +322,77 @@ describe('Project Spell', () => {
     expect(loadSpy.mock.contexts.every((audio) => audio.preload === 'auto')).toBe(true);
   });
 
+  it('mixes rapid feedback effects through separate Web Audio sources during speech', async () => {
+    const startedSources = [];
+    const contexts = [];
+
+    class BufferSourceMock extends EventTarget {
+      connect() {}
+      disconnect() {}
+      start() {
+        startedSources.push(this);
+      }
+      stop() {}
+    }
+
+    class AudioContextMock {
+      constructor() {
+        this.state = 'suspended';
+        this.destination = {};
+        this.decodeAudioData = vi.fn(async () => ({}));
+        this.resume = vi.fn(() => {
+          this.state = 'running';
+          return Promise.resolve();
+        });
+        contexts.push(this);
+      }
+      close() {
+        this.state = 'closed';
+        return Promise.resolve();
+      }
+      createBufferSource() {
+        return new BufferSourceMock();
+      }
+      createGain() {
+        return { connect() {}, disconnect() {}, gain: { value: 1 } };
+      }
+    }
+
+    const audioContextDescriptor = Object.getOwnPropertyDescriptor(window, 'AudioContext');
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      value: AudioContextMock,
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      arrayBuffer: async () => new ArrayBuffer(1),
+      ok: true,
+    });
+    const fallbackPlaySpy = vi.spyOn(Audio.prototype, 'play');
+
+    const view = render(<App />);
+    await waitFor(() => expect(contexts[0].decodeAudioData).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+    fireEvent.keyDown(input, { key: 'c' });
+    fireEvent.keyDown(input, { key: 'a' });
+
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(1);
+    expect(contexts[0].resume).toHaveBeenCalledTimes(1);
+    expect(startedSources).toHaveLength(2);
+    expect(startedSources[0]).not.toBe(startedSources[1]);
+    expect(fallbackPlaySpy).not.toHaveBeenCalled();
+
+    view.unmount();
+    fetchSpy.mockRestore();
+    if (audioContextDescriptor) {
+      Object.defineProperty(window, 'AudioContext', audioContextDescriptor);
+    } else {
+      delete window.AudioContext;
+    }
+  });
+
   it('waits for the final ding to finish before giving varied spoken praise', () => {
     vi.useFakeTimers();
     const playSpy = vi.spyOn(Audio.prototype, 'play');
@@ -324,23 +408,33 @@ describe('Project Spell', () => {
       });
       const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
 
-      expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
-      act(() => ding.dispatchEvent(new Event('ended')));
-      expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
-      act(() => vi.advanceTimersByTime(120));
+      if (word < 3) {
+        expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
+        window.speechSynthesis.speak.mockClear();
+      } else {
+        expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+        act(() => ding.dispatchEvent(new Event('ended')));
+        expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(120));
+      }
     }
 
     const firstPraise = window.speechSynthesis.speak.mock.calls.at(-1)[0].text;
     expect(firstPraise).toBe('Amazing! You finished the round!');
 
     fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    window.speechSynthesis.speak.mockClear();
     for (let word = 1; word <= 3; word += 1) {
       fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
         target: { value: 'cat' },
       });
       const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
-      act(() => ding.dispatchEvent(new Event('ended')));
-      act(() => vi.advanceTimersByTime(120));
+      if (word < 3) {
+        window.speechSynthesis.speak.mockClear();
+      } else {
+        act(() => ding.dispatchEvent(new Event('ended')));
+        act(() => vi.advanceTimersByTime(120));
+      }
     }
 
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe(
