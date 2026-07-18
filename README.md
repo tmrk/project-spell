@@ -2,6 +2,10 @@
 
 Project Spell is a calm, full-screen spelling game for children. It reads a word aloud, lets the child type one letter at a time, and gives immediate visual and audio feedback. The interface deliberately keeps the game itself almost empty; configuration lives in a separate grown-ups panel.
 
+## The story
+
+Project Spell began in January 2023 as a small proof of concept for helping children practise spelling. Its playful letter faces and immediate sound feedback arrived in those early days. In 2026, the project was picked up again and shaped into the calmer, multilingual, privacy-conscious game it is today. The aim has stayed the same: make spelling practice feel clear, friendly, and a little bit magical.
+
 ## Local development
 
 Requirements: Node.js 20.19 or newer. Node 24 is the recommended development version and is recorded in `.nvmrc`.
