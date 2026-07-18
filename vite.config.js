@@ -8,7 +8,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon.svg',
+        'favicon-16x16.png',
+        'favicon-32x32.png',
+        'apple-touch-icon.png',
+      ],
       manifest: {
         id: '/project-spell/',
         name: 'Project Spell',
