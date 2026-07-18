@@ -58,6 +58,7 @@ describe('Project Spell', () => {
 
     expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
 
   it('cuts the old prompt and speaks the next one while the ding is still playing', () => {

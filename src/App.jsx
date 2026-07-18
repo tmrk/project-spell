@@ -456,7 +456,7 @@ export default function App() {
   const completeWord = useCallback(() => {
     const isLastWord = wordIndex === roundWords.length - 1;
     if (isLastWord) {
-      setFeedback('idle');
+      signalFeedback('idle');
       setFeedbackMessage('');
       setPhase('complete');
       transitioningRef.current = false;
@@ -473,10 +473,10 @@ export default function App() {
 
     setWordIndex((index) => index + 1);
     setLetterIndex(0);
-    setFeedback('idle');
+    signalFeedback('idle');
     setFeedbackMessage('');
     transitioningRef.current = false;
-  }, [copy.roundFinishedSpeeches, pauseMusic, roundWords.length, say, wordIndex]);
+  }, [copy.roundFinishedSpeeches, pauseMusic, roundWords.length, say, signalFeedback, wordIndex]);
 
   const handleAttempt = useCallback(
     (value) => {
