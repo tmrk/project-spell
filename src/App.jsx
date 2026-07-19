@@ -1280,7 +1280,7 @@ export default function App() {
       {phase === 'welcome' && (
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
-          <Wordmark />
+          <Wordmark name={copy.projectName} />
           <button type="button" className="primary-button welcome-play-button" onClick={startRound}>
             {copy.play}
           </button>

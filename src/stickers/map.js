@@ -416,9 +416,8 @@ export function buildBookPages(progress, locale = 'en-GB') {
     candidatesByTheme[theme].some(({ codepoint }) => !ownedCodepoints.has(codepoint)),
   );
 
-  const pages = Object.keys(STICKER_THEMES).flatMap((theme) => {
+  const pages = Object.keys(STICKER_THEMES).map((theme) => {
     const owned = ownedByTheme[theme];
-    if (!owned.length && theme !== firstIncompleteTheme) return [];
     const missing = theme === firstIncompleteTheme
       ? candidatesByTheme[theme]
           .filter(({ codepoint }) => !ownedCodepoints.has(codepoint))
@@ -426,7 +425,7 @@ export function buildBookPages(progress, locale = 'en-GB') {
       : [];
     const complete = candidatesByTheme[theme].length > 0 &&
       candidatesByTheme[theme].every(({ codepoint }) => ownedCodepoints.has(codepoint));
-    return [{ id: theme, complete, stickers: [...owned, ...missing] }];
+    return { id: theme, complete, stickers: [...owned, ...missing] };
   });
 
   const shinyStickers = Array.isArray(progress?.shinyStickers)
@@ -447,5 +446,5 @@ export function buildBookPages(progress, locale = 'en-GB') {
     });
   }
 
-  return pages.length ? pages : [{ id: 'things', complete: false, stickers: [] }];
+  return pages;
 }

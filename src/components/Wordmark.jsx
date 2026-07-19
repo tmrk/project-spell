@@ -1,17 +1,11 @@
-const LETTERS = Object.freeze([...'SPELL']);
+export default function Wordmark({ name = 'Project Spell' }) {
+  const [firstWord, ...remainingWords] = name.trim().split(/\s+/u);
+  const finalWords = remainingWords.join(' ');
 
-export default function Wordmark() {
   return (
-    <div className="wordmark" role="img" aria-label="SPELL">
-      {LETTERS.map((letter, index) => (
-        <span className={`wordmark__letter letter--c${index % 5}`} key={`${letter}-${index}`} aria-hidden="true">
-          {letter}
-          <span className="wordmark__eyes">
-            <i />
-            <i />
-          </span>
-        </span>
-      ))}
-    </div>
+    <h1 className="wordmark" aria-label={name}>
+      <span className="wordmark__project" aria-hidden="true">{firstWord}</span>{' '}
+      <span className="wordmark__spell" aria-hidden="true">{finalWords}</span>
+    </h1>
   );
 }

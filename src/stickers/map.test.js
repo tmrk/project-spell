@@ -60,28 +60,31 @@ describe('sticker catalogue', () => {
     expect(hashCode('en-GB/cat')).not.toBe(hashCode('en-GB/dog'));
   });
 
-  it('builds owned-first pages with silhouettes only on the first incomplete page', () => {
+  it('builds owned-first categories with silhouettes only in the first incomplete category', () => {
     const pages = buildBookPages({
       stickers: ['en-GB/apple', 'en-GB/cat', 'en-GB/dog'],
       shinyStickers: [],
     }, 'en-GB');
     const animalPage = pages.find(({ id }) => id === 'animals');
     const foodPage = pages.find(({ id }) => id === 'food');
+    const thingsPage = pages.find(({ id }) => id === 'things');
 
     expect(animalPage.stickers.slice(0, 2).map(({ word }) => word)).toEqual(['cat', 'dog']);
     expect(animalPage.stickers.filter(({ owned }) => !owned)).toHaveLength(4);
     expect(foodPage.stickers).toEqual([
       expect.objectContaining({ word: 'apple', owned: true }),
     ]);
+    expect(thingsPage.stickers).toEqual([]);
     expect(pages.flatMap(({ stickers }) => stickers).filter(({ owned }) => !owned)).toHaveLength(4);
   });
 
-  it('keeps shiny prizes on a final page and starts an empty book with gentle goals', () => {
+  it('keeps shiny prizes last and starts an empty book with all categories and gentle goals', () => {
     const emptyPages = buildBookPages({ stickers: [], shinyStickers: [] }, 'en-GB');
-    expect(emptyPages).toHaveLength(1);
-    expect(emptyPages[0].id).toBe('animals');
+    expect(emptyPages.map(({ id }) => id)).toEqual(['animals', 'food', 'things']);
     expect(emptyPages[0].stickers).toHaveLength(4);
     expect(emptyPages[0].stickers.every(({ owned }) => !owned)).toBe(true);
+    expect(emptyPages[1].stickers).toEqual([]);
+    expect(emptyPages[2].stickers).toEqual([]);
 
     const pages = buildBookPages({ stickers: ['en-GB/cat'], shinyStickers: ['1f451'] }, 'en-GB');
     expect(pages.at(-1)).toEqual(expect.objectContaining({

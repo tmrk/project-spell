@@ -32,8 +32,9 @@ describe('Project Spell', () => {
     expect(screen.queryByText('Ready to spell?')).not.toBeInTheDocument();
     expect(screen.queryByText('Listen, then type one letter at a time.')).not.toBeInTheDocument();
     expect(screen.queryByText('Language')).not.toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'SPELL' })).toBeInTheDocument();
-    expect(screen.queryByText('Project Spell')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project Spell' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'SPELL' })).not.toBeInTheDocument();
+    expect(document.querySelectorAll('.scenery__cloud')).toHaveLength(7);
     expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
   });
 
@@ -899,6 +900,13 @@ describe('Project Spell', () => {
   });
 
   it('opens the sticker book from the welcome screen and closes it with Escape', () => {
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+      version: 1,
+      totalStars: 0,
+      stickers: ['en-GB/cat', 'en-GB/apple'],
+      shinyStickers: [],
+      badges: [],
+    }));
     render(<App />);
 
     const bookTab = screen.getByRole('button', { name: 'Open sticker book' });
@@ -906,7 +914,12 @@ describe('Project Spell', () => {
     fireEvent.click(bookTab);
     const book = screen.getByRole('dialog', { name: 'My sticker book' });
     expect(book).toBeInTheDocument();
-    expect(within(book).getByText('Animals · 0 stickers')).toBeInTheDocument();
+    expect(within(book).getByText('2 stickers')).toBeInTheDocument();
+    expect(within(book).getByText('Animals · 1 stickers')).toBeInTheDocument();
+    expect(within(book).getByText('Food · 1 stickers')).toBeInTheDocument();
+    expect(within(book).getByText('Things · 0 stickers')).toBeInTheDocument();
+    expect(book.querySelectorAll('.sticker-book__section')).toHaveLength(3);
+    expect(within(book).queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
     expect(book.querySelectorAll('.sticker-card--silhouette')).toHaveLength(4);
     expect(book.querySelector('.sticker-card--silhouette button')).not.toBeInTheDocument();
 
