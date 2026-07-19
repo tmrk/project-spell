@@ -50,9 +50,9 @@ import {
   getLocale,
 } from './locales';
 import croc from './assets/croc.svg';
-import bgMusic from './sounds/bgmusic.mp3';
 import bgMusic2 from './sounds/bgmusic2.mp3';
 import bgMusic3 from './sounds/bgmusic3.mp3';
+import townThemeMusic from './sounds/town-theme.mp3';
 import doneSfx from './sounds/done.mp3';
 import fanfareSfx from './sounds/fanfare.mp3';
 import popSfx from './sounds/pop.mp3';
@@ -67,7 +67,7 @@ const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
 const MUSIC_VOLUME = 0.12;
 const MUSIC_DUCKED_VOLUME = 0.05;
-const TRACKS = Object.freeze([bgMusic, bgMusic2, bgMusic3]);
+const TRACKS = Object.freeze([townThemeMusic, bgMusic2, bgMusic3]);
 
 const emptyRoundReward = () => ({
   badge: null,
@@ -558,6 +558,15 @@ export default function App() {
     roundWords.length,
     wordIndex + (letterIndex === currentWordLetters.length && currentWordLetters.length > 0 ? 1 : 0),
   );
+  const roundProgress = roundWords.length && currentWordLetters.length
+    ? Math.min(
+        (wordIndex + Math.min(letterIndex / currentWordLetters.length, 1)) / roundWords.length,
+        1,
+      )
+    : 0;
+  const correctLetterCount = roundWords
+    .slice(0, wordIndex)
+    .reduce((count, word) => count + [...word].length, letterIndex);
 
   const {
     musicIsPlaying,
@@ -1255,6 +1264,8 @@ export default function App() {
           <StarTrail
             total={roundWords.length}
             filled={filledWords}
+            progress={roundProgress}
+            step={correctLetterCount}
             croc={croc}
             ariaLabel={formatMessage(copy.progress, { current: wordIndex + 1, total: roundWords.length })}
           />

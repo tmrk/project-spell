@@ -70,6 +70,10 @@ Settings are persisted in `localStorage` under `project-spell:settings:v1`. Anon
 
 The project uses React and Vite. It intentionally avoids a UI framework so the bundle and visual language stay small.
 
+## Asset credits
+
+The crocodile icon was [designed by Magnific from Flaticon](https://www.flaticon.com/free-icon/crocodile_220061) and is used under the Flaticon License with attribution. Background track “Town Theme RPG” is by [cynicmusic](https://opengameart.org/content/town-theme-rpg), released under CC0 1.0 and volume-normalised for the game. The complete asset and dependency catalogue is available in the app's grown-ups About section.
+
 ## Deployment
 
 `npm run deploy` builds `dist/` and publishes it to the repository's `gh-pages` branch. Vite's base path is `/project-spell/`, matching the configured GitHub Pages URL.

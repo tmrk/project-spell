@@ -76,9 +76,20 @@ describe('Project Spell', () => {
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
     expect(document.querySelectorAll('.star-trail__socket')).toHaveLength(3);
     expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(0);
+    expect(document.querySelector('.star-trail__croc')).toHaveStyle({ left: '0%' });
     expect(screen.queryByText('1 / 3')).not.toBeInTheDocument();
 
-    fireEvent.input(input, { target: { value: 'cat' } });
+    fireEvent.keyDown(input, { key: 'x' });
+    expect(document.querySelector('.star-trail__croc')).toHaveStyle({ left: '0%' });
+    fireEvent.keyDown(input, { key: 'c' });
+    expect(Number.parseFloat(document.querySelector('.star-trail__croc').style.left))
+      .toBeCloseTo(100 / 9);
+    fireEvent.keyDown(input, { key: 'a' });
+    expect(Number.parseFloat(document.querySelector('.star-trail__croc').style.left))
+      .toBeCloseTo(200 / 9);
+    fireEvent.keyDown(input, { key: 't' });
+    expect(Number.parseFloat(document.querySelector('.star-trail__croc').style.left))
+      .toBeCloseTo(100 / 3);
 
     expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/done.mp3'))).toBe(true);
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
@@ -93,6 +104,8 @@ describe('Project Spell', () => {
     act(() => vi.advanceTimersByTime(1));
 
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(Number.parseFloat(document.querySelector('.star-trail__croc').style.left))
+      .toBeCloseTo(100 / 3);
     expect(document.querySelector('.confetti')).not.toBeInTheDocument();
     expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
@@ -702,7 +715,11 @@ describe('Project Spell', () => {
       });
       expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).totalStars).toBe(word * 3);
       expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(word);
-      if (word === 3) expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+      if (word === 3) {
+        expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+        expect(document.querySelector('.star-trail__croc')).toHaveStyle({ left: '100%' });
+        expect(document.querySelector('.star-trail__line-fill')).toHaveStyle({ width: '100%' });
+      }
       act(() => vi.advanceTimersByTime(760));
     }
 
@@ -875,8 +892,11 @@ describe('Project Spell', () => {
     expect(within(dialog).getByText(`v${packageInfo.version}`)).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Noto Emoji colour SVG artwork' }))
       .toHaveAttribute('href', 'https://github.com/googlefonts/noto-emoji');
+    expect(within(dialog).getByRole('link', { name: 'Crocodile icon' }))
+      .toHaveAttribute('href', 'https://www.flaticon.com/free-icon/crocodile_220061');
     expect(within(dialog).getByText(/Children's March Theme/u)).toBeInTheDocument();
-    expect(within(dialog).getAllByText(/Provenance unknown/u)).toHaveLength(2);
+    expect(within(dialog).getByText(/Town Theme RPG/u)).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/Provenance unknown/u)).toHaveLength(1);
   });
 
   it('selects a background track at round start and ducks it while speech is active', () => {
@@ -897,7 +917,7 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
 
     const music = playSpy.mock.contexts.find((audio) => audio.loop);
-    expect(music.src).toMatch(/\/bgmusic(?:2|3)?\.mp3$/u);
+    expect(music.src).toMatch(/\/(?:bgmusic2|bgmusic3|town-theme)\.mp3$/u);
     expect(loadSpy.mock.contexts).toContain(music);
     expect(music.volume).toBe(0.05);
 

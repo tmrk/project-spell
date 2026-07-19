@@ -12,6 +12,12 @@ const entries = [
     licence: 'Apache-2.0',
   },
   {
+    title: 'Crocodile icon',
+    author: 'designed by Magnific from Flaticon',
+    source: 'https://www.flaticon.com/free-icon/crocodile_220061',
+    licence: 'Flaticon License (attribution required)',
+  },
+  {
     title: 'Interface Sounds (star chimes)',
     author: 'Kenney',
     source: 'https://kenney.nl/assets/interface-sounds',
@@ -30,16 +36,16 @@ const entries = [
     licence: 'CC0 1.0',
   },
   {
+    title: 'Town Theme RPG (volume-normalised edit)',
+    author: 'cynicmusic',
+    source: 'https://opengameart.org/content/town-theme-rpg',
+    licence: 'CC0 1.0',
+  },
+  {
     title: 'Music Jingles — Pizzicato 07',
     author: 'Kenney',
     source: 'https://kenney.nl/assets/music-jingles',
     licence: 'CC0 1.0',
-  },
-  {
-    title: 'Legacy background music (bgmusic.mp3)',
-    author: 'Unrecorded legacy asset',
-    source: 'https://github.com/tmrk/project-spell/commit/168643427b98d4589c74fe6d0d6ab42ed721497d',
-    licence: 'Provenance unknown',
   },
   {
     title: 'Legacy feedback sounds (pop.mp3, bad.mp3, done.mp3)',
