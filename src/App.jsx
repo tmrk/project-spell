@@ -4,8 +4,9 @@ import BookTab from './components/BookTab';
 import CelebrationConfetti from './components/CelebrationConfetti';
 import JourneyStrip from './components/JourneyStrip';
 import LetterKeyboard from './components/LetterKeyboard';
-import ModeToggle from './components/ModeToggle';
+import ModeCards from './components/ModeCards';
 import NameDialog from './components/NameDialog';
+import NameField from './components/NameField';
 import NameTag from './components/NameTag';
 import Scenery from './components/Scenery';
 import SettingsPanel from './components/SettingsPanel';
@@ -51,11 +52,13 @@ import {
   recordRoundInCycle,
 } from './progress';
 import {
+  MAX_NAME_LENGTH,
   MAX_PROFILES,
   PROFILES_KEY,
   createEmptyProfiles,
   createProfile,
   getActiveProfile,
+  normaliseProfileName,
   normaliseProfiles,
   profileStorageKey,
   removeProfile,
@@ -538,6 +541,7 @@ export default function App() {
   const activeProfileId = activeProfile.id;
   const [settings, setSettings] = useState(() => loadSettings(activeProfileId));
   const [nameDialog, setNameDialog] = useState(null);
+  const [welcomeName, setWelcomeName] = useState('');
   const [phase, setPhase] = useState('welcome');
   const [roundWords, setRoundWords] = useState([]);
   const [wordIndex, setWordIndex] = useState(0);
@@ -779,17 +783,20 @@ export default function App() {
     }
   }, [activeProfileId]);
 
-  const startRound = useCallback(() => {
+  // `options.settings` lets the mode cards start a round with the mode they represent without
+  // waiting a render for the settings state to catch up.
+  const startRound = useCallback((options = {}) => {
+    const activeSettings = options.settings ?? settings;
     const nextRoundKind = isSuperRoundNext(progressRef.current) ? 'super' : 'normal';
     const selectionSummary =
-      settings.adaptivePractice && statsRef.current.totals.attempts >= ADAPTIVE_MIN_ATTEMPTS
-        ? summariseForSelection(statsRef.current, settings.locale)
+      activeSettings.adaptivePractice && statsRef.current.totals.attempts >= ADAPTIVE_MIN_ATTEMPTS
+        ? summariseForSelection(statsRef.current, activeSettings.locale)
         : null;
     const words = nextRoundKind === 'super'
-      ? createReviewRound(settings, sessionStrugglesRef.current, Math.random, selectionSummary)
+      ? createReviewRound(activeSettings, sessionStrugglesRef.current, Math.random, selectionSummary)
       : selectionSummary
-        ? createAdaptiveRound(settings, selectionSummary)
-        : createRound(settings);
+        ? createAdaptiveRound(activeSettings, selectionSummary)
+        : createRound(activeSettings);
     if (!words.length) {
       setSettingsOpen(true);
       return;
@@ -832,7 +839,7 @@ export default function App() {
     setPhase('playing');
     primeEffects();
     selectNextMusicTrack();
-    if (settings.music) playMusic();
+    if (activeSettings.music) playMusic();
   }, [clearRoundTimers, playMusic, primeEffects, resetHintLadder, selectNextMusicTrack, settings]);
 
   const dismissSuperIntro = useCallback(() => {
@@ -1283,6 +1290,21 @@ export default function App() {
 
   const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
 
+  // Choosing a card is choosing how to play *and* starting — so the mode has to be applied and
+  // handed to startRound in the same tick.
+  const startRoundInMode = (gameMode) => {
+    const next = normaliseSettings({ ...settingsRef.current, gameMode });
+    settingsRef.current = next;
+    setSettings(next);
+    startRound({ settings: next });
+  };
+
+  const submitWelcomeName = () => {
+    if (!normaliseProfileName(welcomeName)) return;
+    switchToProfile(createProfile(profiles, welcomeName));
+    setWelcomeName('');
+  };
+
   const saveProfileName = (name) => {
     if (nameDialog?.mode === 'rename' && nameDialog.profileId) {
       setProfiles((current) => renameProfile(current, nameDialog.profileId, name));
@@ -1414,9 +1436,43 @@ export default function App() {
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
           <Wordmark name={copy.projectName} showEyes={settings.eyes} />
-          <button type="button" className="primary-button welcome-play-button" onClick={startRound}>
-            {copy.play}
-          </button>
+          {namedProfiles.length === 0 ? (
+            // Nobody can play anonymously any more (owner direction): the first thing a child
+            // does is write their name, and the game starts from there.
+            <div className="welcome-naming">
+              <p className="welcome-naming__question">{copy.nameEntryTitle}</p>
+              <NameField
+                value={welcomeName}
+                onChange={setWelcomeName}
+                onSubmit={submitWelcomeName}
+                placeholder={copy.namePlaceholder}
+                label={copy.nameLabel}
+                showEyes={settings.eyes}
+                maxLength={MAX_NAME_LENGTH}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="primary-button welcome-naming__confirm"
+                onClick={submitWelcomeName}
+                disabled={!normaliseProfileName(welcomeName)}
+              >
+                {copy.nameReady}
+              </button>
+            </div>
+          ) : (
+            <ModeCards
+              labels={{
+                easy: copy.modeCardEasy,
+                easyAria: copy.playEasyAria,
+                normal: copy.modeCardNormal,
+                normalAria: copy.playNormalAria,
+              }}
+              onPlay={startRoundInMode}
+            />
+          )}
+          {/* While the first child is naming themselves there is nothing to pick between. */}
+          {namedProfiles.length > 0 && (
           <div className="profile-picker">
             {namedProfiles.map((profile) => (
               <button
@@ -1440,15 +1496,8 @@ export default function App() {
                 <span aria-hidden="true">+</span>
               </button>
             )}
-            <ModeToggle
-              mode={settings.gameMode}
-              labels={{
-                switchToEasy: copy.switchToModeEasy,
-                switchToNormal: copy.switchToModeNormal,
-              }}
-              onChange={(gameMode) => applySettingsChange({ gameMode })}
-            />
           </div>
+          )}
           <div className="welcome-language">
             <select
               aria-label={copy.language}
@@ -1629,7 +1678,7 @@ export default function App() {
               })}
             </p>
           )}
-          <button type="button" className="primary-button" onClick={startRound}>
+          <button type="button" className="primary-button" onClick={() => startRound()}>
             {copy.playAgain}
           </button>
         </main>

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import NameTag from './NameTag';
+import { useState } from 'react';
+import NameField from './NameField';
 import { MAX_NAME_LENGTH, normaliseProfileName } from '../profiles';
 
 /**
- * One field, one name. The live preview above the input is the point: the child watches their
- * own letters appear in the game's colours as they type, so entering a name is part of the
- * game rather than a form to get past.
+ * One field, and the field itself is made of the game's letters — the child types straight
+ * into the coloured tiles rather than filling in a box and seeing a copy of it elsewhere.
  */
 export default function NameDialog({
   copy,
@@ -16,16 +15,10 @@ export default function NameDialog({
   onSave,
 }) {
   const [name, setName] = useState(initialName);
-  const inputRef = useRef(null);
-  const preview = normaliseProfileName(name);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, []);
+  const cleanName = normaliseProfileName(name);
 
   const save = () => {
-    if (preview) onSave(preview);
+    if (cleanName) onSave(cleanName);
   };
 
   return (
@@ -48,30 +41,16 @@ export default function NameDialog({
         }}
       >
         <h3 id="name-dialog-title">{title}</h3>
-        <div className="name-dialog__preview" aria-hidden="true">
-          <NameTag name={preview} showEyes={showEyes} size="chip" />
-        </div>
-        <label className="stacked-field">
-          <span>{copy.nameLabel}</span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                save();
-              }
-            }}
-            placeholder={copy.namePlaceholder}
-            maxLength={MAX_NAME_LENGTH}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="words"
-            spellCheck="false"
-          />
-        </label>
+        <NameField
+          value={name}
+          onChange={setName}
+          onSubmit={save}
+          placeholder={copy.namePlaceholder}
+          label={copy.nameLabel}
+          showEyes={showEyes}
+          maxLength={MAX_NAME_LENGTH}
+          autoFocus
+        />
         <div className="confirmation-dialog__actions">
           <button type="button" className="text-button" onClick={onCancel}>
             {copy.cancelName}
@@ -80,7 +59,7 @@ export default function NameDialog({
             type="button"
             className="primary-button primary-button--small"
             onClick={save}
-            disabled={!preview}
+            disabled={!cleanName}
           >
             {copy.saveName}
           </button>
