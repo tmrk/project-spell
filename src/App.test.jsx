@@ -1355,6 +1355,26 @@ describe('Project Spell', () => {
       expect(screen.queryByRole('textbox', { name: 'Type the next letter' })).not.toBeInTheDocument();
     });
 
+    it('lets the keyboard do nothing to the name but type it', () => {
+      asNewDevice();
+      render(<App />);
+      playIn(PLAY_EASY);
+
+      // The input is invisible — the value is drawn as tiles — so an autocorrection or a
+      // predictive suggestion would rewrite a child's name with nothing on screen to explain it.
+      const field = screen.getByLabelText('First name');
+      expect(field).toHaveAttribute('autocomplete', 'off');
+      expect(field).toHaveAttribute('autocorrect', 'off');
+      expect(field).toHaveAttribute('autocapitalize', 'none');
+      expect(field).toHaveAttribute('spellcheck', 'false');
+      expect(field).toHaveAttribute('data-gramm', 'false');
+
+      // What is stored is exactly what was typed, case and all.
+      fireEvent.change(field, { target: { value: 'anna' } });
+      fireEvent.click(screen.getByRole('button', { name: 'That’s me!' }));
+      expect(JSON.parse(window.localStorage.getItem(PROFILES_KEY)).profiles[0].name).toBe('anna');
+    });
+
     it('will not start the round until a real name has been given', () => {
       asNewDevice();
       render(<App />);

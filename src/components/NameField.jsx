@@ -53,10 +53,21 @@ export default function NameField({
         }}
         aria-label={label}
         maxLength={maxLength}
+        // Every keyboard convenience is off, deliberately. The input itself is invisible — the
+        // value is drawn as tiles underneath — so a predictive suggestion or an autocorrection
+        // would silently rewrite a child's name with nothing on screen explaining why. Names are
+        // also exactly the words a dictionary gets wrong. `none` rather than `words` for
+        // capitalisation so what is stored is what was typed; every child-facing surface
+        // uppercases the name in CSS anyway.
         autoComplete="off"
         autoCorrect="off"
-        autoCapitalize="words"
+        autoCapitalize="none"
         spellCheck="false"
+        // Grammarly and friends inject an overlay into the field, which lands on top of the
+        // tiles rather than the invisible input they think they are decorating.
+        data-gramm="false"
+        data-gramm_editor="false"
+        data-enable-grammarly="false"
       />
     </div>
   );
