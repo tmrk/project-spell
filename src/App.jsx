@@ -3,6 +3,7 @@ import Letter from './components/Letter';
 import BookTab from './components/BookTab';
 import CelebrationConfetti from './components/CelebrationConfetti';
 import JourneyStrip from './components/JourneyStrip';
+import LetterKeyboard from './components/LetterKeyboard';
 import ModeToggle from './components/ModeToggle';
 import NameDialog from './components/NameDialog';
 import NameTag from './components/NameTag';
@@ -61,6 +62,7 @@ import {
   renameProfile,
   selectProfile,
 } from './profiles';
+import { buildKeys } from './keyboard';
 import { getStickerDetails } from './stickers/map';
 import {
   LOCALE_OPTIONS,
@@ -544,6 +546,7 @@ export default function App() {
   const [feedback, setFeedback] = useState('idle');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [hintLevel, setHintLevel] = useState('none');
+  const [keyHint, setKeyHint] = useState(null);
   const [celebratingWord, setCelebratingWord] = useState(false);
   const [confettiVisible, setConfettiVisible] = useState(false);
   const [heartBurstId, setHeartBurstId] = useState(0);
@@ -608,6 +611,11 @@ export default function App() {
         1,
       )
     : 0;
+  // Recomputed only when the word changes, so the simple tier's keys never move mid-word.
+  const keyboardKeys = useMemo(
+    () => buildKeys(settings.keyboard, currentWord, settings.locale),
+    [currentWord, settings.keyboard, settings.locale],
+  );
   const correctLetterCount = roundWords
     .slice(0, wordIndex)
     .reduce((count, word) => count + [...word].length, letterIndex);
@@ -746,6 +754,7 @@ export default function App() {
   const resetHintLadder = useCallback(() => {
     missCountRef.current = 0;
     setHintLevel('none');
+    setKeyHint(null);
   }, []);
 
   const persistStats = useCallback(() => {
@@ -1014,6 +1023,9 @@ export default function App() {
           }
           setMistakes((count) => count + 1);
           missCountRef.current += 1;
+          // Pointing at the right key sits between "try again" and giving the answer away,
+          // so it applies in easy mode too — where there is no glyph left to reveal.
+          if (missCountRef.current >= 2) setKeyHint(expected);
           if (missCountRef.current === 2) {
             if (settings.gameMode === 'normal') {
               setHintLevel('ghost');
@@ -1454,7 +1466,12 @@ export default function App() {
       )}
 
       {phase === 'playing' && (
-        <main className="play-screen" onClick={focusInput}>
+        <main
+          className={`play-screen${
+            keyboardKeys.length ? ` play-screen--keys-${settings.keyboard}` : ''
+          }`}
+          onClick={focusInput}
+        >
           {activeProfile.name && (
             // Flat letters, no widget chrome — the child's name belongs to the same world as
             // the words they are spelling, not to a labelled status pill.
@@ -1547,6 +1564,13 @@ export default function App() {
             autoCorrect="off"
             autoCapitalize="none"
             spellCheck="false"
+          />
+
+          <LetterKeyboard
+            keys={keyboardKeys}
+            highlight={keyHint}
+            label={copy.keyboardLabel}
+            onPress={handleAttempt}
           />
         </main>
       )}

@@ -411,6 +411,75 @@ input:focus-visible {
   gap: 4px;
 }
 
+// Keep the word clear of the keys. The full alphabet wraps to more rows than the simple tier,
+// so it reserves more room.
+.play-screen--keys-simple {
+  padding-bottom: max(150px, calc(env(safe-area-inset-bottom) + 140px));
+}
+
+.play-screen--keys-full {
+  padding-bottom: max(268px, calc(env(safe-area-inset-bottom) + 258px));
+}
+
+// Optional on-screen letter keys (G8.3). Sits at the foot of the play screen so the word
+// keeps the centre of the stage; the system keyboard still works at the same time.
+.letter-keyboard {
+  position: absolute;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: 50%;
+  display: flex;
+  flex-wrap: wrap;
+  width: min(94vw, 720px);
+  transform: translateX(-50%);
+  gap: 8px;
+  justify-content: center;
+}
+
+.letter-key {
+  min-width: 52px;
+  min-height: 52px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  color: var(--ps-ink);
+  font-size: 1.5rem;
+  font-weight: 900;
+  background: var(--ps-paper);
+  box-shadow: 0 4px 0 rgba(32, 48, 43, 0.16);
+  cursor: pointer;
+  text-transform: lowercase;
+  transition: transform 90ms ease, box-shadow 90ms ease;
+}
+
+.letter-key:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(32, 48, 43, 0.16);
+}
+
+// The miss-two hint: point at the key rather than answering for the child.
+.letter-key--hint {
+  color: #fff;
+  background: var(--ps-grass);
+  box-shadow: 0 4px 0 var(--ps-grass-shade);
+  animation: key-hint-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes key-hint-pulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@media (max-width: 600px) {
+  .letter-keyboard {
+    gap: 6px;
+  }
+
+  .letter-key {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.25rem;
+  }
+}
+
 // Per-child ground colour (G8.7). Swatches show the real thing rather than a label.
 .palette-field {
   display: flex;

@@ -486,6 +486,18 @@ export default function SettingsPanel({
               <small>{copy.customWordsHelp}</small>
             </label>
             <label className="stacked-field">
+              <span>{copy.onScreenKeyboard}</span>
+              <select
+                value={settings.keyboard}
+                onChange={(event) => applyChange({ keyboard: event.target.value })}
+              >
+                <option value="system">{copy.keyboardSystem}</option>
+                <option value="full">{copy.keyboardFull}</option>
+                <option value="simple">{copy.keyboardSimple}</option>
+              </select>
+              <small>{copy.keyboardHelp}</small>
+            </label>
+            <label className="stacked-field">
               <span>{copy.chooseFrom}</span>
               <select value={settings.wordSource} onChange={(event) => applyChange({ wordSource: event.target.value })}>
                 <option value="all">{copy.allWords}</option>

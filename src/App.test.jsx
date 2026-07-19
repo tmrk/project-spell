@@ -1088,6 +1088,92 @@ describe('Project Spell', () => {
     expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/fanfare.mp3'))).toHaveLength(1);
   });
 
+  describe('on-screen letter keyboard', () => {
+    const withKeyboard = (keyboard) => {
+      window.localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({
+          ...DEFAULT_SETTINGS,
+          customWords: 'cat',
+          wordSource: 'custom',
+          roundLength: 3,
+          music: false,
+          keyboard,
+        }),
+      );
+    };
+
+    it('stays off by default so the device keyboard is the norm', () => {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+      expect(screen.queryByRole('group', { name: 'Letter keys' })).not.toBeInTheDocument();
+    });
+
+    it('spells a word by tapping keys, exactly like typing does', () => {
+      withKeyboard('simple');
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+      const keyboard = screen.getByRole('group', { name: 'Letter keys' });
+      ['c', 'a', 't'].forEach((letter) => {
+        fireEvent.click(within(keyboard).getByRole('button', { name: letter }));
+      });
+
+      expect(screen.getByRole('button', { name: 't, completed' })).toBeInTheDocument();
+      expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(1);
+    });
+
+    it('offers the whole alphabet in full mode and only a few keys in simple mode', () => {
+      withKeyboard('full');
+      const full = render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      expect(within(screen.getByRole('group', { name: 'Letter keys' })).getAllByRole('button'))
+        .toHaveLength(26);
+      full.unmount();
+
+      withKeyboard('simple');
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      const keys = within(screen.getByRole('group', { name: 'Letter keys' })).getAllByRole('button');
+      expect(keys).toHaveLength(9);
+      // The word's own letters must always be reachable.
+      const labels = keys.map((key) => key.textContent);
+      expect(labels).toEqual(expect.arrayContaining(['c', 'a', 't']));
+    });
+
+    it('points at the right key after a second miss, in easy mode too', () => {
+      withKeyboard('simple');
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+      const keyboard = screen.getByRole('group', { name: 'Letter keys' });
+
+      fireEvent.keyDown(input, { key: 'x' });
+      expect(keyboard.querySelector('.letter-key--hint')).toBeNull();
+
+      fireEvent.keyDown(input, { key: 'z' });
+      expect(within(keyboard).getByRole('button', { name: 'c' })).toHaveClass('letter-key--hint');
+
+      // The hint clears once the child gets it right.
+      fireEvent.keyDown(input, { key: 'c' });
+      expect(keyboard.querySelector('.letter-key--hint')).toBeNull();
+    });
+
+    it('keeps physical typing working while the keys are on screen', () => {
+      withKeyboard('simple');
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+      const keyboard = screen.getByRole('group', { name: 'Letter keys' });
+      fireEvent.click(within(keyboard).getByRole('button', { name: 'c' }));
+      fireEvent.keyDown(screen.getByRole('textbox', { name: 'Type the next letter' }), { key: 'a' });
+
+      expect(screen.getByRole('button', { name: 'a, completed' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 't, current letter' })).toBeInTheDocument();
+    });
+  });
+
   describe('background palette', () => {
     it('paints the chosen ground and keeps it per child', () => {
       render(<App />);

@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, normaliseLocale } from './locales';
+import { KEYBOARD_MODES } from './keyboard';
 import {
   excludedWords as britishExcludedWords,
   regionalWords as britishRegionalWords,
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   acceptUnaccented: false,
   adaptivePractice: true,
   palette: 'sunshine',
+  keyboard: 'system',
 });
 
 // Alternative warm grounds (roadmap G8.7). Adding one means adding a matching
@@ -240,6 +242,7 @@ export function normaliseSettings(value = {}) {
         ? value.adaptivePractice
         : DEFAULT_SETTINGS.adaptivePractice,
     palette: PALETTES.includes(value.palette) ? value.palette : DEFAULT_SETTINGS.palette,
+    keyboard: KEYBOARD_MODES.includes(value.keyboard) ? value.keyboard : DEFAULT_SETTINGS.keyboard,
   };
 }
 
