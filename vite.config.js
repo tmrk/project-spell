@@ -25,8 +25,8 @@ export default defineConfig({
         scope: '/project-spell/',
         display: 'standalone',
         orientation: 'any',
-        background_color: '#ffee99',
-        theme_color: '#ffee99',
+        background_color: '#ffd84d',
+        theme_color: '#ffd84d',
         categories: ['education', 'games', 'kids'],
         icons: [
           {

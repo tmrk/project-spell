@@ -89,6 +89,32 @@ describe('Letter eyes', () => {
   });
 });
 
+describe('Letter wheel colours', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('applies the wheel colour class for its colorIndex without touching the label', () => {
+    render(<Letter letter="a" state="done" colorIndex={3} onSpeak={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: 'a, completed' });
+    expect(button).toHaveClass('letter--c3');
+    expect(button).toHaveClass('letter--done');
+  });
+
+  it('cycles back to the first wheel colour after five letters', () => {
+    render(<Letter letter="b" state="active" colorIndex={7} onSpeak={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'b, current letter' })).toHaveClass('letter--c2');
+  });
+
+  it('defaults to the first wheel colour and keeps the eyes unchanged', () => {
+    render(<Letter letter="m" state="waiting" onSpeak={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'm, next' })).toHaveClass('letter--c0');
+    expect(screen.getAllByTestId('cartoon-eye')).toHaveLength(2);
+  });
+});
+
 describe('Hidden letters (normal mode)', () => {
   afterEach(() => {
     vi.restoreAllMocks();

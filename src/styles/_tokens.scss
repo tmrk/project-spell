@@ -1,0 +1,28 @@
+// Design tokens for the sunshine identity (decision D-006).
+// Every colour in component styles must go through one of these tokens.
+:root {
+  // ground
+  --ps-sun: #ffd84d;        // page background (was #ffee99)
+  --ps-sun-deep: #f5c62e;   // pressed/dimmed sun, decor tint
+  --ps-cloud: #ffe47f;      // paper-cut clouds
+  --ps-paper: #fff7e0;      // panels, dialogs, book pages (was #fffaf0)
+  --ps-ink: #20302b;        // unchanged
+  --ps-ink-soft: rgba(32, 48, 43, 0.6);
+
+  // action + reward
+  --ps-grass: #20b967;      // unchanged primary
+  --ps-grass-shade: #178d4f;
+  --ps-gold: #ffc531;       // stars (was #f5b942)
+  --ps-gold-shade: #d9930f;
+
+  // letter wheel (colour + shadow shade pairs, cycled by letter index % 5)
+  --ps-coral: #f2695c;      --ps-coral-shade: #cd4a3f;
+  --ps-sky: #55b3e4;        --ps-sky-shade: #3286ba;
+  --ps-leaf: #6dc24b;       --ps-leaf-shade: #4c9a2f;
+  --ps-sunflower: #f79728;  --ps-sunflower-shade: #c47108;
+  --ps-berry: #b784e0;      --ps-berry-shade: #8f5eb8;
+
+  // feedback flashes (soften the current #33ff66 / #ff2222)
+  --ps-flash-success: #3fd67f;
+  --ps-flash-error: #ff6a5c;
+}

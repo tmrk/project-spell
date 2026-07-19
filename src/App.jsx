@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Letter from './components/Letter';
+import Scenery from './components/Scenery';
 import SettingsPanel from './components/SettingsPanel';
 import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
 import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon, StickerIcon } from './components/Icons';
@@ -67,17 +68,17 @@ const emptyRoundReward = () => ({
 
 const CONFETTI_PIECES = Object.freeze(
   [
-    [-86, 84, '#20b967'],
-    [-62, 104, '#f5b942'],
-    [-38, 90, '#ef5263'],
+    [-86, 84, 'var(--ps-grass)'],
+    [-62, 104, 'var(--ps-gold)'],
+    [-38, 90, 'var(--ps-coral)'],
     [-14, 114, '#ffffff'],
-    [10, 98, '#20b967'],
-    [34, 110, '#f5b942'],
-    [58, 92, '#ef5263'],
+    [10, 98, 'var(--ps-grass)'],
+    [34, 110, 'var(--ps-gold)'],
+    [58, 92, 'var(--ps-coral)'],
     [82, 112, '#ffffff'],
-    [118, 88, '#20b967'],
-    [150, 102, '#f5b942'],
-    [210, 96, '#ef5263'],
+    [118, 88, 'var(--ps-grass)'],
+    [150, 102, 'var(--ps-gold)'],
+    [210, 96, 'var(--ps-coral)'],
     [242, 108, '#ffffff'],
   ].map(([angle, distance, colour], index) =>
     Object.freeze({ angle, distance, colour, delay: (index % 3) * 24 }),
@@ -1063,6 +1064,7 @@ export default function App() {
 
   return (
     <div ref={appRef} className="app" data-feedback={feedback} data-phase={phase}>
+      <Scenery phase={phase} />
       <header className="app-controls" aria-label={copy.appControls}>
         {phase === 'playing' && (
           <button type="button" className="icon-button" onClick={repeatWord} aria-label={copy.hearAgain}>
@@ -1144,6 +1146,7 @@ export default function App() {
                 key={`${currentWord}-${index}`}
                 letter={letter}
                 state={index < letterIndex ? 'done' : index === letterIndex ? 'active' : 'waiting'}
+                colorIndex={index}
                 onSpeak={speakLetter}
                 showEyes={settings.eyes}
                 hidden={settings.gameMode === 'normal'}

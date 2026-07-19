@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import packageInfo from '../package.json';
 import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
 import { PROGRESS_KEY } from './progress';
@@ -72,6 +73,15 @@ describe('Project Spell', () => {
     expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     expect(document.querySelector('.confetti')).not.toBeInTheDocument();
     expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
+  });
+
+  it('colours the letters of a word through the wheel in order', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    expect(screen.getByRole('button', { name: 'c, current letter' })).toHaveClass('letter--c0');
+    expect(screen.getByRole('button', { name: 'a, next' })).toHaveClass('letter--c1');
+    expect(screen.getByRole('button', { name: 't, next' })).toHaveClass('letter--c2');
   });
 
   it('speaks short praise after two words and lets it finish before the next prompt', () => {
@@ -774,7 +784,7 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Grown-ups' });
-    expect(within(dialog).getByText('v1.0.0')).toBeInTheDocument();
+    expect(within(dialog).getByText(`v${packageInfo.version}`)).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Noto Emoji colour SVG artwork' }))
       .toHaveAttribute('href', 'https://github.com/googlefonts/noto-emoji');
     expect(within(dialog).getByText(/Children's March Theme/u)).toBeInTheDocument();

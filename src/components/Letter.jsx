@@ -42,6 +42,7 @@ export default function Letter({
   letter,
   state,
   onSpeak,
+  colorIndex = 0,
   showEyes = true,
   hidden = false,
   hint = 'none',
@@ -84,7 +85,7 @@ export default function Letter({
   return (
     <button
       type="button"
-      className={`letter letter--${state}${glyphHidden ? ' letter--hidden' : ''}${
+      className={`letter letter--${state} letter--c${colorIndex % 5}${glyphHidden ? ' letter--hidden' : ''}${
         glyphHidden && hint === 'ghost' ? ' letter--hint-ghost' : ''
       }${hidden ? ' letter--was-hidden' : ''}${isWobbling ? ' letter--wobbling' : ''}`}
       onClick={handleClick}

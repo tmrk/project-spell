@@ -1,6 +1,8 @@
+@use 'styles/tokens';
+
 :root {
-  color: #20302b;
-  background: #ffee99;
+  color: var(--ps-ink);
+  background: var(--ps-sun);
   font-family: ui-rounded, "SF Pro Rounded", "Nunito Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -46,12 +48,12 @@ button:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 input:focus-visible {
-  outline: 3px solid #20302b;
+  outline: 3px solid var(--ps-ink);
   outline-offset: 3px;
 }
 
 .app {
-  --page-background: #ffee99;
+  --page-background: var(--ps-sun);
   position: relative;
   display: grid;
   width: 100%;
@@ -63,11 +65,11 @@ input:focus-visible {
 }
 
 .app[data-feedback="success"] {
-  --page-background: #33ff66;
+  --page-background: var(--ps-flash-success);
 }
 
 .app[data-feedback="error"] {
-  --page-background: #ff2222;
+  --page-background: var(--ps-flash-error);
 }
 
 .app-controls {
@@ -136,7 +138,7 @@ input:focus-visible {
 
 .complete-screen h1 {
   margin: 0;
-  color: #20302b;
+  color: var(--ps-ink);
   font-size: clamp(2.7rem, 7vw, 5.8rem);
   font-weight: 850;
   letter-spacing: -0.055em;
@@ -185,7 +187,7 @@ input:focus-visible {
 }
 
 .round-sticker-award strong {
-  color: #20302b;
+  color: var(--ps-ink);
   font-size: 1.08rem;
   text-transform: capitalize;
 }
@@ -212,9 +214,9 @@ input:focus-visible {
   padding: 10px 36px 10px 14px;
   border: 1px solid rgba(32, 48, 43, 0.16);
   border-radius: 14px;
-  color: #20302b;
+  color: var(--ps-ink);
   background-color: rgba(255, 255, 255, 0.64);
-  background-image: linear-gradient(45deg, transparent 50%, #63716c 50%), linear-gradient(135deg, #63716c 50%, transparent 50%);
+  background-image: linear-gradient(45deg, transparent 50%, var(--ps-ink-soft) 50%), linear-gradient(135deg, var(--ps-ink-soft) 50%, transparent 50%);
   background-position: calc(100% - 19px) 20px, calc(100% - 14px) 20px;
   background-repeat: no-repeat;
   background-size: 5px 5px, 5px 5px;
@@ -229,8 +231,8 @@ input:focus-visible {
   border: 0;
   border-radius: 18px;
   color: #fff;
-  background: #20b967;
-  box-shadow: 0 8px 0 #178d4f;
+  background: var(--ps-grass);
+  box-shadow: 0 8px 0 var(--ps-grass-shade);
   font-size: 1.12rem;
   font-weight: 850;
   cursor: pointer;
@@ -238,17 +240,17 @@ input:focus-visible {
 }
 
 .primary-button:hover {
-  background: #1fb363;
+  background: color-mix(in srgb, var(--ps-grass) 94%, var(--ps-ink));
 }
 
 .primary-button:active {
   transform: translateY(5px);
-  box-shadow: 0 3px 0 #178d4f;
+  box-shadow: 0 3px 0 var(--ps-grass-shade);
 }
 
 .primary-button:disabled {
   color: rgba(32, 48, 43, 0.45);
-  background: #d8ded9;
+  background: color-mix(in srgb, var(--ps-ink) 14%, #fff);
   box-shadow: none;
   cursor: not-allowed;
 }
@@ -258,7 +260,7 @@ input:focus-visible {
   min-height: 48px;
   padding: 10px 18px;
   border-radius: 14px;
-  box-shadow: 0 5px 0 #178d4f;
+  box-shadow: 0 5px 0 var(--ps-grass-shade);
   font-size: 0.96rem;
 }
 
@@ -267,7 +269,7 @@ input:focus-visible {
   min-height: clamp(124px, 18vw, 170px);
   padding: 18px 42px;
   border-radius: 34px;
-  box-shadow: 0 14px 0 #178d4f;
+  box-shadow: 0 14px 0 var(--ps-grass-shade);
   font-size: clamp(3.5rem, 9vw, 6.5rem);
   letter-spacing: 0.015em;
   line-height: 1;
@@ -279,7 +281,7 @@ input:focus-visible {
 .welcome-play-button:active {
   animation: none;
   transform: translateY(8px);
-  box-shadow: 0 5px 0 #178d4f;
+  box-shadow: 0 5px 0 var(--ps-grass-shade);
 }
 
 .play-screen {
@@ -322,7 +324,7 @@ input:focus-visible {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: rgba(32, 185, 103, 0.52);
+  background: color-mix(in srgb, var(--ps-grass) 52%, transparent);
   transition: width 260ms ease;
 }
 
@@ -391,7 +393,7 @@ input:focus-visible {
   padding: 0 0.035em;
   border: 0;
   border-radius: 0.16em;
-  color: rgba(32, 48, 43, 0.12);
+  color: rgba(32, 48, 43, 0.13);
   background: transparent;
   font-size: clamp(1.1rem, var(--letter-size), 11.5rem);
   font-weight: 900;
@@ -408,18 +410,29 @@ input:focus-visible {
   place-items: center;
 }
 
+// Letter wheel: colour + shadow pairs cycled by the letter's index in the word.
+.letter--c0 { --lc: var(--ps-coral); --lcs: var(--ps-coral-shade); }
+.letter--c1 { --lc: var(--ps-sky); --lcs: var(--ps-sky-shade); }
+.letter--c2 { --lc: var(--ps-leaf); --lcs: var(--ps-leaf-shade); }
+.letter--c3 { --lc: var(--ps-sunflower); --lcs: var(--ps-sunflower-shade); }
+.letter--c4 { --lc: var(--ps-berry); --lcs: var(--ps-berry-shade); }
+
 .letter--done {
-  color: #20302b;
+  color: var(--lc);
+  text-shadow: 0 0.055em 0 var(--lcs);
 }
 
 .letter--active {
-  color: #ef5263;
-  background: rgba(255, 255, 255, 0.4);
+  color: var(--lc);
+  background: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 0.055em 0 var(--lcs);
   animation: letter-breathe 2.4s ease-in-out infinite;
 }
 
 .letter--hidden {
   color: transparent;
+  // A shadow would trace the hidden glyph, so the quiet states drop it entirely.
+  text-shadow: none;
 }
 
 .letter--hidden.letter--waiting {
@@ -510,8 +523,8 @@ input:focus-visible {
 }
 
 .star-ceremony__star--filled {
-  color: #f5b942;
-  filter: drop-shadow(0 5px 0 rgba(190, 129, 24, 0.24));
+  color: var(--ps-gold);
+  filter: drop-shadow(0 5px 0 var(--ps-gold-shade));
   animation: finish-pop 480ms cubic-bezier(0.2, 0.9, 0.25, 1.25) var(--star-delay) both;
 }
 
@@ -540,7 +553,7 @@ input:focus-visible {
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid rgba(32, 48, 43, 0.08);
   border-radius: 28px;
-  background: #fffaf0;
+  background: var(--ps-paper);
   box-shadow: 0 24px 80px rgba(32, 48, 43, 0.22);
   -webkit-overflow-scrolling: touch;
 }
@@ -554,7 +567,7 @@ input:focus-visible {
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid rgba(32, 48, 43, 0.08);
   border-radius: 28px;
-  background: #fffaf0;
+  background: var(--ps-paper);
   box-shadow: 0 24px 80px rgba(32, 48, 43, 0.22);
   flex-direction: column;
   -webkit-overflow-scrolling: touch;
@@ -607,14 +620,14 @@ input:focus-visible {
   padding: 10px 6px 8px;
   border: 1px solid rgba(32, 48, 43, 0.08);
   border-radius: 18px;
-  color: #20302b;
+  color: var(--ps-ink);
   background: rgba(255, 255, 255, 0.68);
   cursor: pointer;
   gap: 5px;
 }
 
 .sticker-card:hover {
-  border-color: rgba(32, 185, 103, 0.42);
+  border-color: color-mix(in srgb, var(--ps-grass) 42%, transparent);
   background: #fff;
 }
 
@@ -663,7 +676,7 @@ input:focus-visible {
 .badge svg {
   width: 22px;
   height: 22px;
-  color: #e4a92d;
+  color: var(--ps-gold-shade);
 }
 
 .confirmation-backdrop {
@@ -680,7 +693,7 @@ input:focus-visible {
   width: min(430px, 100%);
   padding: clamp(24px, 5vw, 34px);
   border-radius: 24px;
-  background: #fffaf0;
+  background: var(--ps-paper);
   box-shadow: 0 24px 80px rgba(32, 48, 43, 0.3);
   text-align: center;
 }
@@ -764,7 +777,7 @@ input:focus-visible {
 }
 
 .preset-button:hover {
-  border-color: rgba(32, 185, 103, 0.6);
+  border-color: color-mix(in srgb, var(--ps-grass) 60%, transparent);
   background: #fff;
 }
 
@@ -797,7 +810,7 @@ input:focus-visible {
 }
 
 .mode-option:has(input:checked) {
-  border-color: rgba(32, 185, 103, 0.6);
+  border-color: color-mix(in srgb, var(--ps-grass) 60%, transparent);
   background: #fff;
 }
 
@@ -805,7 +818,7 @@ input:focus-visible {
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  accent-color: #20b967;
+  accent-color: var(--ps-grass);
 }
 
 .mode-option__copy {
@@ -859,7 +872,7 @@ input:focus-visible {
   padding: 10px 12px;
   border: 1px solid rgba(32, 48, 43, 0.16);
   border-radius: 12px;
-  color: #20302b;
+  color: var(--ps-ink);
   background: #fff;
   font-size: 16px;
   -webkit-appearance: none;
@@ -868,7 +881,7 @@ input:focus-visible {
 .field-grid select,
 .stacked-field select {
   padding-right: 32px;
-  background-image: linear-gradient(45deg, transparent 50%, #63716c 50%), linear-gradient(135deg, #63716c 50%, transparent 50%);
+  background-image: linear-gradient(45deg, transparent 50%, var(--ps-ink-soft) 50%), linear-gradient(135deg, var(--ps-ink-soft) 50%, transparent 50%);
   background-position: calc(100% - 17px) 20px, calc(100% - 12px) 20px;
   background-repeat: no-repeat;
   background-size: 5px 5px, 5px 5px;
@@ -907,7 +920,7 @@ input:focus-visible {
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  accent-color: #20b967;
+  accent-color: var(--ps-grass);
 }
 
 .toggle-copy {
@@ -943,14 +956,14 @@ input:focus-visible {
 }
 
 .field-error {
-  color: #b53645;
+  color: var(--ps-coral-shade);
 }
 
 .text-button {
   min-height: 44px;
   padding: 8px 2px;
   border: 0;
-  color: rgba(32, 48, 43, 0.6);
+  color: var(--ps-ink-soft);
   background: transparent;
   font-size: 0.88rem;
   font-weight: 750;
@@ -960,7 +973,7 @@ input:focus-visible {
 }
 
 .text-button--danger {
-  color: #b53645;
+  color: var(--ps-coral-shade);
 }
 
 .text-button:disabled {
@@ -970,16 +983,16 @@ input:focus-visible {
 }
 
 .primary-button--danger {
-  background: #ef5263;
-  box-shadow: 0 5px 0 #c23648;
+  background: var(--ps-coral);
+  box-shadow: 0 5px 0 var(--ps-coral-shade);
 }
 
 .primary-button--danger:hover {
-  background: #e94a5b;
+  background: color-mix(in srgb, var(--ps-coral) 92%, var(--ps-ink));
 }
 
 .primary-button--danger:active {
-  box-shadow: 0 3px 0 #c23648;
+  box-shadow: 0 3px 0 var(--ps-coral-shade);
 }
 
 .progress-summary {
@@ -1019,7 +1032,8 @@ input:focus-visible {
 }
 
 .about-section a {
-  color: #176e47;
+  // Darkened grass so the small link text keeps ~5.9:1 contrast on paper.
+  color: color-mix(in srgb, var(--ps-grass-shade) 70%, var(--ps-ink));
   text-underline-offset: 2px;
 }
 
@@ -1039,6 +1053,74 @@ input:focus-visible {
   line-height: 1.4;
   list-style: none;
   gap: 6px;
+}
+
+.scenery {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scenery svg {
+  position: absolute;
+  display: block;
+}
+
+.scenery__cloud path {
+  fill: var(--ps-cloud);
+}
+
+.scenery__tuft path {
+  fill: var(--ps-sun-deep);
+  opacity: 0.8;
+}
+
+.scenery--welcome .scenery__cloud--one {
+  top: 36px;
+  left: -30px;
+  width: 240px;
+}
+
+.scenery--welcome .scenery__cloud--two {
+  top: 90px;
+  right: 60px;
+  width: 180px;
+  opacity: 0.8;
+}
+
+.scenery--welcome .scenery__tuft {
+  bottom: -6px;
+  left: 24px;
+  width: 150px;
+}
+
+.scenery--play .scenery__cloud--one {
+  top: 150px;
+  left: -40px;
+  width: 190px;
+  opacity: 0.55;
+}
+
+.scenery--play .scenery__cloud--two {
+  right: -30px;
+  bottom: 15%;
+  width: 210px;
+  opacity: 0.5;
+}
+
+.scenery--complete .scenery__cloud--one {
+  top: 40px;
+  left: -30px;
+  width: 200px;
+  opacity: 0.7;
+}
+
+.scenery--complete .scenery__cloud--two {
+  top: 70px;
+  right: 40px;
+  width: 150px;
+  opacity: 0.6;
 }
 
 .sr-only {
@@ -1131,6 +1213,19 @@ input:focus-visible {
   .round-progress__value img {
     width: 50px;
     height: 50px;
+  }
+
+  .scenery--welcome .scenery__cloud--one {
+    width: 190px;
+  }
+
+  .scenery--welcome .scenery__cloud--two {
+    right: 24px;
+    width: 130px;
+  }
+
+  .scenery--welcome .scenery__tuft {
+    width: 110px;
   }
 
   .settings-panel {
@@ -1231,7 +1326,7 @@ input:focus-visible {
     width: min(480px, 76vw);
     min-height: clamp(94px, 24vh, 112px);
     border-radius: 26px;
-    box-shadow: 0 10px 0 #178d4f;
+    box-shadow: 0 10px 0 var(--ps-grass-shade);
     font-size: clamp(3rem, 10vh, 4.6rem);
   }
 
