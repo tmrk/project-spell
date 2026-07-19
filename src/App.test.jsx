@@ -718,7 +718,9 @@ describe('Project Spell', () => {
       if (word === 3) {
         expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
         expect(document.querySelector('.star-trail__croc')).toHaveStyle({ left: '100%' });
-        expect(document.querySelector('.star-trail__line-fill')).toHaveStyle({ width: '100%' });
+        expect(document.querySelector('.star-trail__line-fill')).toHaveStyle({
+          width: 'calc(100% + 2 * var(--trail-pad))',
+        });
       }
       act(() => vi.advanceTimersByTime(760));
     }
