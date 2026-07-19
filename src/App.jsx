@@ -71,6 +71,17 @@ const CONFETTI_DURATION = 700;
 const MUSIC_VOLUME = 0.12;
 const MUSIC_DUCKED_VOLUME = 0.05;
 const TRACKS = Object.freeze([townThemeMusic, bgMusic2, bgMusic3]);
+const ROUND_SETTING_KEYS = Object.freeze([
+  'locale',
+  'gameMode',
+  'minLetters',
+  'maxLetters',
+  'syllables',
+  'roundLength',
+  'wordSource',
+  'customWords',
+  'acceptUnaccented',
+]);
 
 const emptyRoundReward = () => ({
   badge: null,
@@ -500,6 +511,7 @@ export default function App() {
   const [visibleProgress, setVisibleProgress] = useState(loadProgress);
 
   const inputRef = useRef(null);
+  const settingsRef = useRef(settings);
   const missCountRef = useRef(0);
   // Stats live in refs so per-key bookkeeping never causes re-renders during play.
   const statsRef = useRef(null);
@@ -533,6 +545,7 @@ export default function App() {
   const sessionStrugglesRef = useRef(new Set());
   const sessionFilterKeyRef = useRef(null);
   const appRef = useRef(null);
+  const roundSettingsDirtyRef = useRef(false);
   const currentWord = roundWords[wordIndex] ?? '';
   const currentWordLetters = useMemo(() => [...currentWord], [currentWord]);
   const locale = getLocale(settings.locale);
@@ -573,6 +586,10 @@ export default function App() {
     } catch {
       // The game still works when browser storage is unavailable.
     }
+  }, [settings]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
   }, [settings]);
 
   useEffect(() => {
@@ -1108,6 +1125,7 @@ export default function App() {
     pauseMusic();
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);
+    roundSettingsDirtyRef.current = false;
     setSettingsOpen(true);
   };
 
@@ -1126,16 +1144,12 @@ export default function App() {
     setStickerBookProgress(progressRef.current);
   }, []);
 
-  const closeSettings = () => {
-    setSettingsOpen(false);
-    if (phase === 'playing' && settings.music) playMusic();
-  };
-
-  const saveSettings = (nextSettings) => {
+  const restartWithSettings = (nextSettings) => {
     clearRoundTimers();
     cancelSpeech();
     pauseMusic();
     transitioningRef.current = false;
+    settingsRef.current = nextSettings;
     setSettings(nextSettings);
     setRoundWords([]);
     setWordIndex(0);
@@ -1152,8 +1166,36 @@ export default function App() {
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
     wordStarsRef.current = [];
+    roundSettingsDirtyRef.current = false;
     setPhase('welcome');
     setSettingsOpen(false);
+  };
+
+  const applySettingsChange = (partial) => {
+    const current = settingsRef.current;
+    const next = normaliseSettings({ ...current, ...partial });
+    if (
+      phase === 'playing' &&
+      ROUND_SETTING_KEYS.some((key) => current[key] !== next[key])
+    ) {
+      roundSettingsDirtyRef.current = true;
+    }
+    settingsRef.current = next;
+    setSettings(next);
+  };
+
+  const closeSettings = () => {
+    if (phase === 'playing' && roundSettingsDirtyRef.current) {
+      restartWithSettings(settingsRef.current);
+      return;
+    }
+    roundSettingsDirtyRef.current = false;
+    setSettingsOpen(false);
+    if (phase === 'playing' && settings.music) playMusic();
+  };
+
+  const changeSettingsLocale = (nextLocale) => {
+    restartWithSettings(normaliseSettings({ ...settingsRef.current, locale: nextLocale }));
   };
 
   const changeWelcomeLanguage = (event) => {
@@ -1418,9 +1460,10 @@ export default function App() {
           settings={settings}
           stats={settingsStats}
           progress={settingsProgress}
+          onChange={applySettingsChange}
           onEraseProgress={eraseProgress}
           onClose={closeSettings}
-          onSave={saveSettings}
+          onLocaleChange={changeSettingsLocale}
         />
       )}
 

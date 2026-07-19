@@ -7,7 +7,6 @@ import { CREDITS } from '../credits';
 import packageInfo from '../../package.json';
 
 const EMPTY_STATS = createEmptyStats();
-
 const NUMBER_OPTIONS = Array.from({ length: 13 }, (_, index) => index + 2);
 const ROUND_OPTIONS = [3, 5, 8, 10, 12, 15, 20];
 const PRESET_MESSAGE_KEYS = Object.freeze({
@@ -110,21 +109,38 @@ function ClearProgressDialog({ copy, onCancel, onConfirm }) {
   );
 }
 
+function SwitchRow({ checked, label, onChange }) {
+  return (
+    <label className="toggle-row">
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    </label>
+  );
+}
+
 export default function SettingsPanel({
   settings,
   stats = null,
   progress = null,
-  onEraseProgress,
+  onChange,
   onClose,
-  onSave,
+  onEraseProgress,
+  onLocaleChange,
 }) {
-  const [draft, setDraft] = useState(settings);
-  const [pendingSettings, setPendingSettings] = useState(null);
+  const [customWords, setCustomWords] = useState(settings.customWords);
+  const [pendingLocale, setPendingLocale] = useState(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [savedVisible, setSavedVisible] = useState(false);
   const closeButtonRef = useRef(null);
   const languageSelectRef = useRef(null);
-  const copy = getLocale(draft.locale).messages;
-  const eligibleCount = useMemo(() => getEligibleWords(draft).length, [draft]);
+  const customWordsTimerRef = useRef(null);
+  const savedTimerRef = useRef(null);
+  const copy = getLocale(settings.locale).messages;
+  const eligibleSettings = useMemo(
+    () => normaliseSettings({ ...settings, customWords }),
+    [customWords, settings],
+  );
+  const eligibleCount = useMemo(() => getEligibleWords(eligibleSettings).length, [eligibleSettings]);
   const statsData = stats ?? EMPTY_STATS;
   const hasPlayData = statsData.totals.attempts > 0 || statsData.totals.wordsCompleted > 0;
   const trickyLetters = trickiestLetters(statsData);
@@ -135,42 +151,53 @@ export default function SettingsPanel({
     return () => previouslyFocused?.focus?.();
   }, []);
 
-  const setValue = (key, value) => {
-    setDraft((current) => normaliseSettings({ ...current, [key]: value }));
+  useEffect(() => () => {
+    window.clearTimeout(customWordsTimerRef.current);
+    window.clearTimeout(savedTimerRef.current);
+  }, []);
+
+  const showSaved = () => {
+    setSavedVisible(true);
+    window.clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = window.setTimeout(() => setSavedVisible(false), 1200);
   };
 
-  const applyPreset = (preset) => {
-    setDraft((current) => normaliseSettings({ ...current, ...preset.settings }));
+  const applyChange = (partial) => {
+    onChange(partial);
+    showSaved();
   };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    if (!eligibleCount) return;
-
-    const nextSettings = normaliseSettings(draft);
-    if (nextSettings.locale !== settings.locale) {
-      setPendingSettings(nextSettings);
-      return;
-    }
-    onSave(nextSettings);
+  const flushCustomWords = () => {
+    window.clearTimeout(customWordsTimerRef.current);
+    if (customWords !== settings.customWords) applyChange({ customWords });
   };
+
+  const closePanel = () => {
+    flushCustomWords();
+    onClose();
+  };
+
+  const changeCustomWords = (value) => {
+    setCustomWords(value);
+    window.clearTimeout(customWordsTimerRef.current);
+    customWordsTimerRef.current = window.setTimeout(() => {
+      onChange({ customWords: value });
+      showSaved();
+    }, 500);
+  };
+
+  const applyPreset = (preset) => applyChange(preset.settings);
 
   const resetSettings = () => {
-    setDraft(normaliseSettings({ ...DEFAULT_SETTINGS, locale: draft.locale }));
+    const reset = normaliseSettings({ ...DEFAULT_SETTINGS, locale: settings.locale });
+    setCustomWords(reset.customWords);
+    applyChange(reset);
   };
 
   const cancelLanguageChange = () => {
-    setPendingSettings(null);
-    setDraft((current) => normaliseSettings({ ...current, locale: settings.locale }));
+    setPendingLocale(null);
     window.requestAnimationFrame(() => languageSelectRef.current?.focus());
   };
-
-  const matchMessage = eligibleCount
-    ? formatMessage(copy.wordsMatch, {
-        count: eligibleCount,
-        unit: eligibleCount === 1 ? copy.wordSingular : copy.wordPlural,
-      })
-    : copy.noWordsMatch;
 
   const downloadData = () => {
     try {
@@ -194,7 +221,7 @@ export default function SettingsPanel({
   };
 
   return (
-    <div className="settings-backdrop" role="presentation" onPointerDown={onClose}>
+    <div className="settings-backdrop" role="presentation" onPointerDown={closePanel}>
       <section
         className="settings-panel"
         role="dialog"
@@ -202,31 +229,40 @@ export default function SettingsPanel({
         aria-labelledby="settings-title"
         onPointerDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') onClose();
+          if (event.key === 'Escape' && !pendingLocale && !confirmingClear) closePanel();
         }}
       >
         <header className="settings-panel__header">
-          <h2 id="settings-title">{copy.settingsHeading}</h2>
+          <div className="settings-panel__title-row">
+            <h2 id="settings-title">
+              {copy.settingsHeading} <small>{copy.settingsHeadingSuffix}</small>
+            </h2>
+            <span className={`saved-toast${savedVisible ? ' saved-toast--visible' : ''}`} role="status">
+              {savedVisible ? copy.savedToast : ''}
+            </span>
+          </div>
           <button
             ref={closeButtonRef}
             type="button"
             className="icon-button"
-            onClick={onClose}
+            onClick={closePanel}
             aria-label={copy.closeSettings}
           >
             <CloseIcon />
           </button>
         </header>
 
-        <form onSubmit={handleSubmit}>
-          <fieldset className="settings-section">
-            <legend>{copy.language}</legend>
+        <div className="settings-panel__body">
+          <fieldset className="settings-group">
+            <legend>{copy.groupGame}</legend>
             <label className="stacked-field">
-              <span className="sr-only">{copy.language}</span>
+              <span>{copy.language}</span>
               <select
                 ref={languageSelectRef}
-                value={draft.locale}
-                onChange={(event) => setValue('locale', event.target.value)}
+                value={pendingLocale ?? settings.locale}
+                onChange={(event) => {
+                  if (event.target.value !== settings.locale) setPendingLocale(event.target.value);
+                }}
               >
                 {LOCALE_OPTIONS.map((option) => (
                   <option key={option.code} value={option.code}>
@@ -235,10 +271,34 @@ export default function SettingsPanel({
                 ))}
               </select>
             </label>
+
+            <div className="mode-options" aria-label={copy.modeHeading}>
+              {[
+                ['easy', copy.modeEasyLabel, copy.modeEasyDescription],
+                ['normal', copy.modeNormalLabel, copy.modeNormalDescription],
+              ].map(([mode, label, description]) => (
+                <label className="mode-option" key={mode}>
+                  <input
+                    type="radio"
+                    name="gameMode"
+                    value={mode}
+                    checked={settings.gameMode === mode}
+                    onChange={() => applyChange({ gameMode: mode })}
+                  />
+                  <span className="mode-option__copy">
+                    <strong>{label}</strong>
+                    <span>{description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {settings.gameMode === 'normal' && !settings.speech && (
+              <small className="mode-note">{copy.modeNormalNeedsSpeech}</small>
+            )}
           </fieldset>
 
-          <fieldset className="settings-section">
-            <legend>{copy.quickStart}</legend>
+          <fieldset className="settings-group">
+            <legend>{copy.groupWords}</legend>
             <div className="preset-grid">
               {Object.entries(PRESETS).map(([id, preset]) => {
                 const [labelKey, descriptionKey] = PRESET_MESSAGE_KEYS[id];
@@ -255,41 +315,11 @@ export default function SettingsPanel({
                 );
               })}
             </div>
-          </fieldset>
 
-          <fieldset className="settings-section">
-            <legend>{copy.modeHeading}</legend>
-            <div className="mode-options">
-              {[
-                ['easy', copy.modeEasyLabel, copy.modeEasyDescription],
-                ['normal', copy.modeNormalLabel, copy.modeNormalDescription],
-              ].map(([mode, label, description]) => (
-                <label className="mode-option" key={mode}>
-                  <input
-                    type="radio"
-                    name="gameMode"
-                    value={mode}
-                    checked={draft.gameMode === mode}
-                    onChange={() => setValue('gameMode', mode)}
-                  />
-                  <span className="mode-option__copy">
-                    <strong>{label}</strong>
-                    <span>{description}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            {draft.gameMode === 'normal' && !draft.speech && (
-              <small className="mode-note">{copy.modeNormalNeedsSpeech}</small>
-            )}
-          </fieldset>
-
-          <fieldset className="settings-section">
-            <legend>{copy.round}</legend>
             <div className="field-grid">
               <label>
                 <span>{copy.shortestWord}</span>
-                <select value={draft.minLetters} onChange={(event) => setValue('minLetters', event.target.value)}>
+                <select value={settings.minLetters} onChange={(event) => applyChange({ minLetters: event.target.value })}>
                   {NUMBER_OPTIONS.slice(0, -2).map((number) => (
                     <option key={number} value={number}>
                       {formatMessage(copy.lettersOption, { count: number })}
@@ -299,8 +329,8 @@ export default function SettingsPanel({
               </label>
               <label>
                 <span>{copy.longestWord}</span>
-                <select value={draft.maxLetters} onChange={(event) => setValue('maxLetters', event.target.value)}>
-                  {NUMBER_OPTIONS.filter((number) => number >= draft.minLetters).map((number) => (
+                <select value={settings.maxLetters} onChange={(event) => applyChange({ maxLetters: event.target.value })}>
+                  {NUMBER_OPTIONS.filter((number) => number >= settings.minLetters).map((number) => (
                     <option key={number} value={number}>
                       {formatMessage(copy.lettersOption, { count: number })}
                     </option>
@@ -309,7 +339,7 @@ export default function SettingsPanel({
               </label>
               <label>
                 <span>{copy.syllables}</span>
-                <select value={draft.syllables} onChange={(event) => setValue('syllables', event.target.value)}>
+                <select value={settings.syllables} onChange={(event) => applyChange({ syllables: event.target.value })}>
                   <option value="any">{copy.anyNumber}</option>
                   <option value="1">{copy.one}</option>
                   <option value="2">{copy.two}</option>
@@ -319,7 +349,7 @@ export default function SettingsPanel({
               </label>
               <label>
                 <span>{copy.wordsInARow}</span>
-                <select value={draft.roundLength} onChange={(event) => setValue('roundLength', event.target.value)}>
+                <select value={settings.roundLength} onChange={(event) => applyChange({ roundLength: event.target.value })}>
                   {ROUND_OPTIONS.map((number) => (
                     <option key={number} value={number}>
                       {formatMessage(copy.wordsOption, { count: number })}
@@ -328,15 +358,14 @@ export default function SettingsPanel({
                 </select>
               </label>
             </div>
-          </fieldset>
 
-          <fieldset className="settings-section">
-            <legend>{copy.yourWords}</legend>
             <label className="stacked-field">
               <span>{copy.wordList}</span>
               <textarea
-                value={draft.customWords}
-                onChange={(event) => setValue('customWords', event.target.value)}
+                aria-label={copy.wordList}
+                value={customWords}
+                onChange={(event) => changeCustomWords(event.target.value)}
+                onBlur={flushCustomWords}
                 placeholder={copy.customWordsPlaceholder}
                 rows="5"
                 spellCheck="false"
@@ -345,20 +374,12 @@ export default function SettingsPanel({
             </label>
             <label className="stacked-field">
               <span>{copy.chooseFrom}</span>
-              <select value={draft.wordSource} onChange={(event) => setValue('wordSource', event.target.value)}>
+              <select value={settings.wordSource} onChange={(event) => applyChange({ wordSource: event.target.value })}>
                 <option value="all">{copy.allWords}</option>
                 <option value="custom">{copy.customWordsOnly}</option>
               </select>
             </label>
-          </fieldset>
-
-          <fieldset className="settings-section settings-section--compact">
-            <legend>{copy.letters}</legend>
-            <label className="toggle-row">
-              <span>{copy.cartoonEyes}</span>
-              <input type="checkbox" checked={draft.eyes} onChange={(event) => setValue('eyes', event.target.checked)} />
-            </label>
-            <label className="toggle-row">
+            <label className="toggle-row toggle-row--described">
               <span className="toggle-copy">
                 <span>{copy.acceptUnaccented}</span>
                 <small>{copy.acceptUnaccentedHelp}</small>
@@ -366,30 +387,34 @@ export default function SettingsPanel({
               <input
                 type="checkbox"
                 aria-label={copy.acceptUnaccented}
-                checked={draft.acceptUnaccented}
-                onChange={(event) => setValue('acceptUnaccented', event.target.checked)}
+                checked={settings.acceptUnaccented}
+                onChange={(event) => applyChange({ acceptUnaccented: event.target.checked })}
               />
             </label>
+
+            <div className={`filter-match${eligibleCount ? '' : ' filter-match--empty'}`}>
+              <span>{copy.matchingFilters}</span>
+              <strong>
+                {eligibleCount
+                  ? formatMessage(copy.matchPill, {
+                      count: eligibleCount,
+                      unit: eligibleCount === 1 ? copy.wordSingular : copy.wordPlural,
+                    })
+                  : copy.noWordsMatch}
+              </strong>
+            </div>
           </fieldset>
 
-          <fieldset className="settings-section settings-section--compact">
-            <legend>{copy.sound}</legend>
-            <label className="toggle-row">
-              <span>{copy.sayEachWord}</span>
-              <input type="checkbox" checked={draft.speech} onChange={(event) => setValue('speech', event.target.checked)} />
-            </label>
-            <label className="toggle-row">
-              <span>{copy.soundEffects}</span>
-              <input type="checkbox" checked={draft.soundEffects} onChange={(event) => setValue('soundEffects', event.target.checked)} />
-            </label>
-            <label className="toggle-row">
-              <span>{copy.backgroundMusic}</span>
-              <input type="checkbox" checked={draft.music} onChange={(event) => setValue('music', event.target.checked)} />
-            </label>
+          <fieldset className="settings-group settings-group--compact">
+            <legend>{copy.groupSound}</legend>
+            <SwitchRow checked={settings.speech} label={copy.sayEachWord} onChange={(speech) => applyChange({ speech })} />
+            <SwitchRow checked={settings.soundEffects} label={copy.soundEffects} onChange={(soundEffects) => applyChange({ soundEffects })} />
+            <SwitchRow checked={settings.music} label={copy.backgroundMusic} onChange={(music) => applyChange({ music })} />
+            <SwitchRow checked={settings.eyes} label={copy.cartoonEyes} onChange={(eyes) => applyChange({ eyes })} />
           </fieldset>
 
-          <fieldset className="settings-section settings-section--compact">
-            <legend>{copy.progressHeading}</legend>
+          <fieldset className="settings-group settings-group--compact">
+            <legend>{copy.groupProgress}</legend>
             {hasPlayData ? (
               <ul className="progress-summary">
                 <li>{formatMessage(copy.progressWordsPractised, { count: statsData.totals.wordsCompleted })}</li>
@@ -399,7 +424,7 @@ export default function SettingsPanel({
                   <li>
                     {formatMessage(copy.progressTrickyLetters, {
                       letters: trickyLetters
-                        .map((letter) => letter.toLocaleUpperCase(draft.locale))
+                        .map((letter) => letter.toLocaleUpperCase(settings.locale))
                         .join(', '),
                     })}
                   </li>
@@ -421,46 +446,40 @@ export default function SettingsPanel({
                 {copy.clearProgress}
               </button>
             </div>
-          </fieldset>
 
-          <fieldset className="settings-section settings-section--compact about-section">
-            <legend>{copy.aboutHeading}</legend>
-            <p className="about-section__app">
-              <a href="https://github.com/tmrk/project-spell" target="_blank" rel="noreferrer">
-                {copy.projectName}
-              </a>{' '}
-              <span>v{packageInfo.version}</span>
-            </p>
-            <p className="about-section__label">{copy.aboutCredits}</p>
-            <ul className="credits-list">
-              {CREDITS.map((credit) => (
-                <li key={credit.title}>
-                  <a href={credit.source} target="_blank" rel="noreferrer">{credit.title}</a>
-                  {' — '}{credit.author}, {credit.licence}
-                </li>
-              ))}
-            </ul>
-          </fieldset>
+            <details className="about-section">
+              <summary>{copy.aboutHeading}</summary>
+              <div className="about-section__body">
+                <p className="about-section__app">
+                  <a href="https://github.com/tmrk/project-spell" target="_blank" rel="noreferrer">
+                    {copy.projectName}
+                  </a>{' '}
+                  <span>v{packageInfo.version}</span>
+                </p>
+                <p className="about-section__label">{copy.aboutCredits}</p>
+                <ul className="credits-list">
+                  {CREDITS.map((credit) => (
+                    <li key={credit.title}>
+                      <a href={credit.source} target="_blank" rel="noreferrer">{credit.title}</a>
+                      {' — '}{credit.author}, {credit.licence}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </details>
 
-          <footer className="settings-footer">
-            <button type="button" className="text-button" onClick={resetSettings}>
-              {copy.reset}
+            <button type="button" className="text-button reset-settings" onClick={resetSettings}>
+              {copy.resetAll}
             </button>
-            <div className="settings-footer__save">
-              <span className={eligibleCount ? '' : 'field-error'}>{matchMessage}</span>
-              <button type="submit" className="primary-button primary-button--small" disabled={!eligibleCount}>
-                {copy.saveAndClose}
-              </button>
-            </div>
-          </footer>
-        </form>
+          </fieldset>
+        </div>
       </section>
 
-      {pendingSettings && (
+      {pendingLocale && (
         <LanguageChangeDialog
           copy={copy}
           onCancel={cancelLanguageChange}
-          onConfirm={() => onSave(pendingSettings)}
+          onConfirm={() => onLocaleChange(pendingLocale)}
         />
       )}
 

@@ -237,15 +237,85 @@ describe('Project Spell', () => {
 
   it('opens the parent settings without adding controls to the play flow', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Grown-ups' });
+    const dialog = screen.getByRole('dialog', { name: 'Settings (for parents)' });
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByRole('option', { name: '🇬🇧 British English' })).toBeInTheDocument();
     expect(within(dialog).getByRole('option', { name: '🇺🇸 US English' })).toBeInTheDocument();
     expect(within(dialog).getByRole('option', { name: '🇸🇪 Svenska' })).toBeInTheDocument();
     expect(within(dialog).getByRole('option', { name: '🇭🇺 Magyar' })).toBeInTheDocument();
     expect(screen.getByLabelText('Words in a row')).toHaveValue('3');
+    expect(within(dialog).getByText('Game')).toBeInTheDocument();
+    expect(within(dialog).getByText('Words')).toBeInTheDocument();
+    expect(within(dialog).getByText('Sound & look')).toBeInTheDocument();
+    expect(within(dialog).getByText('Progress & about')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /save/iu })).not.toBeInTheDocument();
+  });
+
+  it('persists sound and look changes immediately without waiting for close', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Background music' }));
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({ music: true });
+    });
+    expect(screen.getByRole('dialog', { name: 'Settings (for parents)' }).querySelector('.saved-toast'))
+      .toHaveTextContent('✓ Saved');
+  });
+
+  it('ends a playing round only after a round-setting change', () => {
+    const first = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    fireEvent.change(screen.getByLabelText('Words in a row'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
+    first.unmount();
+
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ ...DEFAULT_SETTINGS, customWords: 'cat', wordSource: 'custom', roundLength: 3, music: false }),
+    );
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Background music' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+  });
+
+  it('debounces custom words, flushes them on blur, and guards a zero-match round', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    const settingsDialog = await screen.findByRole('dialog', { name: 'Settings (for parents)' });
+    const wordList = within(settingsDialog).getByLabelText('Word list');
+    fireEvent.change(wordList, { target: { value: '' } });
+
+    expect(screen.getByText('No words match these settings')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).customWords).toBe('cat');
+    fireEvent.blur(wordList);
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).customWords).toBe('');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
+    expect(screen.getByRole('dialog', { name: 'Settings (for parents)' })).toBeInTheDocument();
+  });
+
+  it('closes settings with Escape and returns focus to its opener', () => {
+    render(<App />);
+    const opener = screen.getByRole('button', { name: 'Open parent settings' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: 'Settings (for parents)' });
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Settings (for parents)' })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
   });
 
   it('offers language selection on the start page and uses an American voice for US English', () => {
@@ -327,24 +397,21 @@ describe('Project Spell', () => {
   it('requires confirmation before a settings language change restarts the game', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
       target: { value: 'en-US' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
-
     expect(screen.getByRole('alertdialog', { name: 'Change language?' })).toBeInTheDocument();
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
 
     fireEvent.click(screen.getByRole('button', { name: 'Keep current language' }));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Grown-ups' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Settings (for parents)' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-GB');
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
       target: { value: 'en-US' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
     fireEvent.click(screen.getByRole('button', { name: 'Change & restart' }));
 
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
@@ -354,9 +421,9 @@ describe('Project Spell', () => {
 
   it('lets grown-ups switch the letter eyes off', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Cartoon eyes' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
 
     expect(document.querySelector('.eyes')).not.toBeInTheDocument();
@@ -365,9 +432,10 @@ describe('Project Spell', () => {
 
   it('lets grown-ups enable unaccented typing and persists the preference', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Accept unaccented typing' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
+    expect(screen.getByRole('dialog', { name: 'Settings (for parents)' }).querySelector('.saved-toast'))
+      .toHaveTextContent('✓ Saved');
 
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({
       acceptUnaccented: true,
@@ -628,7 +696,7 @@ describe('Project Spell', () => {
     expect(stored.recentEvents.length).toBeGreaterThan(0);
     expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({ totalStars: 2 });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
     expect(screen.getByText('1 words practised')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear progress' }));
@@ -655,7 +723,7 @@ describe('Project Spell', () => {
       fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
         target: { value: 'cat' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
       fireEvent.click(screen.getByRole('button', { name: 'Download data' }));
 
       const blob = createObjectURL.mock.calls[0][0];
@@ -816,7 +884,7 @@ describe('Project Spell', () => {
 
   it('lets grown-ups pick normal mode and reminds them it needs speech', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
 
     fireEvent.click(screen.getByRole('radio', { name: /letters are hidden/ }));
     expect(screen.queryByText(/works best with/)).not.toBeInTheDocument();
@@ -824,7 +892,6 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Say each word' }));
     expect(screen.getByText(/works best with/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save & close' }));
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({
       gameMode: 'normal',
       speech: false,
@@ -926,11 +993,12 @@ describe('Project Spell', () => {
     expect(document.querySelector('.sticker-book__confetti')).not.toBeInTheDocument();
   });
 
-  it('shows the app version and asset licences in the grown-ups About section', () => {
+  it('shows the app version and asset licences in the parent About section', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Open grown-ups settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Grown-ups' });
+    const dialog = screen.getByRole('dialog', { name: 'Settings (for parents)' });
+    fireEvent.click(within(dialog).getByText('About'));
     expect(within(dialog).getByText(`v${packageInfo.version}`)).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Noto Emoji colour SVG artwork' }))
       .toHaveAttribute('href', 'https://github.com/googlefonts/noto-emoji');
