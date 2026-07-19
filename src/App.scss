@@ -320,6 +320,60 @@ input:focus-visible {
   line-height: 1;
 }
 
+// The child's own difficulty control (G8.2). One small flat object on the existing row —
+// the Play button stays the only dominant action on the welcome screen.
+.mode-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 5px 12px 5px 8px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  gap: 4px;
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.mode-toggle:active {
+  transform: translateY(1px);
+}
+
+.mode-toggle__croc {
+  width: 30px;
+  height: 30px;
+}
+
+.mode-toggle__tiles {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mode-toggle__tile {
+  display: grid;
+  width: 15px;
+  height: 19px;
+  border-radius: 4px;
+  color: var(--lc);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  place-items: center;
+  text-transform: lowercase;
+}
+
+// Normal mode hides the glyphs behind the same blank cream cards the play screen uses.
+.mode-toggle--normal .mode-toggle__tile {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(32, 48, 43, 0.1);
+}
+
+.mode-toggle__tile--c0 { --lc: var(--ps-coral); }
+.mode-toggle__tile--c1 { --lc: var(--ps-sky); }
+.mode-toggle__tile--c2 { --lc: var(--ps-leaf); }
+
 .profile-list {
   display: grid;
   margin: 0;

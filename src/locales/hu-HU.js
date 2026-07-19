@@ -90,6 +90,8 @@ const messages = Object.freeze({
   modeEasyDescription: 'A betűk látszanak — keresd meg őket a billentyűzeten',
   modeNormalLabel: 'Normál',
   modeNormalDescription: 'A betűk rejtve vannak — betűzd a hallott szót',
+  switchToModeEasy: 'Váltás könnyű módra',
+  switchToModeNormal: 'Váltás normál módra',
   modeNormalNeedsSpeech: 'A normál mód a „Szavak felolvasása” bekapcsolásával működik a legjobban.',
   settingsHeading: 'Beállítások',
   settingsHeadingSuffix: '(szülőknek)',

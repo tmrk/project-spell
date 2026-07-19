@@ -3,6 +3,7 @@ import Letter from './components/Letter';
 import BookTab from './components/BookTab';
 import CelebrationConfetti from './components/CelebrationConfetti';
 import JourneyStrip from './components/JourneyStrip';
+import ModeToggle from './components/ModeToggle';
 import NameDialog from './components/NameDialog';
 import NameTag from './components/NameTag';
 import Scenery from './components/Scenery';
@@ -1426,6 +1427,14 @@ export default function App() {
                 <span aria-hidden="true">+</span>
               </button>
             )}
+            <ModeToggle
+              mode={settings.gameMode}
+              labels={{
+                switchToEasy: copy.switchToModeEasy,
+                switchToNormal: copy.switchToModeNormal,
+              }}
+              onChange={(gameMode) => applySettingsChange({ gameMode })}
+            />
           </div>
           <div className="welcome-language">
             <select

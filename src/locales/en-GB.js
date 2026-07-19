@@ -90,6 +90,8 @@ const messages = Object.freeze({
   modeEasyDescription: 'The letters are shown — find them on the keyboard',
   modeNormalLabel: 'Normal',
   modeNormalDescription: 'The letters are hidden — spell the word you hear',
+  switchToModeEasy: 'Switch to easy mode',
+  switchToModeNormal: 'Switch to normal mode',
   modeNormalNeedsSpeech: 'Normal mode works best with “Say each word” switched on.',
   settingsHeading: 'Settings',
   settingsHeadingSuffix: '(for parents)',

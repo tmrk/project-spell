@@ -90,6 +90,8 @@ const messages = Object.freeze({
   modeEasyDescription: 'Bokstäverna visas — hitta dem på tangentbordet',
   modeNormalLabel: 'Normal',
   modeNormalDescription: 'Bokstäverna är dolda — stava ordet du hör',
+  switchToModeEasy: 'Byt till lätt läge',
+  switchToModeNormal: 'Byt till normalt läge',
   modeNormalNeedsSpeech: 'Normalläget fungerar bäst när ”Läs upp varje ord” är på.',
   settingsHeading: 'Inställningar',
   settingsHeadingSuffix: '(för vuxna)',

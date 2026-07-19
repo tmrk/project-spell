@@ -1088,6 +1088,26 @@ describe('Project Spell', () => {
     expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/fanfare.mp3'))).toHaveLength(1);
   });
 
+  describe('child-facing mode picker', () => {
+    it('switches game mode from the welcome screen and keeps it for that child', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to normal mode' }));
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).gameMode).toBe('normal');
+
+      // The letters are hidden in normal mode; the toggle is the only thing that changed.
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toBeInTheDocument();
+    });
+
+    it('is absent during play so the child screen keeps one action', () => {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+      expect(screen.queryByRole('button', { name: /^Switch to/u })).not.toBeInTheDocument();
+    });
+  });
+
   describe('local profiles', () => {
     const addProfile = (name) => {
       fireEvent.click(screen.getByRole('button', { name: 'Add a name' }));
