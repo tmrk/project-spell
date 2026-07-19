@@ -391,6 +391,18 @@ export default function SettingsPanel({
                 onChange={(event) => applyChange({ acceptUnaccented: event.target.checked })}
               />
             </label>
+            <label className="toggle-row toggle-row--described">
+              <span className="toggle-copy">
+                <span>{copy.adaptivePractice}</span>
+                <small>{copy.adaptivePracticeHelp}</small>
+              </span>
+              <input
+                type="checkbox"
+                aria-label={copy.adaptivePractice}
+                checked={settings.adaptivePractice}
+                onChange={(event) => applyChange({ adaptivePractice: event.target.checked })}
+              />
+            </label>
 
             <div className={`filter-match${eligibleCount ? '' : ' filter-match--empty'}`}>
               <span>{copy.matchingFilters}</span>

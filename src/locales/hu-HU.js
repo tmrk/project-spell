@@ -129,6 +129,8 @@ const messages = Object.freeze({
   cartoonEyes: 'Rajzfilmszemek',
   acceptUnaccented: 'Ékezet nélküli betűk elfogadása',
   acceptUnaccentedHelp: 'Például az a elfogadható az á helyett.',
+  adaptivePractice: 'A nehezebb szavak gyakrabban jöjjenek elő',
+  adaptivePracticeHelp: 'A gyermeked számára nehéz szavak hamarabb térnek vissza. Ebből semmit nem vesz észre.',
   sound: 'Hang',
   sayEachWord: 'Szavak felolvasása',
   soundEffects: 'Hanghatások',

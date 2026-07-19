@@ -13,6 +13,7 @@ import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icon
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
+  createAdaptiveRound,
   createReviewRound,
   createRound,
   lettersMatch,
@@ -27,6 +28,7 @@ import {
   recordWordCompleted,
   starsForRound,
   starsForWord,
+  summariseForSelection,
 } from './stats';
 import {
   PROGRESS_KEY,
@@ -66,6 +68,9 @@ import star3Sfx from './sounds/star3.mp3';
 import './App.scss';
 
 const WORD_COMPLETION_PAUSE = 760;
+// Adaptive practice needs a little history before it can weight anything sensibly;
+// below this the child gets the plain random round (roadmap G6).
+const ADAPTIVE_MIN_ATTEMPTS = 20;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
 const MUSIC_VOLUME = 0.12;
@@ -706,9 +711,15 @@ export default function App() {
 
   const startRound = useCallback(() => {
     const nextRoundKind = isSuperRoundNext(progressRef.current) ? 'super' : 'normal';
+    const selectionSummary =
+      settings.adaptivePractice && statsRef.current.totals.attempts >= ADAPTIVE_MIN_ATTEMPTS
+        ? summariseForSelection(statsRef.current, settings.locale)
+        : null;
     const words = nextRoundKind === 'super'
-      ? createReviewRound(settings, sessionStrugglesRef.current)
-      : createRound(settings);
+      ? createReviewRound(settings, sessionStrugglesRef.current, Math.random, selectionSummary)
+      : selectionSummary
+        ? createAdaptiveRound(settings, selectionSummary)
+        : createRound(settings);
     if (!words.length) {
       setSettingsOpen(true);
       return;

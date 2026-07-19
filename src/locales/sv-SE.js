@@ -129,6 +129,8 @@ const messages = Object.freeze({
   cartoonEyes: 'Tecknade ögon',
   acceptUnaccented: 'Godkänn bokstäver utan accent',
   acceptUnaccentedHelp: 'Till exempel kan a godkännas för å eller ä.',
+  adaptivePractice: 'Öva klurigare ord lite oftare',
+  adaptivePracticeHelp: 'Ord som ditt barn tycker är svåra kommer tillbaka snabbare. Barnet märker ingenting.',
   sound: 'Ljud',
   sayEachWord: 'Läs upp varje ord',
   soundEffects: 'Ljudeffekter',

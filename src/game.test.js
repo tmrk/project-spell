@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS,
   WORD_BANK,
   WORD_BANKS,
+  createAdaptiveRound,
   createRound,
   createReviewRound,
   estimateSyllables,
@@ -298,5 +299,93 @@ describe('round creation', () => {
       createReviewRound(settings, [], seeded()),
     );
     expect(createReviewRound(settings, [], () => 0)).toHaveLength(5);
+  });
+
+  it('puts this session’s struggles before remembered ones', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      wordSource: 'custom',
+      customWords: 'cat\ndog\nfox\nhen',
+      roundLength: 4,
+    };
+    const round = createReviewRound(settings, new Set(['fox']), () => 0, {
+      trickyLetters: [],
+      strugglingWords: new Set(['cat', 'dog']),
+      masteredWords: new Set(),
+    });
+
+    expect(round[0]).toBe('fox');
+    expect(new Set(round.slice(1, 3))).toEqual(new Set(['cat', 'dog']));
+    expect(round).toHaveLength(4);
+  });
+});
+
+describe('adaptive rounds', () => {
+  const bank = {
+    ...DEFAULT_SETTINGS,
+    wordSource: 'custom',
+    customWords: 'zap\ncat\ndog\nfox\nhen\npig',
+    roundLength: 3,
+  };
+  const seededRandom = (seed) => {
+    let state = seed;
+    return () => {
+      state = (state * 1664525 + 1013904223) % 4294967296;
+      return state / 4294967296;
+    };
+  };
+  const countWords = (settings, summary, rounds = 600) => {
+    const random = seededRandom(20260719);
+    const counts = new Map();
+    for (let index = 0; index < rounds; index += 1) {
+      createAdaptiveRound(settings, summary, random).forEach((word) => {
+        counts.set(word, (counts.get(word) ?? 0) + 1);
+      });
+    }
+    return counts;
+  };
+
+  it('returns an empty round when nothing is eligible', () => {
+    expect(
+      createAdaptiveRound({ ...bank, customWords: '' }, null, () => 0),
+    ).toEqual([]);
+  });
+
+  it('is deterministic for a given random source and avoids adjacent repeats', () => {
+    const summary = {
+      trickyLetters: ['z'],
+      strugglingWords: new Set(['cat']),
+      masteredWords: new Set(['dog']),
+    };
+    const first = createAdaptiveRound(bank, summary, seededRandom(7));
+    const second = createAdaptiveRound(bank, summary, seededRandom(7));
+
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(3);
+
+    const long = createAdaptiveRound({ ...bank, roundLength: 12 }, summary, seededRandom(11));
+    expect(long).toHaveLength(12);
+    expect(long.every((word, index) => index === 0 || word !== long[index - 1])).toBe(true);
+  });
+
+  it('draws tricky-letter and struggling words more often than mastered ones', () => {
+    const counts = countWords(bank, {
+      trickyLetters: ['z'],
+      strugglingWords: new Set(['cat']),
+      masteredWords: new Set(['dog']),
+    });
+
+    expect(counts.get('zap')).toBeGreaterThan(counts.get('fox'));
+    expect(counts.get('cat')).toBeGreaterThan(counts.get('fox'));
+    expect(counts.get('dog')).toBeLessThan(counts.get('fox'));
+    expect(counts.get('zap')).toBeGreaterThan(counts.get('cat'));
+  });
+
+  it('treats every word alike when the summary is empty', () => {
+    const counts = countWords(bank, null);
+    const totals = [...counts.values()];
+
+    expect(counts.size).toBe(6);
+    expect(Math.max(...totals) - Math.min(...totals)).toBeLessThan(Math.min(...totals) * 0.25);
   });
 });

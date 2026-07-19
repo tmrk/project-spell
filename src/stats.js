@@ -155,6 +155,29 @@ export function trickiestLetters(stats, { minAttempts = 5, count = 3 } = {}) {
     .map(([letter]) => letter);
 }
 
+// Feeds adaptive word selection (roadmap G6). `perfect` records whether the *most recent*
+// completion was clean, so a struggling word is one the child last got wrong.
+export function summariseForSelection(stats, locale) {
+  const safe = stats?.words && typeof stats.words === 'object' ? stats : createEmptyStats();
+  const prefix = `${locale}/`;
+  const strugglingWords = new Set();
+  const masteredWords = new Set();
+
+  Object.entries(safe.words).forEach(([id, entry]) => {
+    if (typeof id !== 'string' || !id.startsWith(prefix) || !entry || typeof entry !== 'object') return;
+    const word = id.slice(prefix.length);
+    if (!word || asCount(entry.completed) < 1) return;
+    if (entry.perfect !== true) strugglingWords.add(word);
+    else if (asCount(entry.completed) >= 2) masteredWords.add(word);
+  });
+
+  return {
+    trickyLetters: trickiestLetters(safe, { count: 3 }),
+    strugglingWords,
+    masteredWords,
+  };
+}
+
 export function averageLetterMs(stats) {
   const entries = Object.values(stats.letters);
   const attempts = entries.reduce((sum, entry) => sum + entry.attempts, 0);

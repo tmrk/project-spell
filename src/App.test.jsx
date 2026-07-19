@@ -443,6 +443,25 @@ describe('Project Spell', () => {
     });
   });
 
+  it('practises tricky words by default and lets grown-ups switch it off', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    const toggle = screen.getByRole('checkbox', { name: 'Practise tricky words a little more often' });
+    expect(toggle).toBeChecked();
+
+    fireEvent.click(toggle);
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({
+      adaptivePractice: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    // Adaptive practice is a parent-only concern: the play screen is unchanged either way.
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    expect(document.querySelectorAll('.letter').length).toBeGreaterThan(0);
+  });
+
   it('requires accents by default and accepts plain equivalents only when enabled', () => {
     vi.useFakeTimers();
     window.localStorage.setItem(

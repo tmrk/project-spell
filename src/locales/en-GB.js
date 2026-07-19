@@ -129,6 +129,8 @@ const messages = Object.freeze({
   cartoonEyes: 'Cartoon eyes',
   acceptUnaccented: 'Accept unaccented typing',
   acceptUnaccentedHelp: 'For example, let a match å, ä or á.',
+  adaptivePractice: 'Practise tricky words a little more often',
+  adaptivePracticeHelp: 'Words your child finds hard come back sooner. They will not notice.',
   sound: 'Sound',
   sayEachWord: 'Say each word',
   soundEffects: 'Sound effects',

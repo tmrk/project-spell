@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   speech: true,
   eyes: true,
   acceptUnaccented: false,
+  adaptivePractice: true,
 });
 
 export const PRESETS = Object.freeze({
@@ -229,6 +230,10 @@ export function normaliseSettings(value = {}) {
       typeof value.acceptUnaccented === 'boolean'
         ? value.acceptUnaccented
         : DEFAULT_SETTINGS.acceptUnaccented,
+    adaptivePractice:
+      typeof value.adaptivePractice === 'boolean'
+        ? value.adaptivePractice
+        : DEFAULT_SETTINGS.adaptivePractice,
   };
 }
 
@@ -331,24 +336,95 @@ export function createRound(value = DEFAULT_SETTINGS, random = Math.random) {
   return round.slice(0, settings.roundLength);
 }
 
-export function createReviewRound(value = DEFAULT_SETTINGS, struggles = [], random = Math.random) {
+// Adaptive practice weights (roadmap G6). Multiplied together, then clamped so no word
+// can dominate a round or disappear from the bank entirely.
+const ADAPTIVE_TRICKY_FACTOR = 2;
+const ADAPTIVE_STRUGGLING_FACTOR = 1.5;
+const ADAPTIVE_MASTERED_FACTOR = 0.6;
+const ADAPTIVE_MIN_WEIGHT = 0.3;
+const ADAPTIVE_MAX_WEIGHT = 3;
+
+const asWordSet = (value) => (value instanceof Set ? value : new Set(Array.isArray(value) ? value : []));
+
+function normaliseSummary(summary) {
+  return {
+    trickyLetters: Array.isArray(summary?.trickyLetters)
+      ? summary.trickyLetters.filter((letter) => typeof letter === 'string' && letter)
+      : [],
+    strugglingWords: asWordSet(summary?.strugglingWords),
+    masteredWords: asWordSet(summary?.masteredWords),
+  };
+}
+
+function adaptiveWeight(word, summary) {
+  let weight = 1;
+  if (summary.trickyLetters.some((letter) => word.includes(letter))) weight *= ADAPTIVE_TRICKY_FACTOR;
+  if (summary.strugglingWords.has(word)) weight *= ADAPTIVE_STRUGGLING_FACTOR;
+  if (summary.masteredWords.has(word)) weight *= ADAPTIVE_MASTERED_FACTOR;
+  return clamp(weight, ADAPTIVE_MIN_WEIGHT, ADAPTIVE_MAX_WEIGHT);
+}
+
+function drawWeighted(candidates, weights, random) {
+  const total = candidates.reduce((sum, word) => sum + weights.get(word), 0);
+  let ticket = random() * total;
+  for (const word of candidates) {
+    ticket -= weights.get(word);
+    if (ticket <= 0) return word;
+  }
+  return candidates.at(-1);
+}
+
+export function createAdaptiveRound(value = DEFAULT_SETTINGS, summary = null, random = Math.random) {
   const settings = normaliseSettings(value);
   const eligible = getEligibleWords(settings).map(({ word }) => word);
   if (!eligible.length) return [];
 
-  const struggleSet = new Set(
-    [...(struggles ?? [])]
-      .filter((word) => typeof word === 'string')
-      .map((word) => word.normalize('NFC').toLocaleLowerCase(settings.locale)),
-  );
-  const reviewWords = shuffle(
-    eligible.filter((word) => struggleSet.has(word)),
-    random,
-  );
+  const weighting = normaliseSummary(summary);
+  const weights = new Map(eligible.map((word) => [word, adaptiveWeight(word, weighting)]));
+
+  const round = [];
+  let pool = [];
+  while (round.length < settings.roundLength) {
+    // Draw without replacement, refilling once the bank is exhausted so short banks
+    // still fill a full round — the same contract as createRound's reshuffle.
+    if (!pool.length) pool = [...eligible];
+    const previous = round.at(-1);
+    const candidates = pool.length > 1 ? pool.filter((word) => word !== previous) : pool;
+    const picked = drawWeighted(candidates, weights, random);
+    round.push(picked);
+    pool = pool.filter((word) => word !== picked);
+  }
+
+  return round.slice(0, settings.roundLength);
+}
+
+export function createReviewRound(
+  value = DEFAULT_SETTINGS,
+  struggles = [],
+  random = Math.random,
+  summary = null,
+) {
+  const settings = normaliseSettings(value);
+  const eligible = getEligibleWords(settings).map(({ word }) => word);
+  if (!eligible.length) return [];
+
+  const normaliseWord = (word) => word.normalize('NFC').toLocaleLowerCase(settings.locale);
+  const asWords = (source) =>
+    new Set([...source].filter((word) => typeof word === 'string').map(normaliseWord));
+  const struggleSet = asWords(struggles ?? []);
+  const rememberedSet = asWords(normaliseSummary(summary).strugglingWords);
+  // This session's stumbles come first; cross-session ones (G6) fill the rest.
+  const reviewWords = [
+    ...shuffle(eligible.filter((word) => struggleSet.has(word)), random),
+    ...shuffle(
+      eligible.filter((word) => !struggleSet.has(word) && rememberedSet.has(word)),
+      random,
+    ),
+  ];
   const round = reviewWords.slice(0, settings.roundLength);
 
-  // G6 can replace the session-only struggle source; this top-up deliberately
-  // retains the ordinary round's deterministic shuffle and repeat protection.
+  // The top-up deliberately retains the ordinary round's deterministic shuffle
+  // and repeat protection.
   while (round.length < settings.roundLength) {
     const nextBatch = shuffle(eligible, random);
     if (nextBatch.length > 1 && round.at(-1) === nextBatch[0]) {

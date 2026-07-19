@@ -8,6 +8,7 @@ import {
   recordWordCompleted,
   starsForRound,
   starsForWord,
+  summariseForSelection,
   trickiestLetters,
 } from './stats';
 
@@ -197,6 +198,52 @@ describe('summaries', () => {
     expect(starsForWord(2)).toBe(2);
     expect(starsForWord(3)).toBe(1);
     expect(starsForWord(Number.NaN)).toBe(1);
+  });
+
+  it('classifies struggling and mastered words for the current locale only', () => {
+    const word = (overrides = {}) => ({
+      word: 'cat',
+      locale: 'en-GB',
+      mistakes: 0,
+      durationMs: 1000,
+      mode: 'easy',
+      ...overrides,
+    });
+
+    let stats = createEmptyStats();
+    stats = recordWordCompleted(stats, word({ word: 'cat', mistakes: 2 }));
+    stats = recordWordCompleted(stats, word({ word: 'dog' }));
+    stats = recordWordCompleted(stats, word({ word: 'dog' }));
+    stats = recordWordCompleted(stats, word({ word: 'fox' }));
+    stats = recordWordCompleted(stats, word({ word: 'katt', locale: 'sv-SE', mistakes: 3 }));
+    // A word that was hard once but is clean now counts as neither.
+    stats = recordWordCompleted(stats, word({ word: 'hen', mistakes: 1 }));
+    stats = recordWordCompleted(stats, word({ word: 'hen' }));
+
+    const summary = summariseForSelection(stats, 'en-GB');
+
+    expect([...summary.strugglingWords]).toEqual(['cat']);
+    expect([...summary.masteredWords].sort()).toEqual(['dog', 'hen']);
+    expect(summary.trickyLetters).toEqual([]);
+
+    const swedish = summariseForSelection(stats, 'sv-SE');
+    expect([...swedish.strugglingWords]).toEqual(['katt']);
+    expect([...swedish.masteredWords]).toEqual([]);
+  });
+
+  it('summarises tricky letters and survives an empty or malformed store', () => {
+    let stats = createEmptyStats();
+    for (let index = 0; index < 6; index += 1) {
+      stats = recordAttempt(stats, attempt({ expected: 'q', typed: 'p', correct: false }));
+    }
+
+    expect(summariseForSelection(stats, 'en-GB').trickyLetters).toEqual(['q']);
+
+    const empty = summariseForSelection(createEmptyStats(), 'en-GB');
+    expect(empty.strugglingWords.size).toBe(0);
+    expect(empty.masteredWords.size).toBe(0);
+    expect(empty.trickyLetters).toEqual([]);
+    expect(summariseForSelection(null, 'en-GB').trickyLetters).toEqual([]);
   });
 
   it('summarises a round from its perfect-word share', () => {
