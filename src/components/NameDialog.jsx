@@ -45,7 +45,6 @@ export default function NameDialog({
           value={name}
           onChange={setName}
           onSubmit={save}
-          placeholder={copy.namePlaceholder}
           label={copy.nameLabel}
           showEyes={showEyes}
           maxLength={MAX_NAME_LENGTH}

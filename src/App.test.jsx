@@ -1239,56 +1239,94 @@ describe('Project Spell', () => {
   });
 
   describe('local profiles', () => {
-    // The naming flow starts from a device nobody has named yet.
+    // A device nobody has named yet.
     const asNewDevice = () => window.localStorage.removeItem(PROFILES_KEY);
-    const typeWelcomeName = (name) => {
+    const confirmName = (name) => {
       fireEvent.change(screen.getByLabelText('First name'), { target: { value: name } });
-      fireEvent.click(screen.getByRole('button', { name: 'That’s me!' }));
+      fireEvent.click(screen.getByRole('button', { name: 'That\u2019s me!' }));
     };
+    // Adds a sibling from the welcome chip row, which uses the dialog rather than the gate.
     const addProfile = (name) => {
       fireEvent.click(screen.getByRole('button', { name: 'Add a name' }));
       fireEvent.change(screen.getByLabelText('First name'), { target: { value: name } });
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     };
 
-    it('cannot start a game until a name has been typed', () => {
+    it('asks for a name only after a child has chosen how to play', () => {
       asNewDevice();
       render(<App />);
 
-      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: PLAY_LISTEN })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'That’s me!' })).toBeDisabled();
+      // The game is the first thing offered, not a form.
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+      expect(screen.queryByLabelText('First name')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+      expect(screen.getByLabelText('First name')).toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: 'Type the next letter' })).not.toBeInTheDocument();
+    });
+
+    it('will not start the round until a real name has been given', () => {
+      asNewDevice();
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+
+      expect(screen.getByRole('button', { name: 'That\u2019s me!' })).toBeDisabled();
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: '123' } });
+      expect(screen.getByRole('button', { name: 'That\u2019s me!' })).toBeDisabled();
 
       fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Anna' } });
-      expect(screen.getByRole('button', { name: 'That’s me!' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'That\u2019s me!' })).toBeEnabled();
+    });
 
-      fireEvent.click(screen.getByRole('button', { name: 'That’s me!' }));
-      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    it('carries the chosen mode through naming into the round', () => {
+      asNewDevice();
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: PLAY_LISTEN }));
+      confirmName('Anna');
+
+      // Listening was chosen before the name was asked for; it must survive the detour.
+      expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toBeInTheDocument();
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).gameMode).toBe('normal');
+    });
+
+    it('speaks the question, because the child being asked cannot read it', () => {
+      asNewDevice();
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+
+      expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('What is your name?');
     });
 
     it('draws the name in game letters as it is typed, with no separate preview', () => {
       asNewDevice();
       render(<App />);
-
-      fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Zsófi' } });
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Zs\u00f3fi' } });
 
       const field = document.querySelector('.name-field');
       expect([...field.querySelectorAll('.name-tag__tile')].map((tile) => tile.textContent))
-        .toEqual(['Z', 's', 'ó', 'f', 'i']);
-      // One set of letters only — the field is the display.
+        .toEqual(['Z', 's', '\u00f3', 'f', 'i']);
+      // One set of letters only — the field is the display, not a copy of it.
       expect(document.querySelectorAll('.name-tag')).toHaveLength(1);
+      expect(field.querySelector('.name-field__slots')).toBeNull();
+    });
+
+    it('offers empty slots before anything is typed', () => {
+      asNewDevice();
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+
+      expect(document.querySelectorAll('.name-field__slot')).toHaveLength(4);
     });
 
     it('shows the name in game letters at the top of the play screen', () => {
       asNewDevice();
       render(<App />);
-      typeWelcomeName('Anna');
-
       fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
-      const nameTag = document.querySelector('.play-name');
-      expect(nameTag).toBeInTheDocument();
+      confirmName('Anna');
+
       expect(screen.getByRole('img', { name: 'Anna' })).toBeInTheDocument();
-      expect([...nameTag.querySelectorAll('.name-tag__tile')].map((tile) => tile.textContent))
+      expect([...document.querySelectorAll('.play-name .name-tag__tile')].map((t) => t.textContent))
         .toEqual(['A', 'n', 'n', 'a']);
     });
 
@@ -1296,56 +1334,50 @@ describe('Project Spell', () => {
       asNewDevice();
       window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({ version: 1, totalStars: 12 }));
       render(<App />);
-      expect(screen.getByLabelText('★ 12 stars in your jar')).toBeInTheDocument();
-
-      typeWelcomeName('Anna');
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+      confirmName('Anna');
 
       // Naming the anonymous slot must not reset the stars already earned on this device.
-      expect(screen.getByLabelText('★ 12 stars in your jar')).toBeInTheDocument();
       expect(window.localStorage.getItem(PROFILES_KEY)).toContain('Anna');
+      expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).totalStars).toBe(12);
     });
 
     it('gives a second child their own empty jar and leaves the first intact', () => {
-      asNewDevice();
       window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({ version: 1, totalStars: 12 }));
       render(<App />);
-      typeWelcomeName('Anna');
-      addProfile('Bo');
+      expect(screen.getByLabelText('\u2605 12 stars in your jar')).toBeInTheDocument();
 
-      expect(screen.queryByLabelText('★ 12 stars in your jar')).not.toBeInTheDocument();
+      addProfile('Bo');
+      expect(screen.queryByLabelText('\u2605 12 stars in your jar')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Play as Bo' })).toHaveAttribute('aria-pressed', 'true');
 
-      fireEvent.click(screen.getByRole('button', { name: 'Play as Anna' }));
-      expect(screen.getByLabelText('★ 12 stars in your jar')).toBeInTheDocument();
-      // Anna keeps the original un-suffixed keys; Bo is stored alongside, not over the top.
+      fireEvent.click(screen.getByRole('button', { name: 'Play as Zoe' }));
+      expect(screen.getByLabelText('\u2605 12 stars in your jar')).toBeInTheDocument();
+      // Zoe keeps the original un-suffixed keys; Bo is stored alongside, not over the top.
       expect(window.localStorage.getItem(PROGRESS_KEY)).toContain('"totalStars":12');
     });
 
     it('keeps each child on their own settings', () => {
-      asNewDevice();
       render(<App />);
-      typeWelcomeName('Anna');
       addProfile('Bo');
 
       // The language select relabels itself in the chosen language, so query it by role.
       fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sv-SE' } });
       expect(screen.getByRole('combobox')).toHaveValue('sv-SE');
 
-      fireEvent.click(screen.getByRole('button', { name: 'Spela som Anna' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Spela som Zoe' }));
       expect(screen.getByRole('combobox')).toHaveValue('en-GB');
     });
 
     it('returns to the welcome screen when a child is switched mid-round', () => {
-      asNewDevice();
       render(<App />);
-      typeWelcomeName('Anna');
       addProfile('Bo');
       fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
       expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
 
       // Chips are welcome-screen only; mid-round switching belongs to the grown-ups panel.
       fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Play as Anna' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play as Zoe' }));
 
       expect(screen.queryByRole('textbox', { name: 'Type the next letter' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
@@ -1360,9 +1392,7 @@ describe('Project Spell', () => {
     });
 
     it('deletes a child and clears only their stored data', () => {
-      asNewDevice();
       render(<App />);
-      typeWelcomeName('Anna');
       addProfile('Bo');
       const boKey = JSON.parse(window.localStorage.getItem(PROFILES_KEY)).activeId;
       // Settings persist on every change; progress only once a round is finished.

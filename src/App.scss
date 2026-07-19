@@ -44,11 +44,13 @@ input[type="checkbox"] {
   touch-action: manipulation;
 }
 
+// Keyboard focus only — a tap or click never draws this. The ring is grass rather than ink
+// because the near-black outline read as an error box on a children's screen.
 button:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 input:focus-visible {
-  outline: 3px solid var(--ps-ink);
+  outline: 3px solid var(--ps-grass);
   outline-offset: 3px;
 }
 
@@ -224,10 +226,12 @@ input:focus-visible {
 
 // A child's name is written in the same letters they spell with (D-012): wheel colours,
 // solid offset shadows, faces. No frame, no pill, no label — one flat object.
+// Capitals throughout: early readers meet upper case first.
 .name-tag {
   display: inline-flex;
   align-items: baseline;
   font-weight: 900;
+  text-transform: uppercase;
   // Matches .letter so the shared per-letter eye offsets resolve to the same spot.
   line-height: 1;
   gap: 0.035em;
@@ -267,44 +271,43 @@ input:focus-visible {
 .name-tag__tile--c4 { --lc: var(--ps-berry); --lcs: var(--ps-berry-shade); }
 
 .name-tag--field {
-  font-size: clamp(2rem, 8vw, 3rem);
+  font-size: clamp(2.4rem, 9vw, 3.4rem);
 }
 
-// A field whose text is the game's own letters. The real input sits invisibly on top so the
-// device keyboard and assistive tech behave normally; everything visible is drawn beneath it.
+// Not a form control: no box, no border, no focus ring. Just room for the letters, with empty
+// slots inviting the first one and a caret showing where the next will land.
 .name-field {
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 96px;
-  padding: 10px clamp(16px, 5vw, 28px);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: inset 0 0 0 2px rgba(32, 48, 43, 0.1);
+  min-height: clamp(84px, 16vw, 116px);
+  padding: 4px 10px;
   cursor: text;
   justify-content: center;
-}
-
-.name-field:focus-within {
-  background: rgba(255, 255, 255, 0.75);
-  box-shadow: inset 0 0 0 3px var(--ps-grass);
 }
 
 .name-field__display {
   display: flex;
   align-items: center;
-  min-height: clamp(2rem, 8vw, 3rem);
+  min-height: clamp(2.4rem, 9vw, 3.4rem);
 }
 
-.name-field__placeholder {
-  color: var(--ps-ink-soft);
-  font-size: 1.05rem;
-  font-weight: 700;
+.name-field__slots {
+  display: flex;
+  gap: clamp(6px, 1.6vw, 10px);
+}
+
+.name-field__slot {
+  width: clamp(30px, 8vw, 46px);
+  height: clamp(44px, 11vw, 64px);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow: inset 0 0 0 2px rgba(32, 48, 43, 0.09);
 }
 
 .name-field__caret {
-  width: 3px;
-  height: clamp(1.9rem, 7vw, 2.8rem);
+  width: 4px;
+  height: clamp(2.2rem, 8vw, 3.2rem);
   margin-left: 5px;
   border-radius: 2px;
   background: var(--ps-ink);
@@ -340,6 +343,11 @@ input:focus-visible {
   background: transparent;
 }
 
+// The blinking caret is the focus indicator here; a ring would box in the letters.
+.name-field__input:focus-visible {
+  outline: none;
+}
+
 .welcome-naming {
   display: grid;
   width: min(440px, 88vw);
@@ -350,8 +358,11 @@ input:focus-visible {
 .welcome-naming__question {
   margin: 0;
   color: var(--ps-ink);
-  font-size: clamp(1.15rem, 4vw, 1.5rem);
-  font-weight: 800;
+  font-size: clamp(1.3rem, 4.8vw, 1.9rem);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 // Not the full-width Play slab: this is a small confirmation, and some languages need two
@@ -382,21 +393,26 @@ input:focus-visible {
   display: grid;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 208px;
-  padding: clamp(16px, 3vw, 24px) clamp(10px, 2vw, 18px) clamp(12px, 2vw, 18px);
+  max-width: 268px;
+  padding: clamp(22px, 4.5vw, 36px) clamp(10px, 2.5vw, 22px) clamp(18px, 3vw, 26px);
   border: 3px solid transparent;
-  border-radius: 26px;
+  border-radius: 32px;
   background: var(--ps-paper);
-  box-shadow: 0 8px 0 rgba(32, 48, 43, 0.16);
+  box-shadow: 0 11px 0 rgba(32, 48, 43, 0.17);
   cursor: pointer;
-  gap: 12px;
+  gap: clamp(12px, 2.5vw, 20px);
   justify-items: center;
+  // A whisper of a tilt, like the letters — pinned up by hand rather than laid out.
+  transform: rotate(var(--card-tilt, 0deg));
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
+.mode-card--easy { --card-tilt: -1.5deg; }
+.mode-card--normal { --card-tilt: 1.5deg; }
+
 .mode-card:active {
-  transform: translateY(5px);
-  box-shadow: 0 3px 0 rgba(32, 48, 43, 0.16);
+  transform: rotate(var(--card-tilt, 0deg)) translateY(6px);
+  box-shadow: 0 4px 0 rgba(32, 48, 43, 0.17);
 }
 
 .mode-card--easy:hover,
@@ -412,17 +428,19 @@ input:focus-visible {
 .mode-card__preview {
   display: flex;
   align-items: center;
-  min-height: 54px;
-  gap: 5px;
+  min-height: clamp(56px, 13vw, 76px);
+  gap: clamp(4px, 1.2vw, 7px);
 }
 
 .mode-card__tile {
   display: grid;
-  width: clamp(26px, 6.5vw, 34px);
-  height: clamp(34px, 8.5vw, 44px);
-  border-radius: 8px;
+  width: clamp(30px, 7.5vw, 46px);
+  height: clamp(40px, 10vw, 60px);
+  border-radius: 11px;
   color: var(--lc);
-  font-size: clamp(1.55rem, 5.2vw, 2.1rem);
+  // The play screen sets its letters in capitals, so the miniature must too.
+  text-transform: uppercase;
+  font-size: clamp(1.8rem, 6vw, 2.7rem);
   font-weight: 900;
   line-height: 1;
   place-items: center;
@@ -440,17 +458,19 @@ input:focus-visible {
 }
 
 .mode-card__speaker {
-  width: clamp(26px, 6.5vw, 34px);
-  height: clamp(26px, 6.5vw, 34px);
-  margin-left: 4px;
+  width: clamp(28px, 7.5vw, 44px);
+  height: clamp(28px, 7.5vw, 44px);
+  margin-left: 5px;
   color: var(--ps-sky);
 }
 
 .mode-card__title {
   color: var(--ps-ink);
-  font-size: clamp(1rem, 3.4vw, 1.25rem);
-  font-weight: 850;
+  font-size: clamp(1.05rem, 4vw, 1.55rem);
+  font-weight: 900;
+  letter-spacing: 0.01em;
   text-align: center;
+  text-transform: uppercase;
 }
 
 // Mirrors the star-jar chip's corner on the welcome screen, so the play screen keeps one
@@ -780,6 +800,7 @@ input:focus-visible {
 }
 
 .complete-screen h1 {
+  text-transform: uppercase;
   margin: 0;
   color: var(--ps-ink);
   font-size: clamp(2.7rem, 7vw, 5.8rem);
@@ -789,6 +810,7 @@ input:focus-visible {
 }
 
 .complete-summary {
+  text-transform: uppercase;
   margin: 22px 0 6px;
   color: rgba(32, 48, 43, 0.67);
   font-size: clamp(1rem, 2.2vw, 1.2rem);
@@ -831,6 +853,7 @@ input:focus-visible {
 .round-sticker-award p,
 .round-sticker-award strong,
 .badge-earned-line {
+  text-transform: uppercase;
   margin: 0;
   line-height: 1.35;
 }
@@ -877,7 +900,9 @@ input:focus-visible {
   -webkit-appearance: none;
 }
 
+// Child-facing buttons are capitals; the settings panel keeps sentence case.
 .primary-button {
+  text-transform: uppercase;
   min-width: 150px;
   min-height: 58px;
   padding: 13px 30px;
@@ -1320,6 +1345,7 @@ input:focus-visible {
 }
 
 .game-hint {
+  text-transform: uppercase;
   position: absolute;
   bottom: max(8vh, calc(env(safe-area-inset-bottom) + 28px));
   left: 50%;
@@ -1516,6 +1542,13 @@ input:focus-visible {
   background: var(--ps-paper);
   box-shadow: 0 24px 80px rgba(32, 48, 43, 0.22);
   -webkit-overflow-scrolling: touch;
+}
+
+// The sticker book is a child's screen too.
+.sticker-book__header h2,
+.sticker-book__header p,
+.sticker-tag {
+  text-transform: uppercase;
 }
 
 .sticker-book {

@@ -542,6 +542,7 @@ export default function App() {
   const [settings, setSettings] = useState(() => loadSettings(activeProfileId));
   const [nameDialog, setNameDialog] = useState(null);
   const [welcomeName, setWelcomeName] = useState('');
+  const [namingMode, setNamingMode] = useState(null);
   const [phase, setPhase] = useState('welcome');
   const [roundWords, setRoundWords] = useState([]);
   const [wordIndex, setWordIndex] = useState(0);
@@ -709,6 +710,12 @@ export default function App() {
       pendingPromptRef.current = null;
     };
   }, [copy.spellPrompt, currentWord, phase, say, settingsOpen, superIntroVisible, wordIndex]);
+
+  // The question is spoken as well as written — the child being asked cannot read it yet.
+  useEffect(() => {
+    if (!namingMode) return;
+    say(copy.nameEntryTitle);
+  }, [copy.nameEntryTitle, namingMode, say]);
 
   useEffect(() => {
     if (phase !== 'complete') return undefined;
@@ -1290,19 +1297,33 @@ export default function App() {
 
   const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
 
-  // Choosing a card is choosing how to play *and* starting — so the mode has to be applied and
-  // handed to startRound in the same tick.
-  const startRoundInMode = (gameMode) => {
+  const playInMode = (gameMode) => {
     const next = normaliseSettings({ ...settingsRef.current, gameMode });
     settingsRef.current = next;
     setSettings(next);
     startRound({ settings: next });
   };
 
+  // Choosing a card is choosing how to play *and* starting. A child who has never given their
+  // name is asked for it at this point — after they have committed to playing, not before.
+  const startRoundInMode = (gameMode) => {
+    if (!profiles.profiles.some((profile) => profile.name)) {
+      setNamingMode(gameMode);
+      return;
+    }
+    playInMode(gameMode);
+  };
+
   const submitWelcomeName = () => {
-    if (!normaliseProfileName(welcomeName)) return;
-    switchToProfile(createProfile(profiles, welcomeName));
+    const name = normaliseProfileName(welcomeName);
+    if (!name) return;
+    // Naming the unnamed default slot keeps the same active profile, so its settings, stats
+    // and progress are already loaded — no store swap needed, just play.
+    setProfiles(createProfile(profiles, name));
     setWelcomeName('');
+    const mode = namingMode;
+    setNamingMode(null);
+    if (mode) playInMode(mode);
   };
 
   const saveProfileName = (name) => {
@@ -1436,16 +1457,15 @@ export default function App() {
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
           <Wordmark name={copy.projectName} showEyes={settings.eyes} />
-          {namedProfiles.length === 0 ? (
-            // Nobody can play anonymously any more (owner direction): the first thing a child
-            // does is write their name, and the game starts from there.
+          {namingMode ? (
+            // Asked only once a child has chosen how to play, so the first thing they meet is
+            // the game, not a form.
             <div className="welcome-naming">
               <p className="welcome-naming__question">{copy.nameEntryTitle}</p>
               <NameField
                 value={welcomeName}
                 onChange={setWelcomeName}
                 onSubmit={submitWelcomeName}
-                placeholder={copy.namePlaceholder}
                 label={copy.nameLabel}
                 showEyes={settings.eyes}
                 maxLength={MAX_NAME_LENGTH}
@@ -1471,8 +1491,8 @@ export default function App() {
               onPlay={startRoundInMode}
             />
           )}
-          {/* While the first child is naming themselves there is nothing to pick between. */}
-          {namedProfiles.length > 0 && (
+          {/* While a child is naming themselves there is nothing to pick between. */}
+          {namedProfiles.length > 0 && !namingMode && (
           <div className="profile-picker">
             {namedProfiles.map((profile) => (
               <button

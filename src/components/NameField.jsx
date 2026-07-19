@@ -13,7 +13,6 @@ export default function NameField({
   value,
   onChange,
   onSubmit,
-  placeholder,
   label,
   showEyes = true,
   maxLength,
@@ -31,7 +30,12 @@ export default function NameField({
         {value ? (
           <NameTag name={value} showEyes={showEyes} size="field" />
         ) : (
-          <span className="name-field__placeholder">{placeholder}</span>
+          // Empty slots read as "letters go here" without a word of instruction.
+          <span className="name-field__slots">
+            {[0, 1, 2, 3].map((slot) => (
+              <span className="name-field__slot" key={slot} />
+            ))}
+          </span>
         )}
         <span className="name-field__caret" />
       </span>
