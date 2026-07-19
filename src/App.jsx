@@ -93,6 +93,8 @@ const WORD_COMPLETION_PAUSE = 760;
 const ADAPTIVE_MIN_ATTEMPTS = 20;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
+// Matches the Play slab's exit animation in `App.scss`; change both together.
+const MODE_REVEAL_MS = 200;
 const MUSIC_VOLUME = 0.12;
 const MUSIC_DUCKED_VOLUME = 0.05;
 const TRACKS = Object.freeze([townThemeMusic, bgMusic2, bgMusic3]);
@@ -543,6 +545,10 @@ export default function App() {
   const [nameDialog, setNameDialog] = useState(null);
   const [welcomeName, setWelcomeName] = useState('');
   const [namingMode, setNamingMode] = useState(null);
+  // The welcome screen opens on one green Play slab; the mode cards are what it turns into.
+  // 'revealing' is the overlap where both are mounted — the cards are already live underneath
+  // while the slab fades off the top of them.
+  const [welcomeStep, setWelcomeStep] = useState('play');
   const [phase, setPhase] = useState('welcome');
   const [roundWords, setRoundWords] = useState([]);
   const [wordIndex, setWordIndex] = useState(0);
@@ -586,6 +592,7 @@ export default function App() {
   const celebrationTimerRef = useRef(null);
   const promptTimerRef = useRef(null);
   const superIntroTimerRef = useRef(null);
+  const modeRevealTimerRef = useRef(null);
   const transitioningRef = useRef(false);
   const lastCorrectIndexRef = useRef(-1);
   const lastWordPraiseIndexRef = useRef(-1);
@@ -761,6 +768,8 @@ export default function App() {
     window.clearTimeout(superIntroTimerRef.current);
     pendingPromptRef.current = null;
   }, []);
+
+  useEffect(() => () => window.clearTimeout(modeRevealTimerRef.current), []);
 
   const resetHintLadder = useCallback(() => {
     missCountRef.current = 0;
@@ -1245,6 +1254,11 @@ export default function App() {
 
   const resetToWelcome = () => {
     clearRoundTimers();
+    window.clearTimeout(modeRevealTimerRef.current);
+    // Coming back to the welcome screen means starting from the Play slab again, whatever the
+    // child left mid-flight.
+    setWelcomeStep('play');
+    setNamingMode(null);
     cancelSpeech();
     pauseMusic();
     transitioningRef.current = false;
@@ -1296,6 +1310,19 @@ export default function App() {
   };
 
   const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
+
+  // Play does not start a round any more — it hands the screen over to the two mode cards. The
+  // cards mount straight away and are usable immediately; the timer only drops the spent slab
+  // once it has faded, so a fast tapper is never waiting on an animation.
+  const revealModeCards = () => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true) {
+      setWelcomeStep('modes');
+      return;
+    }
+    setWelcomeStep('revealing');
+    window.clearTimeout(modeRevealTimerRef.current);
+    modeRevealTimerRef.current = window.setTimeout(() => setWelcomeStep('modes'), MODE_REVEAL_MS);
+  };
 
   const playInMode = (gameMode) => {
     const next = normaliseSettings({ ...settingsRef.current, gameMode });
@@ -1457,6 +1484,10 @@ export default function App() {
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
           <Wordmark name={copy.projectName} showEyes={settings.eyes} />
+          {/* One reserved slot for all three welcome steps: the Play slab, the cards it turns
+              into, and the name question. Without it the croc and the wordmark jump upwards the
+              moment the taller cards mount. */}
+          <div className="welcome-action">
           {namingMode ? (
             // Asked only once a child has chosen how to play, so the first thing they meet is
             // the game, not a form.
@@ -1481,16 +1512,38 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <ModeCards
-              labels={{
-                easy: copy.modeCardEasy,
-                easyAria: copy.playEasyAria,
-                normal: copy.modeCardNormal,
-                normalAria: copy.playNormalAria,
-              }}
-              onPlay={startRoundInMode}
-            />
+            <>
+              {welcomeStep !== 'play' && (
+                <ModeCards
+                  revealed
+                  labels={{
+                    easy: copy.modeCardEasy,
+                    easyAria: copy.playEasyAria,
+                    normal: copy.modeCardNormal,
+                    normalAria: copy.playNormalAria,
+                  }}
+                  onPlay={startRoundInMode}
+                  showEyes={settings.eyes}
+                />
+              )}
+              {welcomeStep !== 'modes' && (
+                // During the overlap the slab is scenery: out of the accessibility tree and out
+                // of the tab order, so the cards beneath it are the only thing anyone can reach.
+                <button
+                  type="button"
+                  className={`primary-button welcome-play-button${
+                    welcomeStep === 'revealing' ? ' welcome-play-button--leaving' : ''
+                  }`}
+                  onClick={revealModeCards}
+                  aria-hidden={welcomeStep === 'revealing' ? 'true' : undefined}
+                  tabIndex={welcomeStep === 'revealing' ? -1 : undefined}
+                >
+                  {copy.play}
+                </button>
+              )}
+            </>
           )}
+          </div>
           {/* While a child is naming themselves there is nothing to pick between. */}
           {namedProfiles.length > 0 && !namingMode && (
           <div className="profile-picker">

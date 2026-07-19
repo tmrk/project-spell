@@ -14,8 +14,11 @@ const BLINK_FREQUENCY_RANGE = 2400;
  *
  * Callers must place this inside a wrapper that mirrors `.letter__visual`, since the shared
  * `getEyeStyle` offsets are resolved against that box.
+ *
+ * `neutral` takes the raised centred pair `Letter` uses for a hidden glyph, so a blank tile can
+ * wear a face without the eye positions tracing the letter underneath.
  */
-export default function TileEyes({ letter }) {
+export default function TileEyes({ letter = '', neutral = false }) {
   const [blinkTiming] = useState(() => ({
     startDelay: BLINK_START_MIN + Math.floor(Math.random() * BLINK_START_RANGE),
     frequency: BLINK_FREQUENCY_MIN + Math.floor(Math.random() * BLINK_FREQUENCY_RANGE),
@@ -29,7 +32,7 @@ export default function TileEyes({ letter }) {
 
   return (
     <span className="eyes">
-      {getEyeStyle(letter).map((style, index) => (
+      {getEyeStyle(letter, { neutral }).map((style, index) => (
         <span className="eye-position" style={style} key={index}>
           <Eye
             className="letter-eye"

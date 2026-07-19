@@ -377,14 +377,15 @@ input:focus-visible {
 }
 
 
-// Choosing how to play is starting the game (G8.2, revised). Each card is a miniature of the
-// screen it leads to, so the choice is legible to a child who cannot read the label.
+// Choosing how to play is starting the game (G8.2, revised). Each card is a little window onto
+// the screen it leads to — the game's own sun-coloured sky, with the game's own letters in it —
+// so the choice is legible to a child who cannot read the label.
 // Always side by side: the two cards are an either/or, and stacking them turns a comparison
 // into a list.
 .mode-cards {
   display: flex;
   flex-wrap: nowrap;
-  width: min(100%, 440px);
+  width: min(100%, 460px);
   gap: clamp(10px, 3vw, 22px);
   justify-content: center;
 }
@@ -394,83 +395,189 @@ input:focus-visible {
   flex: 1 1 0;
   min-width: 0;
   max-width: 268px;
-  padding: clamp(22px, 4.5vw, 36px) clamp(10px, 2.5vw, 22px) clamp(18px, 3vw, 26px);
+  padding: clamp(11px, 2.6vw, 18px) clamp(11px, 2.6vw, 18px) clamp(14px, 2.6vw, 20px);
   border: 3px solid transparent;
-  border-radius: 32px;
+  border-radius: 30px;
   background: var(--ps-paper);
-  box-shadow: 0 11px 0 rgba(32, 48, 43, 0.17);
+  // The base is the card's own accent at full strength, the same solid unblurred offset the
+  // letters cast (D-006) — the card is an object of this world, not a floating panel.
+  box-shadow: 0 10px 0 var(--card-base);
   cursor: pointer;
-  gap: clamp(12px, 2.5vw, 20px);
+  gap: clamp(10px, 2vw, 15px);
   justify-items: center;
   // A whisper of a tilt, like the letters — pinned up by hand rather than laid out.
   transform: rotate(var(--card-tilt, 0deg));
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
-.mode-card--easy { --card-tilt: -1.5deg; }
-.mode-card--normal { --card-tilt: 1.5deg; }
+.mode-card--easy {
+  --card-tilt: -1.5deg;
+  --card-accent: var(--ps-grass);
+  --card-base: var(--ps-grass-shade);
+}
 
+.mode-card--normal {
+  --card-tilt: 1.5deg;
+  --card-accent: var(--ps-sky);
+  --card-base: var(--ps-sky-shade);
+}
+
+// Dealt out from where the Play slab stood: each card slides out to its own side, rises, and
+// settles into its tilt a beat after the other. Not `forwards` — once it lands the card is back
+// on its normal transform, so hover and press behave as if it had always been there.
+.mode-cards--revealed .mode-card {
+  animation: mode-card-deal 340ms cubic-bezier(0.22, 1.4, 0.36, 1) backwards;
+}
+
+.mode-cards--revealed .mode-card--easy {
+  --deal-shift: 18px;
+  animation-delay: 30ms;
+}
+
+.mode-cards--revealed .mode-card--normal {
+  --deal-shift: -18px;
+  animation-delay: 110ms;
+}
+
+.mode-card:hover,
+.mode-card:focus-visible {
+  border-color: var(--card-accent);
+  transform: rotate(var(--card-tilt, 0deg)) translateY(-3px);
+  box-shadow: 0 13px 0 var(--card-base);
+}
+
+// The global focus ring is grass green, which reads as a third colour around the listening card.
+.mode-card:focus-visible {
+  outline-color: var(--card-accent);
+}
+
+// Pressing pushes the card down onto its base, the way the play buttons behave.
 .mode-card:active {
   transform: rotate(var(--card-tilt, 0deg)) translateY(6px);
-  box-shadow: 0 4px 0 rgba(32, 48, 43, 0.17);
+  box-shadow: 0 4px 0 var(--card-base);
 }
 
-.mode-card--easy:hover,
-.mode-card--easy:focus-visible {
-  border-color: var(--ps-grass);
+@media (prefers-reduced-motion: reduce) {
+  .mode-card { transition: none; }
+  .mode-card:hover,
+  .mode-card:focus-visible { transform: rotate(var(--card-tilt, 0deg)); }
 }
 
-.mode-card--normal:hover,
-.mode-card--normal:focus-visible {
-  border-color: var(--ps-sky);
-}
-
-.mode-card__preview {
-  display: flex;
+// The window itself. One em base drives the whole miniature, so the sky slot, the tiles and
+// their faces scale as a single object and the two stages stay identical in geometry.
+.mode-card__stage {
+  position: relative;
+  display: grid;
+  width: 100%;
+  padding: 0.14em 0.12em 0.26em;
+  overflow: hidden;
+  border-radius: 20px;
+  // The play screen's own ground, whichever the child chose (G8.7), so the letter colours keep
+  // exactly the separation they were tuned for. The rim stops the window reading as a hole
+  // punched through the card when the page behind it is the same colour.
+  background: var(--ps-sun);
+  box-shadow: inset 0 0 0 2px rgba(32, 48, 43, 0.06);
+  font-size: clamp(1.6rem, 10vw, 3.6rem);
+  // Sky over ground: an empty sky row on the seeing card keeps both tile rows on one line.
+  grid-template-rows: 0.82em auto;
+  justify-items: center;
   align-items: center;
-  min-height: clamp(56px, 13vw, 76px);
-  gap: clamp(4px, 1.2vw, 7px);
+}
+
+.mode-card__row {
+  display: flex;
+  grid-row: 2;
+  gap: 0.09em;
+  align-items: flex-end;
 }
 
 .mode-card__tile {
+  position: relative;
   display: grid;
-  width: clamp(30px, 7.5vw, 46px);
-  height: clamp(40px, 10vw, 60px);
-  border-radius: 11px;
+  // Proportioned like a play-screen letter (0.68em over 1.28em), a little wider so a blank
+  // card still reads as a card at this size.
+  width: 0.8em;
+  height: 1.26em;
   color: var(--lc);
   // The play screen sets its letters in capitals, so the miniature must too.
   text-transform: uppercase;
-  font-size: clamp(1.8rem, 6vw, 2.7rem);
+  font-size: 1em;
   font-weight: 900;
   line-height: 1;
   place-items: center;
   text-shadow: 0 0.055em 0 var(--lcs);
+  transform: rotate(var(--tile-tilt, 0deg)) translateY(var(--tile-lift, 0));
+}
+
+// Mirrors Letter's visual wrapper so TileEyes' shared offsets land on the glyph, not the box.
+.mode-card__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
 }
 
 .mode-card__tile--c0 { --lc: var(--ps-coral); --lcs: var(--ps-coral-shade); }
 .mode-card__tile--c1 { --lc: var(--ps-sky); --lcs: var(--ps-sky-shade); }
 .mode-card__tile--c2 { --lc: var(--ps-leaf); --lcs: var(--ps-leaf-shade); }
 
-// The same blank cream card the play screen shows in normal mode.
+// The same quiet card the play screen shows for a letter not yet heard.
 .mode-card__tile--blank {
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: inset 0 0 0 1.5px rgba(32, 48, 43, 0.1);
+  border-radius: 0.16em;
+  background: rgba(255, 255, 255, 0.44);
+  box-shadow: inset 0 0 0 0.05em rgba(32, 48, 43, 0.09);
+  transform: none;
 }
 
-.mode-card__speaker {
-  width: clamp(28px, 7.5vw, 44px);
-  height: clamp(28px, 7.5vw, 44px);
-  margin-left: 5px;
-  color: var(--ps-sky);
+.mode-card__tile--blank .mode-card__glyph {
+  // Empty tiles have no glyph box to hang faces on, so give the eyes the tile to centre in.
+  position: absolute;
+  inset: 0;
+  // The eyes are sized in em off this box. A hidden letter on the play screen is far bigger
+  // than this miniature, so without a step up its face shrinks to two specks.
+  font-size: 1.7em;
+}
+
+// Waiting, not asleep: the play screen dims a hidden letter's eyes by the same amount.
+.mode-card__tile--blank .letter-eye {
+  opacity: 0.48;
+}
+
+.mode-card__cloud {
+  grid-row: 1;
+  width: 1.35em;
+  // Lighter than the page's `--ps-cloud` clouds on purpose: those read because they are 200px
+  // across, and the same tint on a 50px cut-out disappears into the ground on every palette.
+  fill: rgba(255, 255, 255, 0.55);
+  transform: rotate(-2deg);
+}
+
+.mode-card__sound {
+  grid-row: 1;
+  width: 1.3em;
+  // The solid unblurred drop is the letters' cartoon shade, applied to a shape instead of type.
+  filter: drop-shadow(0 0.045em 0 var(--ps-sky-shade));
+  transform: rotate(-4deg);
+}
+
+.mode-card__sound-horn {
+  fill: var(--ps-sky);
+}
+
+.mode-card__sound-waves path {
+  fill: none;
+  stroke: var(--ps-sky);
+  stroke-width: 3.2;
+  stroke-linecap: round;
 }
 
 .mode-card__title {
-  color: var(--ps-ink);
-  font-size: clamp(1.05rem, 4vw, 1.55rem);
+  color: var(--card-base);
+  font-size: clamp(1rem, 3.5vw, 1.35rem);
   font-weight: 900;
   letter-spacing: 0.01em;
   text-align: center;
   text-transform: uppercase;
+  text-wrap: balance;
 }
 
 // Mirrors the star-jar chip's corner on the welcome screen, so the play screen keeps one
@@ -931,6 +1038,51 @@ input:focus-visible {
   background: color-mix(in srgb, var(--ps-ink) 14%, #fff);
   box-shadow: none;
   cursor: not-allowed;
+}
+
+// Holds whichever of the three welcome steps is showing. The reserved height tracks the mode
+// cards — the tallest of them — off the same clamp their stage is sized from, so the slab and
+// the cards occupy one fixed block and nothing above shifts when they swap.
+.welcome-action {
+  display: grid;
+  width: 100%;
+  min-height: calc(clamp(1.6rem, 10vw, 3.6rem) * 4.1);
+  place-items: center;
+}
+
+// Every step shares one cell, so the spent Play slab can fade out directly over the cards that
+// have already taken its place instead of the two swapping in sequence.
+.welcome-action > * {
+  grid-area: 1 / 1;
+}
+
+// One green slab is the whole of the first screen's ask: press this. Choosing *how* to play is
+// the next question, and the slab hands over to the mode cards rather than starting a round.
+.welcome-play-button {
+  width: min(520px, 88vw);
+  min-height: clamp(124px, 18vw, 170px);
+  padding: 18px 42px;
+  border-radius: 34px;
+  box-shadow: 0 14px 0 var(--ps-grass-shade);
+  font-size: clamp(3.5rem, 9vw, 6.5rem);
+  letter-spacing: 0.015em;
+  line-height: 1;
+  text-transform: uppercase;
+  transform-origin: 50% 80%;
+  animation: play-button-wiggle 5.8s ease-in-out infinite;
+}
+
+.welcome-play-button:active {
+  animation: none;
+  transform: translateY(8px);
+  box-shadow: 0 5px 0 var(--ps-grass-shade);
+}
+
+// The slab sinks and shrinks towards the spot the two cards are about to rise from, so the
+// swap reads as one object becoming two rather than a panel being replaced.
+.welcome-play-button--leaving {
+  pointer-events: none;
+  animation: play-button-handoff 200ms ease-in both;
 }
 
 .primary-button--small {
@@ -2456,6 +2608,24 @@ input:focus-visible {
   98% { transform: rotate(0deg); }
 }
 
+@keyframes play-button-handoff {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(14px) scale(0.88); }
+}
+
+// Starts square-on and lands on the card's own tilt, so the pair settles like two cut-outs
+// dropped onto the table rather than sliding into a layout.
+@keyframes mode-card-deal {
+  from {
+    opacity: 0;
+    transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
+  }
+}
+
 @keyframes trail-croc-walk {
   0%, 100% { transform: translateX(-50%) rotate(-2deg); }
   50% { transform: translateX(-50%) translateY(-4px) rotate(2deg); }
@@ -2791,6 +2961,17 @@ input:focus-visible {
     align-items: stretch;
     flex-direction: column-reverse;
     gap: 10px;
+  }
+}
+
+// A landscape tablet is short, and the welcome lockup is tall: croc, wordmark, the Play slab or
+// the cards it becomes, the name chips. The generous float above the paper-cut ground is the
+// first thing to give up, well before anything shrinks. Declared ahead of the shorter-screen
+// block below so that one still wins where it applies.
+@media (orientation: landscape) and (max-height: 900px) {
+  .welcome-screen {
+    padding-top: clamp(16px, 3vh, 40px);
+    padding-bottom: clamp(64px, 11vh, 150px);
   }
 }
 

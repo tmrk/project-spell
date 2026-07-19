@@ -1,6 +1,7 @@
 // Paper-cut background decor (decision D-006). The varied tracks and negative delays
 // make the sky feel loosely scattered while keeping positions stable across renders.
-const CLOUD_PATH =
+// Exported so the mode cards can cut their sky from the same silhouette as the page behind them.
+export const CLOUD_PATH =
   'M30 85 C 8 85 2 68 12 56 C 6 40 22 26 38 32 C 44 12 74 8 86 24 C 98 10 126 14 130 32 C 150 26 168 40 162 58 C 176 64 174 84 154 85 Z';
 const TUFT_PATH = 'M10 40 Q14 18 22 40 Q28 12 36 40 Q44 20 50 40 Z';
 // Two stacked paper-cut rises give the welcome and complete screens a floor to stand on.
