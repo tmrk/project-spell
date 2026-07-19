@@ -411,6 +411,71 @@ input:focus-visible {
   gap: 4px;
 }
 
+// Parent-facing letter heat map (G8.8). Warm = needs practice, cool = going well; the band
+// is backed up by a per-cell label so colour is never the only carrier of meaning.
+.heat-map-section {
+  margin: 4px 0 10px;
+}
+
+.heat-map-section summary {
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--ps-ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.heat-map__help,
+.heat-map__label {
+  margin: 0 0 8px;
+  color: var(--ps-ink-soft);
+  font-size: 0.92rem;
+}
+
+.heat-map__label {
+  margin-top: 14px;
+  font-weight: 800;
+}
+
+.heat-map {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+  list-style: none;
+}
+
+.heat-map__cell {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--band);
+  place-items: center;
+}
+
+.heat-map__cell[data-band="strong"] { --band: rgba(109, 194, 75, 0.28); }
+.heat-map__cell[data-band="mixed"] { --band: rgba(247, 151, 40, 0.32); }
+.heat-map__cell[data-band="tricky"] { --band: rgba(242, 105, 92, 0.38); }
+
+.heat-map__letter {
+  color: var(--ps-ink);
+  font-size: 1.05rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.confusion-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  color: var(--ps-ink-soft);
+  font-size: 0.95rem;
+  gap: 3px;
+  list-style: none;
+}
+
 .profile-data-note {
   margin: 0 0 8px;
   color: var(--ps-ink-soft);

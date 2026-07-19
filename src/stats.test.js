@@ -10,6 +10,8 @@ import {
   starsForWord,
   summariseForSelection,
   trickiestLetters,
+  buildLetterHeatMap,
+  topConfusions,
 } from './stats';
 
 const attempt = (overrides = {}) => ({
@@ -253,5 +255,49 @@ describe('summaries', () => {
     expect(starsForRound([3, 2, 2])).toBe(1);
     expect(starsForRound([2, 2, 1])).toBe(1);
     expect(starsForRound([])).toBe(1);
+  });
+});
+
+describe('letter heat map', () => {
+  const stats = {
+    letters: {
+      a: { attempts: 10, misses: 0, totalMs: 4000 },
+      b: { attempts: 10, misses: 5, totalMs: 20000 },
+      c: { attempts: 8, misses: 2, totalMs: 8000 },
+      d: { attempts: 2, misses: 2, totalMs: 4000 },
+    },
+    confusions: { 'b→d': 4, 'c→k': 1, 'b→p': 2, 'x→': 3 },
+  };
+
+  it('ranks the hardest letters first and reports accuracy and pace', () => {
+    const heatMap = buildLetterHeatMap(stats);
+
+    expect(heatMap.map((entry) => entry.letter)).toEqual(['b', 'c', 'a']);
+    expect(heatMap[0]).toMatchObject({ accuracy: 0.5, attempts: 10, misses: 5, averageMs: 2000 });
+    expect(heatMap.at(-1).accuracy).toBe(1);
+  });
+
+  it('leaves out letters with too little evidence to judge', () => {
+    // 'd' is 0 for 2 — alarming-looking and meaningless.
+    expect(buildLetterHeatMap(stats).some((entry) => entry.letter === 'd')).toBe(false);
+    expect(buildLetterHeatMap(stats, { minAttempts: 2 }).some((entry) => entry.letter === 'd')).toBe(true);
+  });
+
+  it('survives an empty or malformed store', () => {
+    expect(buildLetterHeatMap(createEmptyStats())).toEqual([]);
+    expect(buildLetterHeatMap(null)).toEqual([]);
+    expect(buildLetterHeatMap({ letters: 'nope' })).toEqual([]);
+  });
+
+  it('lists the most frequent letter mix-ups and skips malformed pairs', () => {
+    const confusions = topConfusions(stats);
+
+    expect(confusions).toEqual([
+      { expected: 'b', typed: 'd', times: 4 },
+      { expected: 'b', typed: 'p', times: 2 },
+      { expected: 'c', typed: 'k', times: 1 },
+    ]);
+    expect(topConfusions(stats, { count: 1 })).toHaveLength(1);
+    expect(topConfusions(createEmptyStats())).toEqual([]);
   });
 });

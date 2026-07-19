@@ -178,6 +178,40 @@ export function summariseForSelection(stats, locale) {
   };
 }
 
+// Parent-facing letter heat map (roadmap G8.8). Hardest first, because a parent opening this
+// wants to know what to help with, not to read the alphabet. Letters with barely any attempts
+// are omitted rather than shown as alarming red on a sample of one.
+export function buildLetterHeatMap(stats, { minAttempts = 3 } = {}) {
+  const letters = stats?.letters && typeof stats.letters === 'object' ? stats.letters : {};
+
+  return Object.entries(letters)
+    .filter(([letter, entry]) => typeof letter === 'string' && letter && entry?.attempts >= minAttempts)
+    .map(([letter, entry]) => ({
+      letter,
+      attempts: entry.attempts,
+      misses: entry.misses,
+      accuracy: (entry.attempts - entry.misses) / entry.attempts,
+      averageMs: Math.round(entry.totalMs / entry.attempts),
+    }))
+    .sort(
+      (a, b) =>
+        a.accuracy - b.accuracy || b.attempts - a.attempts || a.letter.localeCompare(b.letter),
+    );
+}
+
+export function topConfusions(stats, { count = 4 } = {}) {
+  const confusions = stats?.confusions && typeof stats.confusions === 'object' ? stats.confusions : {};
+
+  return Object.entries(confusions)
+    .map(([pair, times]) => {
+      const [expected, typed] = String(pair).split('→');
+      return { expected, typed, times: asCount(times) };
+    })
+    .filter(({ expected, typed, times }) => expected && typed && times > 0)
+    .sort((a, b) => b.times - a.times || a.expected.localeCompare(b.expected))
+    .slice(0, count);
+}
+
 export function averageLetterMs(stats) {
   const entries = Object.values(stats.letters);
   const attempts = entries.reduce((sum, entry) => sum + entry.attempts, 0);

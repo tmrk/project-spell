@@ -3,7 +3,7 @@ import { CloseIcon } from './Icons';
 import NameTag from './NameTag';
 import { MAX_PROFILES, getActiveProfile } from '../profiles';
 import { DEFAULT_SETTINGS, PRESETS, getEligibleWords, normaliseSettings } from '../game';
-import { createEmptyStats, trickiestLetters } from '../stats';
+import { buildLetterHeatMap, createEmptyStats, topConfusions, trickiestLetters } from '../stats';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
 import { CREDITS } from '../credits';
 import packageInfo from '../../package.json';
@@ -199,6 +199,8 @@ export default function SettingsPanel({
   const statsData = stats ?? EMPTY_STATS;
   const hasPlayData = statsData.totals.attempts > 0 || statsData.totals.wordsCompleted > 0;
   const trickyLetters = trickiestLetters(statsData);
+  const heatMap = useMemo(() => buildLetterHeatMap(statsData), [statsData]);
+  const confusions = useMemo(() => topConfusions(statsData), [statsData]);
   const activeProfile = profiles ? getActiveProfile(profiles) : null;
   const profileList = profiles?.profiles.filter((profile) => profile.name) ?? [];
 
@@ -557,6 +559,61 @@ export default function SettingsPanel({
             ) : (
               <p className="progress-empty">{copy.progressNoData}</p>
             )}
+            {heatMap.length > 0 && (
+              // Parent-facing only. Nothing here is ever shown to the child, and it stays
+              // folded away so the panel does not turn into a dashboard.
+              <details className="heat-map-section">
+                <summary>{copy.letterHeatMap}</summary>
+                <div className="heat-map-section__body">
+                  <p className="heat-map__help">{copy.letterHeatMapHelp}</p>
+                  <ul className="heat-map">
+                    {heatMap.map((entry) => {
+                      const percent = Math.round(entry.accuracy * 100);
+                      return (
+                        <li
+                          key={entry.letter}
+                          className="heat-map__cell"
+                          data-band={percent >= 90 ? 'strong' : percent >= 75 ? 'mixed' : 'tricky'}
+                          title={formatMessage(copy.letterAccuracy, {
+                            letter: entry.letter.toLocaleUpperCase(settings.locale),
+                            percent,
+                            count: entry.attempts,
+                          })}
+                        >
+                          <span className="heat-map__letter" aria-hidden="true">
+                            {entry.letter.toLocaleUpperCase(settings.locale)}
+                          </span>
+                          <span className="sr-only">
+                            {formatMessage(copy.letterAccuracy, {
+                              letter: entry.letter.toLocaleUpperCase(settings.locale),
+                              percent,
+                              count: entry.attempts,
+                            })}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {confusions.length > 0 && (
+                    <>
+                      <p className="heat-map__label">{copy.confusionsHeading}</p>
+                      <ul className="confusion-list">
+                        {confusions.map((confusion) => (
+                          <li key={`${confusion.expected}-${confusion.typed}`}>
+                            {formatMessage(copy.confusionPair, {
+                              expected: confusion.expected.toLocaleUpperCase(settings.locale),
+                              typed: confusion.typed.toLocaleUpperCase(settings.locale),
+                            })}
+                            {` ×${confusion.times}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              </details>
+            )}
+
             <div className="progress-actions">
               <button type="button" className="text-button" onClick={downloadData} disabled={!hasPlayData}>
                 {copy.downloadData}
