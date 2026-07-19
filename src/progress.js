@@ -1,8 +1,9 @@
 // Local-only reward progress (decision D-004). Persistence stays in App.jsx.
 
-import { getStickerFor } from './stickers/map';
+import { SHINY_STICKER_SEQUENCE, getStickerFor } from './stickers/map';
 
 export const PROGRESS_KEY = 'project-spell:progress:v1';
+export const SUPER_ROUND_EVERY = 4;
 
 const asCount = (value) => (Number.isFinite(value) && value > 0 ? Math.round(value) : 0);
 
@@ -11,12 +12,17 @@ const normaliseIds = (value) =>
     ? [...new Set(value.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))]
     : [];
 
+const asCyclePosition = (value) =>
+  Math.min(asCount(value), SUPER_ROUND_EVERY - 1);
+
 export function createEmptyProgress() {
   return {
     version: 1,
     totalStars: 0,
     stickers: [],
+    shinyStickers: [],
     badges: [],
+    roundsTowardSuper: 0,
   };
 }
 
@@ -27,7 +33,9 @@ export function normaliseProgress(value) {
     version: 1,
     totalStars: asCount(value.totalStars),
     stickers: normaliseIds(value.stickers),
+    shinyStickers: normaliseIds(value.shinyStickers),
     badges: normaliseIds(value.badges),
+    roundsTowardSuper: asCyclePosition(value.roundsTowardSuper),
   };
 }
 
@@ -56,6 +64,32 @@ export function addSticker(progress, id) {
   const nextId = typeof id === 'string' ? id.trim() : '';
   if (!nextId || current.stickers.includes(nextId)) return current;
   return { ...current, stickers: [...current.stickers, nextId] };
+}
+
+export function isSuperRoundNext(progress) {
+  return normaliseProgress(progress).roundsTowardSuper >= SUPER_ROUND_EVERY - 1;
+}
+
+export function recordRoundInCycle(progress, { wasSuper = false } = {}) {
+  const current = normaliseProgress(progress);
+  return {
+    ...current,
+    roundsTowardSuper: wasSuper
+      ? 0
+      : Math.min(current.roundsTowardSuper + 1, SUPER_ROUND_EVERY - 1),
+  };
+}
+
+export function pickShinyAward(progress) {
+  const owned = new Set(normaliseProgress(progress).shinyStickers);
+  return SHINY_STICKER_SEQUENCE.find((codepoint) => !owned.has(codepoint)) ?? null;
+}
+
+export function addShinySticker(progress, codepoint) {
+  const current = normaliseProgress(progress);
+  const nextCodepoint = typeof codepoint === 'string' ? codepoint.trim() : '';
+  if (!nextCodepoint || current.shinyStickers.includes(nextCodepoint)) return current;
+  return { ...current, shinyStickers: [...current.shinyStickers, nextCodepoint] };
 }
 
 const BADGE_RULES = Object.freeze([

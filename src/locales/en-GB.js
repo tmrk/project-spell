@@ -14,6 +14,15 @@ const messages = Object.freeze({
     'Wonderful spelling! You finished the round!',
     'Fantastic! You finished the round!',
   ]),
+  superRoundHeading: 'Super round!',
+  superRoundIntroSpeeches: Object.freeze([
+    'Super round! Ready?',
+    'It’s a super round! Let’s go!',
+  ]),
+  superRoundCountdownOne: 'One more round to the super round!',
+  superRoundCountdownMany: '{count} rounds to the super round',
+  superRoundDone: 'Super round finished — what a star!',
+  newShinyStickerLine: 'A shiny sticker for your book!',
   tryAgain: 'Try once more',
   wordFinished: 'That’s the word!',
   wordFinishedSpeeches: Object.freeze([

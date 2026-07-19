@@ -14,6 +14,15 @@ const messages = Object.freeze({
     'Csodás helyesírás! Befejezted a kört!',
     'Fantasztikus! Az egész kör sikerült!',
   ]),
+  superRoundHeading: 'Szuper kör!',
+  superRoundIntroSpeeches: Object.freeze([
+    'Szuper kör! Készen állsz?',
+    'Ez egy szuper kör! Rajta!',
+  ]),
+  superRoundCountdownOne: 'Még egy kör a szuper körig!',
+  superRoundCountdownMany: 'Még {count} kör a szuper körig',
+  superRoundDone: 'Kész a szuper kör — igazi csillag vagy!',
+  newShinyStickerLine: 'Csillogó matrica került a könyvedbe!',
   tryAgain: 'Próbáld meg még egyszer',
   wordFinished: 'Ez az!',
   wordFinishedSpeeches: Object.freeze([

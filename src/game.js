@@ -330,3 +330,32 @@ export function createRound(value = DEFAULT_SETTINGS, random = Math.random) {
 
   return round.slice(0, settings.roundLength);
 }
+
+export function createReviewRound(value = DEFAULT_SETTINGS, struggles = [], random = Math.random) {
+  const settings = normaliseSettings(value);
+  const eligible = getEligibleWords(settings).map(({ word }) => word);
+  if (!eligible.length) return [];
+
+  const struggleSet = new Set(
+    [...(struggles ?? [])]
+      .filter((word) => typeof word === 'string')
+      .map((word) => word.normalize('NFC').toLocaleLowerCase(settings.locale)),
+  );
+  const reviewWords = shuffle(
+    eligible.filter((word) => struggleSet.has(word)),
+    random,
+  );
+  const round = reviewWords.slice(0, settings.roundLength);
+
+  // G6 can replace the session-only struggle source; this top-up deliberately
+  // retains the ordinary round's deterministic shuffle and repeat protection.
+  while (round.length < settings.roundLength) {
+    const nextBatch = shuffle(eligible, random);
+    if (nextBatch.length > 1 && round.at(-1) === nextBatch[0]) {
+      [nextBatch[0], nextBatch[1]] = [nextBatch[1], nextBatch[0]];
+    }
+    round.push(...nextBatch);
+  }
+
+  return round.slice(0, settings.roundLength);
+}

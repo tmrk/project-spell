@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Letter from './components/Letter';
+import JourneyStrip from './components/JourneyStrip';
 import Scenery from './components/Scenery';
 import SettingsPanel from './components/SettingsPanel';
+import StarJarChip from './components/StarJarChip';
+import StarTrail from './components/StarTrail';
 import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
+import Wordmark from './components/Wordmark';
 import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon, StickerIcon } from './components/Icons';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
+  createReviewRound,
   createRound,
   lettersMatch,
   normaliseSettings,
@@ -23,13 +28,18 @@ import {
 } from './stats';
 import {
   PROGRESS_KEY,
+  SUPER_ROUND_EVERY,
   addBadges,
+  addShinySticker,
   addSticker,
   addStars,
   createEmptyProgress,
+  isSuperRoundNext,
   newBadges,
   normaliseProgress,
+  pickShinyAward,
   pickStickerAward,
+  recordRoundInCycle,
 } from './progress';
 import { getStickerDetails } from './stickers/map';
 import {
@@ -61,6 +71,10 @@ const TRACKS = Object.freeze([bgMusic, bgMusic2, bgMusic3]);
 
 const emptyRoundReward = () => ({
   badge: null,
+  journeyPosition: 0,
+  kind: 'normal',
+  previousTotalStars: 0,
+  shiny: null,
   stars: 0,
   sticker: null,
   totalStars: 0,
@@ -490,48 +504,60 @@ export default function App() {
   const [hintLevel, setHintLevel] = useState('none');
   const [celebratingWord, setCelebratingWord] = useState(false);
   const [confettiVisible, setConfettiVisible] = useState(false);
+  const [heartBurstId, setHeartBurstId] = useState(0);
+  const [roundKind, setRoundKind] = useState('normal');
   const [roundReward, setRoundReward] = useState(emptyRoundReward);
+  const [superIntroVisible, setSuperIntroVisible] = useState(false);
   const [stickerBookOpen, setStickerBookOpen] = useState(false);
   const [stickerBookProgress, setStickerBookProgress] = useState(createEmptyProgress);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
+  const [visibleProgress, setVisibleProgress] = useState(loadProgress);
 
   const inputRef = useRef(null);
   const missCountRef = useRef(0);
   // Stats live in refs so per-key bookkeeping never causes re-renders during play.
   const statsRef = useRef(null);
   if (statsRef.current === null) statsRef.current = loadStats();
-  const progressRef = useRef(null);
-  if (progressRef.current === null) progressRef.current = loadProgress();
+  const progressRef = useRef(visibleProgress);
   const letterStartRef = useRef(0);
   const wordStartRef = useRef(0);
   const roundStartRef = useRef(0);
   const wordMissesRef = useRef(0);
   const roundMissesRef = useRef(0);
+  const roundStartStarsRef = useRef(0);
   const wordStarsRef = useRef([]);
-  const roundAwardRef = useRef({ badge: null, sticker: null });
+  const roundAwardRef = useRef({ badge: null, journeyPosition: 0, shiny: null, sticker: null, wasSuper: false });
   const feedbackTimerRef = useRef(null);
   const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
   const celebrationTimerRef = useRef(null);
   const promptTimerRef = useRef(null);
+  const superIntroTimerRef = useRef(null);
   const transitioningRef = useRef(false);
   const lastCorrectIndexRef = useRef(-1);
   const lastWordPraiseIndexRef = useRef(-1);
   const lastRoundPraiseIndexRef = useRef(-1);
   const lastEncouragementIndexRef = useRef(-1);
+  const lastSuperIntroIndexRef = useRef(-1);
   const speechBusyUntilRef = useRef(0);
   const speechTokenRef = useRef(0);
   const pendingPromptRef = useRef(null);
   const wordsSincePraiseRef = useRef(0);
   const wordPraiseGapRef = useRef(2);
+  const sessionStrugglesRef = useRef(new Set());
+  const sessionFilterKeyRef = useRef(null);
   const appRef = useRef(null);
   const currentWord = roundWords[wordIndex] ?? '';
   const currentWordLetters = useMemo(() => [...currentWord], [currentWord]);
   const locale = getLocale(settings.locale);
   const copy = locale.messages;
   const earnedRoundStars = phase === 'complete' ? roundReward.stars : 0;
+  const filledWords = Math.min(
+    roundWords.length,
+    wordIndex + (letterIndex === currentWordLetters.length && currentWordLetters.length > 0 ? 1 : 0),
+  );
 
   const {
     musicIsPlaying,
@@ -565,7 +591,24 @@ export default function App() {
   }, [pauseMusic, settings.music]);
 
   useEffect(() => {
-    if (phase !== 'playing' || !currentWord || settingsOpen) return undefined;
+    const filterKey = JSON.stringify([
+      settings.locale,
+      settings.gameMode,
+      settings.minLetters,
+      settings.maxLetters,
+      settings.syllables,
+      settings.roundLength,
+      settings.wordSource,
+      settings.customWords,
+    ]);
+    if (sessionFilterKeyRef.current !== null && sessionFilterKeyRef.current !== filterKey) {
+      sessionStrugglesRef.current.clear();
+    }
+    sessionFilterKeyRef.current = filterKey;
+  }, [settings]);
+
+  useEffect(() => {
+    if (phase !== 'playing' || !currentWord || settingsOpen || superIntroVisible) return undefined;
     window.clearTimeout(promptTimerRef.current);
     pendingPromptRef.current = null;
     const speakPrompt = () => {
@@ -583,7 +626,7 @@ export default function App() {
       window.clearTimeout(promptTimerRef.current);
       pendingPromptRef.current = null;
     };
-  }, [copy.spellPrompt, currentWord, phase, say, settingsOpen, wordIndex]);
+  }, [copy.spellPrompt, currentWord, phase, say, settingsOpen, superIntroVisible, wordIndex]);
 
   useEffect(() => {
     if (phase !== 'complete') return undefined;
@@ -596,10 +639,10 @@ export default function App() {
   }, [earnedRoundStars, phase, playEffect]);
 
   useEffect(() => {
-    if (phase !== 'playing' || settingsOpen) return undefined;
+    if (phase !== 'playing' || settingsOpen || superIntroVisible) return undefined;
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     return () => window.cancelAnimationFrame(frame);
-  }, [letterIndex, phase, settingsOpen, wordIndex]);
+  }, [letterIndex, phase, settingsOpen, superIntroVisible, wordIndex]);
 
 
   useEffect(
@@ -609,17 +652,12 @@ export default function App() {
       window.clearTimeout(advanceTimerRef.current);
       window.clearTimeout(celebrationTimerRef.current);
       window.clearTimeout(promptTimerRef.current);
+      window.clearTimeout(superIntroTimerRef.current);
       pendingPromptRef.current = null;
       cancelSpeech();
     },
     [cancelSpeech],
   );
-
-  const progress = useMemo(() => {
-    if (!roundWords.length || !currentWord) return 0;
-    const currentWordProgress = Math.min(letterIndex / currentWordLetters.length, 1);
-    return ((wordIndex + currentWordProgress) / roundWords.length) * 100;
-  }, [currentWord, currentWordLetters.length, letterIndex, roundWords.length, wordIndex]);
 
   const focusInput = useCallback(() => {
     if (phase === 'playing' && !settingsOpen) inputRef.current?.focus({ preventScroll: true });
@@ -631,6 +669,7 @@ export default function App() {
     window.clearTimeout(advanceTimerRef.current);
     window.clearTimeout(celebrationTimerRef.current);
     window.clearTimeout(promptTimerRef.current);
+    window.clearTimeout(superIntroTimerRef.current);
     pendingPromptRef.current = null;
   }, []);
 
@@ -656,21 +695,31 @@ export default function App() {
   }, []);
 
   const startRound = useCallback(() => {
-    const words = createRound(settings);
+    const nextRoundKind = isSuperRoundNext(progressRef.current) ? 'super' : 'normal';
+    const words = nextRoundKind === 'super'
+      ? createReviewRound(settings, sessionStrugglesRef.current)
+      : createRound(settings);
     if (!words.length) {
       setSettingsOpen(true);
       return;
     }
 
     clearRoundTimers();
-    transitioningRef.current = false;
+    transitioningRef.current = nextRoundKind === 'super';
     resetHintLadder();
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
     wordsSincePraiseRef.current = 0;
     wordPraiseGapRef.current = randomWordPraiseGap();
     wordStarsRef.current = [];
-    roundAwardRef.current = { badge: null, sticker: null };
+    roundAwardRef.current = {
+      badge: null,
+      journeyPosition: progressRef.current.roundsTowardSuper,
+      shiny: null,
+      sticker: null,
+      wasSuper: false,
+    };
+    roundStartStarsRef.current = progressRef.current.totalStars;
     const now = performance.now();
     roundStartRef.current = now;
     wordStartRef.current = now;
@@ -685,12 +734,40 @@ export default function App() {
     setFeedbackMessage('');
     setCelebratingWord(false);
     setConfettiVisible(false);
+    setHeartBurstId(0);
+    setRoundKind(nextRoundKind);
     setRoundReward(emptyRoundReward());
+    setSuperIntroVisible(nextRoundKind === 'super');
     setPhase('playing');
     primeEffects();
     selectNextMusicTrack();
     if (settings.music) playMusic();
   }, [clearRoundTimers, playMusic, primeEffects, resetHintLadder, selectNextMusicTrack, settings]);
+
+  const dismissSuperIntro = useCallback(() => {
+    if (!superIntroVisible) return;
+    window.clearTimeout(superIntroTimerRef.current);
+    cancelSpeech();
+    speechTokenRef.current += 1;
+    speechBusyUntilRef.current = 0;
+    transitioningRef.current = false;
+    const now = performance.now();
+    roundStartRef.current = now;
+    wordStartRef.current = now;
+    letterStartRef.current = now;
+    setSuperIntroVisible(false);
+  }, [cancelSpeech, superIntroVisible]);
+
+  useEffect(() => {
+    if (phase !== 'playing' || roundKind !== 'super' || !superIntroVisible) return undefined;
+    transitioningRef.current = true;
+    playEffect(star3Sfx, 0.42);
+    say(pickVaried(copy.superRoundIntroSpeeches, lastSuperIntroIndexRef), {
+      fallbackMs: 1900,
+    });
+    superIntroTimerRef.current = window.setTimeout(dismissSuperIntro, 2000);
+    return () => window.clearTimeout(superIntroTimerRef.current);
+  }, [copy.superRoundIntroSpeeches, dismissSuperIntro, phase, playEffect, roundKind, say, superIntroVisible]);
 
   const repeatWord = useCallback(() => {
     speechTokenRef.current += 1;
@@ -733,16 +810,22 @@ export default function App() {
     [copy.wordFinishedSpeeches, releaseWordPraise, say],
   );
 
+  const spawnHearts = useCallback(() => {
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    if (!reducedMotion) setHeartBurstId((id) => id + 1);
+  }, []);
+
   const speakEncouragement = useCallback(
     (letter) => {
       const encouragement = pickVaried(copy.encouragementSpeeches, lastEncouragementIndexRef);
       const message = settings.gameMode === 'normal'
         ? `${encouragement} ${letter.toLocaleUpperCase(locale.code)}.`
         : encouragement;
+      spawnHearts();
       say(message, { rate: 0.76, pitch: 1.06 });
       window.requestAnimationFrame(focusInput);
     },
-    [copy.encouragementSpeeches, focusInput, locale.code, say, settings.gameMode],
+    [copy.encouragementSpeeches, focusInput, locale.code, say, settings.gameMode, spawnHearts],
   );
 
   const resetFeedbackSoon = useCallback((messageDelay = 1000, colorDelay = 150) => {
@@ -766,12 +849,13 @@ export default function App() {
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
     setCelebratingWord(true);
     setConfettiVisible(!reducedMotion);
+    spawnHearts();
     window.clearTimeout(celebrationTimerRef.current);
     celebrationTimerRef.current = window.setTimeout(() => {
       setCelebratingWord(false);
       setConfettiVisible(false);
     }, CONFETTI_DURATION + 40);
-  }, []);
+  }, [spawnHearts]);
 
   const completeWord = useCallback(() => {
     resetHintLadder();
@@ -782,6 +866,10 @@ export default function App() {
       const stars = starsForRound(wordStarsRef.current);
       setRoundReward({
         badge: roundAwardRef.current.badge,
+        journeyPosition: roundAwardRef.current.journeyPosition,
+        kind: roundAwardRef.current.wasSuper ? 'super' : 'normal',
+        previousTotalStars: roundStartStarsRef.current,
+        shiny: roundAwardRef.current.shiny,
         stars,
         sticker: roundAwardRef.current.sticker,
         totalStars: progressRef.current.totalStars,
@@ -879,6 +967,7 @@ export default function App() {
           durationMs: completionTime - wordStartRef.current,
           mode: settings.gameMode,
         });
+        if (wordMissesRef.current > 0) sessionStrugglesRef.current.add(currentWord);
         const isLastWord = wordIndex === roundWords.length - 1;
         if (isLastWord) {
           statsRef.current = recordRoundCompleted(statsRef.current, {
@@ -888,8 +977,16 @@ export default function App() {
             mode: settings.gameMode,
           });
           const roundStars = starsForRound(wordStarsRef.current);
-          const stickerId = pickStickerAward(progressRef.current, roundWords, settings.locale);
+          const wasSuper = roundKind === 'super';
+          const stickerId = wasSuper
+            ? null
+            : pickStickerAward(progressRef.current, roundWords, settings.locale);
+          const shinyCodepoint = wasSuper ? pickShinyAward(progressRef.current) : null;
           if (stickerId) progressRef.current = addSticker(progressRef.current, stickerId);
+          if (shinyCodepoint) {
+            progressRef.current = addShinySticker(progressRef.current, shinyCodepoint);
+          }
+          progressRef.current = recordRoundInCycle(progressRef.current, { wasSuper });
           const badges = newBadges(progressRef.current, statsRef.current, {
             mode: settings.gameMode,
             stars: roundStars,
@@ -897,8 +994,12 @@ export default function App() {
           progressRef.current = addBadges(progressRef.current, badges);
           roundAwardRef.current = {
             badge: badges[0] ?? null,
+            journeyPosition: progressRef.current.roundsTowardSuper,
+            shiny: shinyCodepoint,
             sticker: stickerId ? getStickerDetails(stickerId) : null,
+            wasSuper,
           };
+          setVisibleProgress(progressRef.current);
         }
         persistStats();
         persistProgress();
@@ -944,6 +1045,7 @@ export default function App() {
       resetFeedbackSoon,
       resetHintLadder,
       roundWords,
+      roundKind,
       signalFeedback,
       settings.acceptUnaccented,
       settings.gameMode,
@@ -1018,6 +1120,7 @@ export default function App() {
     }
     statsRef.current = createEmptyStats();
     progressRef.current = createEmptyProgress();
+    setVisibleProgress(progressRef.current);
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);
     setStickerBookProgress(progressRef.current);
@@ -1041,7 +1144,10 @@ export default function App() {
     setFeedbackMessage('');
     setCelebratingWord(false);
     setConfettiVisible(false);
+    setHeartBurstId(0);
+    setRoundKind('normal');
     setRoundReward(emptyRoundReward());
+    setSuperIntroVisible(false);
     setStickerBookOpen(false);
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
@@ -1061,10 +1167,37 @@ export default function App() {
     template: copy.letterLabel,
     hiddenTemplate: copy.letterHiddenLabel,
   };
+  const roundsRemaining = SUPER_ROUND_EVERY - roundReward.journeyPosition;
+  const journeyMessage = roundReward.kind === 'super'
+    ? copy.superRoundDone
+    : roundsRemaining === 1
+      ? copy.superRoundCountdownOne
+      : formatMessage(copy.superRoundCountdownMany, { count: roundsRemaining });
 
   return (
-    <div ref={appRef} className="app" data-feedback={feedback} data-phase={phase}>
+    <div
+      ref={appRef}
+      className="app"
+      data-feedback={feedback}
+      data-phase={phase}
+      data-round={roundKind}
+    >
       <Scenery phase={phase} />
+      {phase === 'welcome' && (
+        <StarJarChip
+          key="welcome-star-jar"
+          count={visibleProgress.totalStars}
+          ariaLabel={formatMessage(copy.starJarLine, { count: visibleProgress.totalStars })}
+        />
+      )}
+      {phase === 'complete' && (
+        <StarJarChip
+          key="complete-star-jar"
+          count={roundReward.totalStars}
+          fromCount={roundReward.previousTotalStars}
+          ariaLabel={formatMessage(copy.starJarLine, { count: roundReward.totalStars })}
+        />
+      )}
       <header className="app-controls" aria-label={copy.appControls}>
         {phase === 'playing' && (
           <button type="button" className="icon-button" onClick={repeatWord} aria-label={copy.hearAgain}>
@@ -1097,7 +1230,7 @@ export default function App() {
       {phase === 'welcome' && (
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
-          <p className="eyebrow">{copy.projectName}</p>
+          <Wordmark />
           <button type="button" className="primary-button welcome-play-button" onClick={startRound}>
             {copy.play}
           </button>
@@ -1119,19 +1252,29 @@ export default function App() {
 
       {phase === 'playing' && (
         <main className="play-screen" onClick={focusInput}>
-          <div
-            className="round-progress"
-            aria-label={formatMessage(copy.progress, { current: wordIndex + 1, total: roundWords.length })}
-          >
-            <span className="round-progress__count">
-              {formatMessage(copy.progressCount, { current: wordIndex + 1, total: roundWords.length })}
-            </span>
-            <div className="round-progress__track">
-              <div className="round-progress__value" style={{ width: `${progress}%` }}>
-                <img src={croc} alt="" />
-              </div>
+          <StarTrail
+            total={roundWords.length}
+            filled={filledWords}
+            croc={croc}
+            ariaLabel={formatMessage(copy.progress, { current: wordIndex + 1, total: roundWords.length })}
+          />
+
+          {superIntroVisible && (
+            <div className="super-round-intro" role="presentation">
+              <button
+                type="button"
+                className="super-round-intro__card"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  dismissSuperIntro();
+                }}
+                aria-label={copy.superRoundHeading}
+              >
+                <span aria-hidden="true">🎁</span>
+                <strong>{copy.superRoundHeading}</strong>
+              </button>
             </div>
-          </div>
+          )}
 
           <div
             className={`word${celebratingWord ? ' word--celebrating' : ''}`}
@@ -1172,6 +1315,20 @@ export default function App() {
                     }}
                   />
                 ))}
+              </div>
+            )}
+            {heartBurstId > 0 && (
+              <div
+                className="heart-burst"
+                key={heartBurstId}
+                aria-hidden="true"
+                onAnimationEnd={(event) => {
+                  if (event.target === event.currentTarget) setHeartBurstId(0);
+                }}
+              >
+                <span>♥</span>
+                <span>♥</span>
+                <span>♥</span>
               </div>
             )}
           </div>
@@ -1227,14 +1384,23 @@ export default function App() {
               perfect: mistakes === 0 ? copy.completePerfect : '.',
             })}
           </p>
-          <p className="star-jar-line">
-            {formatMessage(copy.starJarLine, { count: roundReward.totalStars })}
-          </p>
+          <JourneyStrip
+            position={roundReward.journeyPosition}
+            wasSuper={roundReward.kind === 'super'}
+            message={journeyMessage}
+          />
           {roundReward.sticker && (
             <div className="round-sticker-award">
               <StickerPicture codepoint={roundReward.sticker.codepoint} />
               <p>{copy.newStickerLine}</p>
               <strong>{roundReward.sticker.word}</strong>
+            </div>
+          )}
+          {roundReward.shiny && (
+            <div className="round-sticker-award round-sticker-award--shiny">
+              <span className="shiny-gift" aria-hidden="true">🎁</span>
+              <StickerPicture codepoint={roundReward.shiny} className="shiny" />
+              <p>{copy.newShinyStickerLine}</p>
             </div>
           )}
           {roundReward.badge && BADGE_LABEL_KEYS[roundReward.badge] && (

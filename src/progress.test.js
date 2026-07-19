@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   PROGRESS_KEY,
+  SUPER_ROUND_EVERY,
   addBadges,
+  addShinySticker,
   addSticker,
   addStars,
   createEmptyProgress,
+  isSuperRoundNext,
   newBadges,
   normaliseProgress,
+  pickShinyAward,
   pickStickerAward,
+  recordRoundInCycle,
 } from './progress';
 
 describe('progress store', () => {
@@ -17,7 +22,9 @@ describe('progress store', () => {
       version: 1,
       totalStars: 0,
       stickers: [],
+      shinyStickers: [],
       badges: [],
+      roundsTowardSuper: 0,
     });
   });
 
@@ -31,22 +38,30 @@ describe('progress store', () => {
         version: 99,
         totalStars: 4.6,
         stickers: ['cat', ' cat ', '', 7, 'cat'],
+        shinyStickers: ['1f451', ' 1f451 ', null],
         badges: ['starter', null],
+        roundsTowardSuper: 20,
         unknown: true,
       }),
     ).toEqual({
       version: 1,
       totalStars: 5,
       stickers: ['cat'],
+      shinyStickers: ['1f451'],
       badges: ['starter'],
+      roundsTowardSuper: 3,
     });
   });
 
   it('adds stars without mutating the original and ignores invalid deductions', () => {
-    const original = { version: 1, totalStars: 3, stickers: ['cat'], badges: [] };
+    const original = {
+      ...createEmptyProgress(),
+      totalStars: 3,
+      stickers: ['cat'],
+    };
     const rewarded = addStars(original, 2);
 
-    expect(rewarded).toEqual({ version: 1, totalStars: 5, stickers: ['cat'], badges: [] });
+    expect(rewarded).toEqual({ ...original, totalStars: 5 });
     expect(original.totalStars).toBe(3);
     expect(addStars(rewarded, -10).totalStars).toBe(5);
   });
@@ -66,6 +81,50 @@ describe('progress store', () => {
     expect(collected.stickers).toEqual(['en-GB/cat']);
     expect(addSticker(collected, 'en-GB/cat')).toEqual(collected);
     expect(original.stickers).toEqual([]);
+  });
+
+  it('loads blobs saved before super-round fields existed', () => {
+    expect(normaliseProgress({
+      version: 1,
+      totalStars: 8,
+      stickers: ['en-GB/cat'],
+      badges: ['first-round'],
+    })).toEqual({
+      ...createEmptyProgress(),
+      totalStars: 8,
+      stickers: ['en-GB/cat'],
+      badges: ['first-round'],
+    });
+  });
+
+  it('increments the round cycle and resets it after the super round', () => {
+    let progress = createEmptyProgress();
+    expect(SUPER_ROUND_EVERY).toBe(4);
+    expect(isSuperRoundNext(progress)).toBe(false);
+
+    progress = recordRoundInCycle(progress, { wasSuper: false });
+    progress = recordRoundInCycle(progress, { wasSuper: false });
+    expect(progress.roundsTowardSuper).toBe(2);
+    expect(isSuperRoundNext(progress)).toBe(false);
+
+    progress = recordRoundInCycle(progress, { wasSuper: false });
+    expect(progress.roundsTowardSuper).toBe(3);
+    expect(isSuperRoundNext(progress)).toBe(true);
+    expect(recordRoundInCycle(progress, { wasSuper: true }).roundsTowardSuper).toBe(0);
+  });
+
+  it('sequences shiny awards without repeats and stops when all are owned', () => {
+    let progress = createEmptyProgress();
+    expect(pickShinyAward(progress)).toBe('1f451');
+    progress = addShinySticker(progress, '1f451');
+    expect(pickShinyAward(progress)).toBe('1f3c6');
+    expect(addShinySticker(progress, '1f451')).toEqual(progress);
+
+    const exhausted = {
+      ...progress,
+      shinyStickers: ['1f451', '1f3c6', '1f308', '1f48e', '1f3c5', '1f947', '1f680', '1f9e7'],
+    };
+    expect(pickShinyAward(exhausted)).toBeNull();
   });
 
   it('finds only newly reached badges at round thresholds', () => {

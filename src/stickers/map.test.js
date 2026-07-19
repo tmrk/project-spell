@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { WORD_BANKS } from '../game';
-import { STICKER_CODEPOINTS, getStickerDetails, getStickerFor } from './map';
+import {
+  SHINY_STICKER_SEQUENCE,
+  STICKER_CODEPOINTS,
+  getStickerDetails,
+  getStickerFor,
+} from './map';
 
 describe('sticker catalogue', () => {
   it('shares art across translations and resolves stored ids', () => {
@@ -26,5 +31,11 @@ describe('sticker catalogue', () => {
   it('keeps every asset codepoint unique and filename-safe', () => {
     expect(new Set(STICKER_CODEPOINTS).size).toBe(STICKER_CODEPOINTS.length);
     expect(STICKER_CODEPOINTS.every((codepoint) => /^[0-9a-f_]+$/u.test(codepoint))).toBe(true);
+  });
+
+  it('includes every shiny prize in the downloadable sticker assets', () => {
+    expect(SHINY_STICKER_SEQUENCE).toHaveLength(8);
+    expect(SHINY_STICKER_SEQUENCE.every((codepoint) => STICKER_CODEPOINTS.includes(codepoint)))
+      .toBe(true);
   });
 });

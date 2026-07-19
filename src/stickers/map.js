@@ -272,6 +272,17 @@ const WORD_GROUPS = Object.freeze([
 
 const LOCALES = Object.freeze(['en-GB', 'sv-SE', 'hu-HU']);
 
+export const SHINY_STICKER_SEQUENCE = Object.freeze([
+  '1f451',
+  '1f3c6',
+  '1f308',
+  '1f48e',
+  '1f3c5',
+  '1f947',
+  '1f680',
+  '1f9e7',
+]);
+
 function buildLocaleMap(localeIndex) {
   const entries = WORD_GROUPS.flatMap(([codepoint, ...localeWords]) =>
     (localeWords[localeIndex] ?? []).map((word) => [word, codepoint]),
@@ -307,7 +318,12 @@ export const STICKER_MAP = Object.freeze({
 });
 
 export const STICKER_CODEPOINTS = Object.freeze(
-  [...new Set(LOCALES.flatMap((locale) => Object.values(STICKER_MAP[locale])).filter(Boolean))].sort(),
+  [
+    ...new Set([
+      ...LOCALES.flatMap((locale) => Object.values(STICKER_MAP[locale])).filter(Boolean),
+      ...SHINY_STICKER_SEQUENCE,
+    ]),
+  ].sort(),
 );
 
 export function getStickerFor(word, locale) {

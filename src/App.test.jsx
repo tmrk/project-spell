@@ -31,7 +31,24 @@ describe('Project Spell', () => {
     expect(screen.queryByText('Ready to spell?')).not.toBeInTheDocument();
     expect(screen.queryByText('Listen, then type one letter at a time.')).not.toBeInTheDocument();
     expect(screen.queryByText('Language')).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'SPELL' })).toBeInTheDocument();
+    expect(screen.queryByText('Project Spell')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
+  });
+
+  it('shows the lifetime star jar on welcome only after stars have been earned', () => {
+    const firstVisit = render(<App />);
+    expect(screen.queryByLabelText('★ 0 stars in your jar')).not.toBeInTheDocument();
+    firstVisit.unmount();
+
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+      version: 1,
+      totalStars: 12,
+      stickers: [],
+      badges: [],
+    }));
+    render(<App />);
+    expect(screen.getByLabelText('★ 12 stars in your jar')).toHaveTextContent('12');
   });
 
   it('uses the browser region on a first visit and preserves saved choices afterwards', () => {
@@ -57,6 +74,9 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     const input = screen.getByRole('textbox', { name: 'Type the next letter' });
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+    expect(document.querySelectorAll('.star-trail__socket')).toHaveLength(3);
+    expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(0);
+    expect(screen.queryByText('1 / 3')).not.toBeInTheDocument();
 
     fireEvent.input(input, { target: { value: 'cat' } });
 
@@ -64,6 +84,8 @@ describe('Project Spell', () => {
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
     expect(document.querySelector('.word')).toHaveClass('word--celebrating');
     expect(document.querySelectorAll('.confetti span')).toHaveLength(12);
+    expect(document.querySelectorAll('.heart-burst span')).toHaveLength(3);
+    expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(1);
 
     act(() => vi.advanceTimersByTime(759));
     expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
@@ -560,6 +582,7 @@ describe('Project Spell', () => {
     fireEvent.keyDown(input, { key: 'x' });
     expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toHaveClass('letter--hint-ghost');
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toMatch(/Almost.+A\.$/u);
+    expect(document.querySelectorAll('.heart-burst span')).toHaveLength(3);
 
     fireEvent.keyDown(input, { key: 'x' });
     expect(screen.getByRole('button', { name: 'a, current letter' })).not.toHaveClass('letter--hidden');
@@ -678,12 +701,15 @@ describe('Project Spell', () => {
         target: { value: 'cat' },
       });
       expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).totalStars).toBe(word * 3);
+      expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(word);
+      if (word === 3) expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
       act(() => vi.advanceTimersByTime(760));
     }
 
     expect(screen.getByRole('img', { name: '3 stars for this round' })).toBeInTheDocument();
     expect(document.querySelectorAll('.star-ceremony__star--filled')).toHaveLength(3);
-    expect(screen.getByText('★ 9 stars in your jar')).toBeInTheDocument();
+    expect(screen.getByLabelText('★ 9 stars in your jar')).toBeInTheDocument();
+    expect(screen.getByText('3 rounds to the super round')).toBeInTheDocument();
   });
 
   it('does not create confetti when reduced motion is requested', () => {
@@ -704,6 +730,68 @@ describe('Project Spell', () => {
 
     expect(document.querySelector('.word')).toHaveClass('word--celebrating');
     expect(document.querySelector('.confetti')).not.toBeInTheDocument();
+    expect(document.querySelector('.heart-burst')).not.toBeInTheDocument();
+  });
+
+  it('starts the fourth round as a skippable super round and awards a shiny sticker', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      PROGRESS_KEY,
+      JSON.stringify({
+        version: 1,
+        totalStars: 9,
+        stickers: ['en-GB/dog'],
+        shinyStickers: [],
+        badges: [],
+        roundsTowardSuper: 3,
+      }),
+    );
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+        soundEffects: false,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-round', 'super');
+    expect(screen.getByRole('button', { name: 'Super round!' })).toBeInTheDocument();
+    expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    expect(window.speechSynthesis.speak.mock.calls[0][0].text).toMatch(/super round/iu);
+    expect(screen.queryByText('Spell the word cat')).not.toBeInTheDocument();
+
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'cat' },
+    });
+    expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Super round!' }));
+    expect(screen.queryByRole('button', { name: 'Super round!' })).not.toBeInTheDocument();
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
+
+    for (let word = 0; word < 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      act(() => vi.advanceTimersByTime(760));
+    }
+
+    expect(screen.getByText('A shiny sticker for your book!')).toBeInTheDocument();
+    expect(screen.getByText('Super round finished — what a star!')).toBeInTheDocument();
+    expect(document.querySelectorAll('.journey-strip__socket--filled')).toHaveLength(3);
+    expect(document.querySelector('.journey-strip__gift')).toHaveClass('journey-strip__gift--opened');
+    expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({
+      roundsTowardSuper: 0,
+      shinyStickers: ['1f451'],
+      stickers: ['en-GB/dog'],
+    });
   });
 
   it('lets grown-ups pick normal mode and reminds them it needs speech', () => {

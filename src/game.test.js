@@ -4,6 +4,7 @@ import {
   WORD_BANK,
   WORD_BANKS,
   createRound,
+  createReviewRound,
   estimateSyllables,
   getEligibleWords,
   lettersMatch,
@@ -264,5 +265,38 @@ describe('round creation', () => {
     expect(
       createRound({ ...DEFAULT_SETTINGS, wordSource: 'custom', customWords: '' }),
     ).toEqual([]);
+  });
+
+  it('puts eligible struggle words first and tops up without adjacent repeats', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      wordSource: 'custom',
+      customWords: 'cat\ndog\nfox',
+      roundLength: 5,
+    };
+    const round = createReviewRound(settings, new Set(['dog', 'cat', 'elephant']), () => 0);
+
+    expect(new Set(round.slice(0, 2))).toEqual(new Set(['cat', 'dog']));
+    expect(round).toHaveLength(5);
+    expect(round.every((word, index) => index === 0 || word !== round[index - 1])).toBe(true);
+  });
+
+  it('creates deterministic review rounds and works without struggle words', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      wordSource: 'custom',
+      customWords: 'cat\ndog\nfox',
+      roundLength: 5,
+    };
+    const sequence = [0.8, 0.2, 0.5, 0.1, 0.9, 0.4, 0.7, 0.3];
+    const seeded = () => {
+      let index = 0;
+      return () => sequence[index++ % sequence.length];
+    };
+
+    expect(createReviewRound(settings, [], seeded())).toEqual(
+      createReviewRound(settings, [], seeded()),
+    );
+    expect(createReviewRound(settings, [], () => 0)).toHaveLength(5);
   });
 });

@@ -14,6 +14,15 @@ const messages = Object.freeze({
     'Vilken fin stavning! Du klarade rundan!',
     'Toppen! Du klarade hela rundan!',
   ]),
+  superRoundHeading: 'Superrunda!',
+  superRoundIntroSpeeches: Object.freeze([
+    'Superrunda! Är du redo?',
+    'Det är en superrunda! Nu kör vi!',
+  ]),
+  superRoundCountdownOne: 'En runda kvar till superrundan!',
+  superRoundCountdownMany: '{count} rundor till superrundan',
+  superRoundDone: 'Superrundan är klar — vilken stjärna!',
+  newShinyStickerLine: 'Ett glänsande klistermärke till din bok!',
   tryAgain: 'Försök en gång till',
   wordFinished: 'Helt rätt!',
   wordFinishedSpeeches: Object.freeze([
