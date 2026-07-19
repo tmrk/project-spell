@@ -423,20 +423,22 @@ input:focus-visible {
 }
 
 // Dealt out from where the Play slab stood: each card slides out to its own side, rises, and
-// settles into its tilt a beat after the other. Not `forwards` — once it lands the card is back
-// on its normal transform, so hover and press behave as if it had always been there.
+// settles into its tilt a beat after the other.
+//
+// The stagger is held inside the keyframes rather than set with `animation-delay`, and no fill
+// mode is used, so the card's own styles are what shows whenever the animation is not actually
+// running. Delay plus `backwards` would pin a card at opacity 0 until something resumed it.
 .mode-cards--revealed .mode-card {
-  animation: mode-card-deal 340ms cubic-bezier(0.22, 1.4, 0.36, 1) backwards;
+  animation: mode-card-deal 460ms cubic-bezier(0.22, 1.4, 0.36, 1);
 }
 
 .mode-cards--revealed .mode-card--easy {
   --deal-shift: 18px;
-  animation-delay: 30ms;
 }
 
 .mode-cards--revealed .mode-card--normal {
   --deal-shift: -18px;
-  animation-delay: 110ms;
+  animation-name: mode-card-deal-late;
 }
 
 .mode-card:hover,
@@ -1072,7 +1074,9 @@ input:focus-visible {
   animation: play-button-wiggle 5.8s ease-in-out infinite;
 }
 
-.welcome-play-button:active {
+// Excluding the leaving slab is load-bearing: `:active` outranks the single-class rule below,
+// and a touch that is still down when the hand-off starts would otherwise cancel the fade.
+.welcome-play-button:active:not(.welcome-play-button--leaving) {
   animation: none;
   transform: translateY(8px);
   box-shadow: 0 5px 0 var(--ps-grass-shade);
@@ -1082,7 +1086,7 @@ input:focus-visible {
 // swap reads as one object becoming two rather than a panel being replaced.
 .welcome-play-button--leaving {
   pointer-events: none;
-  animation: play-button-handoff 200ms ease-in both;
+  animation: play-button-handoff 180ms ease-in both;
 }
 
 .primary-button--small {
@@ -1092,26 +1096,6 @@ input:focus-visible {
   border-radius: 14px;
   box-shadow: 0 5px 0 var(--ps-grass-shade);
   font-size: 0.96rem;
-}
-
-.welcome-play-button {
-  width: min(520px, 88vw);
-  min-height: clamp(124px, 18vw, 170px);
-  padding: 18px 42px;
-  border-radius: 34px;
-  box-shadow: 0 14px 0 var(--ps-grass-shade);
-  font-size: clamp(3.5rem, 9vw, 6.5rem);
-  letter-spacing: 0.015em;
-  line-height: 1;
-  text-transform: uppercase;
-  transform-origin: 50% 80%;
-  animation: play-button-wiggle 5.8s ease-in-out infinite;
-}
-
-.welcome-play-button:active {
-  animation: none;
-  transform: translateY(8px);
-  box-shadow: 0 5px 0 var(--ps-grass-shade);
 }
 
 .play-screen {
@@ -2614,13 +2598,25 @@ input:focus-visible {
 }
 
 // Starts square-on and lands on the card's own tilt, so the pair settles like two cut-outs
-// dropped onto the table rather than sliding into a layout.
+// dropped onto the table rather than sliding into a layout. The flat opening stretch is the
+// wait for the slab to clear; the second card simply waits longer.
 @keyframes mode-card-deal {
-  from {
+  0%, 26% {
     opacity: 0;
     transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
   }
-  to {
+  100% {
+    opacity: 1;
+    transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
+  }
+}
+
+@keyframes mode-card-deal-late {
+  0%, 43% {
+    opacity: 0;
+    transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
+  }
+  100% {
     opacity: 1;
     transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
   }

@@ -1284,6 +1284,22 @@ describe('Project Spell', () => {
       expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
     });
 
+    it('lands the cards in their resting state even if the deal-in never plays', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      revealModes();
+
+      const cards = document.querySelector('.mode-cards');
+      expect(cards).toHaveClass('mode-cards--revealed');
+
+      // The entrance must not be load-bearing. A browser that paused the animation part-way
+      // would leave the cards on the opening keyframe — invisible but still clickable — so the
+      // animation comes off on a timer rather than on the animation finishing.
+      act(() => vi.advanceTimersByTime(600));
+      expect(cards).not.toHaveClass('mode-cards--revealed');
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    });
+
     it('skips the hand-off animation when the child has asked for reduced motion', () => {
       window.matchMedia.mockImplementation((query) => ({
         matches: query === '(prefers-reduced-motion: reduce)',

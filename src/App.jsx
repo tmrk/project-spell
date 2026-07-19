@@ -93,8 +93,10 @@ const WORD_COMPLETION_PAUSE = 760;
 const ADAPTIVE_MIN_ATTEMPTS = 20;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
-// Matches the Play slab's exit animation in `App.scss`; change both together.
-const MODE_REVEAL_MS = 200;
+// Comfortably longer than the Play slab's 180ms exit in `App.scss`. The headroom matters: at
+// exactly the animation's length, ordinary timer jitter drops the slab while it is still
+// faintly visible and it reads as a pop rather than a fade.
+const MODE_REVEAL_MS = 260;
 const MUSIC_VOLUME = 0.12;
 const MUSIC_DUCKED_VOLUME = 0.05;
 const TRACKS = Object.freeze([townThemeMusic, bgMusic2, bgMusic3]);

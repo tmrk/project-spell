@@ -1,5 +1,14 @@
+import { useEffect, useState } from 'react';
 import TileEyes from './TileEyes';
 import { CLOUD_PATH } from './Scenery';
+
+// A little past the deal-in animation in `App.scss`. When it elapses the animation is taken off
+// the cards entirely, which is what makes the entrance non-load-bearing: a browser that paused
+// the animation part-way (a backgrounded tab is the common one) would otherwise leave the cards
+// pinned at the opening keyframe — invisible, but still clickable. Timers fire in background
+// tabs where animation frames do not, so this always lands the pair in its resting, visible
+// state whether or not the animation ever got to play.
+const DEAL_MS = 520;
 
 // The letters lean alternately on one baseline, exactly like the wordmark: cut out and
 // pinned up by hand rather than set as type.
@@ -54,8 +63,16 @@ function SkyCloud() {
  * deal-in animation. Rendering without it (a test, a future screen) simply shows the cards.
  */
 export default function ModeCards({ labels, onPlay, showEyes = true, revealed = false }) {
+  const [dealing, setDealing] = useState(revealed);
+
+  useEffect(() => {
+    if (!revealed) return undefined;
+    const timer = window.setTimeout(() => setDealing(false), DEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [revealed]);
+
   return (
-    <div className={`mode-cards${revealed ? ' mode-cards--revealed' : ''}`}>
+    <div className={`mode-cards${dealing ? ' mode-cards--revealed' : ''}`}>
       <button
         type="button"
         className="mode-card mode-card--easy"
