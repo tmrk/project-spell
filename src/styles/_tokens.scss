@@ -26,3 +26,19 @@
   --ps-flash-success: #3fd67f;
   --ps-flash-error: #ff6a5c;
 }
+
+// Alternative grounds (roadmap G8.7), chosen per child. Only the three ground tokens move —
+// paper, ink, grass, gold and the whole letter wheel stay put, so the brand identity (D-006)
+// holds and every letter colour keeps its separation from the background. Each option is a
+// desaturated warm tint well clear of the saturated wheel colours it has to sit behind.
+.app[data-palette="peach"] {
+  --ps-sun: #ffc9a4;
+  --ps-sun-deep: #f2a877;
+  --ps-cloud: #ffdcc4;
+}
+
+.app[data-palette="mint"] {
+  --ps-sun: #b6e3cd;
+  --ps-sun-deep: #8fceaf;
+  --ps-cloud: #d3efe1;
+}

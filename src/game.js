@@ -27,7 +27,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   eyes: true,
   acceptUnaccented: false,
   adaptivePractice: true,
+  palette: 'sunshine',
 });
+
+// Alternative warm grounds (roadmap G8.7). Adding one means adding a matching
+// `.app[data-palette="…"]` block in `src/styles/_tokens.scss`.
+export const PALETTES = Object.freeze(['sunshine', 'peach', 'mint']);
 
 export const PRESETS = Object.freeze({
   starter: {
@@ -234,6 +239,7 @@ export function normaliseSettings(value = {}) {
       typeof value.adaptivePractice === 'boolean'
         ? value.adaptivePractice
         : DEFAULT_SETTINGS.adaptivePractice,
+    palette: PALETTES.includes(value.palette) ? value.palette : DEFAULT_SETTINGS.palette,
   };
 }
 

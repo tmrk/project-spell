@@ -1088,6 +1088,19 @@ describe('Project Spell', () => {
     expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/fanfare.mp3'))).toHaveLength(1);
   });
 
+  describe('background palette', () => {
+    it('paints the chosen ground and keeps it per child', () => {
+      render(<App />);
+      expect(document.querySelector('.app')).toHaveAttribute('data-palette', 'sunshine');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Mint' }));
+
+      expect(document.querySelector('.app')).toHaveAttribute('data-palette', 'mint');
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).palette).toBe('mint');
+    });
+  });
+
   describe('child-facing mode picker', () => {
     it('switches game mode from the welcome screen and keeps it for that child', () => {
       render(<App />);

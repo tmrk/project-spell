@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CloseIcon } from './Icons';
 import NameTag from './NameTag';
 import { MAX_PROFILES, getActiveProfile } from '../profiles';
-import { DEFAULT_SETTINGS, PRESETS, getEligibleWords, normaliseSettings } from '../game';
+import { DEFAULT_SETTINGS, PALETTES, PRESETS, getEligibleWords, normaliseSettings } from '../game';
 import { buildLetterHeatMap, createEmptyStats, topConfusions, trickiestLetters } from '../stats';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
 import { CREDITS } from '../credits';
@@ -11,6 +11,11 @@ import packageInfo from '../../package.json';
 const EMPTY_STATS = createEmptyStats();
 const NUMBER_OPTIONS = Array.from({ length: 13 }, (_, index) => index + 2);
 const ROUND_OPTIONS = [3, 5, 8, 10, 12, 15, 20];
+const PALETTE_MESSAGE_KEYS = Object.freeze({
+  sunshine: 'paletteSunshine',
+  peach: 'palettePeach',
+  mint: 'paletteMint',
+});
 const PRESET_MESSAGE_KEYS = Object.freeze({
   starter: ['presetStarterLabel', 'presetStarterDescription'],
   explorer: ['presetExplorerLabel', 'presetExplorerDescription'],
@@ -531,6 +536,25 @@ export default function SettingsPanel({
             <SwitchRow checked={settings.soundEffects} label={copy.soundEffects} onChange={(soundEffects) => applyChange({ soundEffects })} />
             <SwitchRow checked={settings.music} label={copy.backgroundMusic} onChange={(music) => applyChange({ music })} />
             <SwitchRow checked={settings.eyes} label={copy.cartoonEyes} onChange={(eyes) => applyChange({ eyes })} />
+
+            <div className="palette-field">
+              <span className="palette-field__label">{copy.background}</span>
+              <div className="palette-swatches" role="radiogroup" aria-label={copy.background}>
+                {PALETTES.map((palette) => (
+                  <button
+                    type="button"
+                    key={palette}
+                    className={`palette-swatch palette-swatch--${palette}${
+                      settings.palette === palette ? ' palette-swatch--active' : ''
+                    }`}
+                    role="radio"
+                    aria-checked={settings.palette === palette}
+                    aria-label={copy[PALETTE_MESSAGE_KEYS[palette]]}
+                    onClick={() => applyChange({ palette })}
+                  />
+                ))}
+              </div>
+            </div>
           </fieldset>
 
           <fieldset className="settings-group settings-group--compact">

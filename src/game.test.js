@@ -11,6 +11,7 @@ import {
   lettersMatch,
   normaliseSettings,
   parseCustomWords,
+  PALETTES,
 } from './game';
 import { LOCALES, detectDefaultLocale } from './locales';
 
@@ -387,5 +388,19 @@ describe('adaptive rounds', () => {
 
     expect(counts.size).toBe(6);
     expect(Math.max(...totals) - Math.min(...totals)).toBeLessThan(Math.min(...totals) * 0.25);
+  });
+});
+
+describe('background palette', () => {
+  it('defaults to sunshine and accepts only known palettes', () => {
+    expect(DEFAULT_SETTINGS.palette).toBe('sunshine');
+    expect(PALETTES).toContain('sunshine');
+
+    PALETTES.forEach((palette) => {
+      expect(normaliseSettings({ palette }).palette).toBe(palette);
+    });
+    expect(normaliseSettings({ palette: 'neon' }).palette).toBe('sunshine');
+    expect(normaliseSettings({ palette: 42 }).palette).toBe('sunshine');
+    expect(normaliseSettings({}).palette).toBe('sunshine');
   });
 });

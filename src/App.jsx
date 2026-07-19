@@ -1351,6 +1351,7 @@ export default function App() {
       ref={appRef}
       className="app"
       data-feedback={feedback}
+      data-palette={settings.palette}
       data-phase={phase}
       data-round={roundKind}
     >
