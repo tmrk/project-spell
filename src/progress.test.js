@@ -6,6 +6,7 @@ import {
   addShinySticker,
   addSticker,
   addStars,
+  celebratePages,
   createEmptyProgress,
   isSuperRoundNext,
   newBadges,
@@ -24,6 +25,7 @@ describe('progress store', () => {
       stickers: [],
       shinyStickers: [],
       badges: [],
+      lastCelebratedPages: [],
       roundsTowardSuper: 0,
     });
   });
@@ -40,6 +42,7 @@ describe('progress store', () => {
         stickers: ['cat', ' cat ', '', 7, 'cat'],
         shinyStickers: ['1f451', ' 1f451 ', null],
         badges: ['starter', null],
+        lastCelebratedPages: ['animals', ' animals ', null],
         roundsTowardSuper: 20,
         unknown: true,
       }),
@@ -49,6 +52,7 @@ describe('progress store', () => {
       stickers: ['cat'],
       shinyStickers: ['1f451'],
       badges: ['starter'],
+      lastCelebratedPages: ['animals'],
       roundsTowardSuper: 3,
     });
   });
@@ -141,5 +145,14 @@ describe('progress store', () => {
     ]);
     expect(newBadges(addBadges(progress, ['first-round']), stats, { stars: 2, mode: 'easy' }))
       .toEqual(['words-50']);
+  });
+
+  it('records each completed book page celebration once', () => {
+    const original = createEmptyProgress();
+    const celebrated = celebratePages(original, ['animals', 'animals']);
+
+    expect(celebrated.lastCelebratedPages).toEqual(['animals']);
+    expect(celebratePages(celebrated, ['animals'])).toEqual(celebrated);
+    expect(original.lastCelebratedPages).toEqual([]);
   });
 });

@@ -66,3 +66,11 @@ export function StickerIcon() {
     </svg>
   );
 }
+
+export function ChevronIcon({ direction = 'next' }) {
+  return (
+    <svg {...sharedProps}>
+      <path d={direction === 'previous' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} />
+    </svg>
+  );
+}

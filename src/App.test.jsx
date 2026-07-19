@@ -5,6 +5,7 @@ import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
 import { PROGRESS_KEY } from './progress';
 import { STATS_KEY } from './stats';
+import { STICKER_MAP, STICKER_THEMES } from './stickers/map';
 
 describe('Project Spell', () => {
   beforeEach(() => {
@@ -833,13 +834,20 @@ describe('Project Spell', () => {
   it('opens the sticker book from the welcome screen and closes it with Escape', () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+    const bookTab = screen.getByRole('button', { name: 'Open sticker book' });
+    expect(bookTab).toHaveClass('book-tab');
+    fireEvent.click(bookTab);
     const book = screen.getByRole('dialog', { name: 'My sticker book' });
     expect(book).toBeInTheDocument();
-    expect(within(book).getByText('0 stickers')).toBeInTheDocument();
+    expect(within(book).getByText('Animals · 0 stickers')).toBeInTheDocument();
+    expect(book.querySelectorAll('.sticker-card--silhouette')).toHaveLength(4);
+    expect(book.querySelector('.sticker-card--silhouette button')).not.toBeInTheDocument();
 
     fireEvent.keyDown(book, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'My sticker book' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(screen.queryByRole('button', { name: 'Open sticker book' })).not.toBeInTheDocument();
   });
 
   it('awards one round sticker, earns quiet badges, and speaks stickers from the book', () => {
@@ -880,10 +888,42 @@ describe('Project Spell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
     const book = screen.getByRole('dialog', { name: 'My sticker book' });
-    expect(within(book).getByText('1 stickers')).toBeInTheDocument();
+    expect(within(book).getByText('Animals · 1 stickers')).toBeInTheDocument();
     fireEvent.click(within(book).getByRole('button', { name: 'cat' }));
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('cat');
     expect(within(book).getByText('First round')).toBeInTheDocument();
+  });
+
+  it('celebrates a completed sticker page only on its first opening', () => {
+    const animalCodepoints = new Set(STICKER_THEMES.animals);
+    const seen = new Set();
+    const animalStickers = Object.entries(STICKER_MAP['en-GB']).flatMap(([word, codepoint]) => {
+      if (!animalCodepoints.has(codepoint) || seen.has(codepoint)) return [];
+      seen.add(codepoint);
+      return [`en-GB/${word}`];
+    });
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+      version: 1,
+      totalStars: 0,
+      stickers: animalStickers,
+      shinyStickers: [],
+      badges: [],
+      roundsTowardSuper: 0,
+      lastCelebratedPages: [],
+    }));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+
+    expect(document.querySelector('.sticker-book__page')).toHaveClass('sticker-book__page--party');
+    expect(document.querySelectorAll('.sticker-book__confetti span')).toHaveLength(12);
+    expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).lastCelebratedPages)
+      .toContain('animals');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close sticker book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+    expect(document.querySelector('.sticker-book__page')).not.toHaveClass('sticker-book__page--party');
+    expect(document.querySelector('.sticker-book__confetti')).not.toBeInTheDocument();
   });
 
   it('shows the app version and asset licences in the grown-ups About section', () => {

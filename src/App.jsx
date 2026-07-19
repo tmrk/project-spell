@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Letter from './components/Letter';
+import BookTab from './components/BookTab';
+import CelebrationConfetti from './components/CelebrationConfetti';
 import JourneyStrip from './components/JourneyStrip';
 import Scenery from './components/Scenery';
 import SettingsPanel from './components/SettingsPanel';
@@ -7,7 +9,7 @@ import StarJarChip from './components/StarJarChip';
 import StarTrail from './components/StarTrail';
 import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
 import Wordmark from './components/Wordmark';
-import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon, StickerIcon } from './components/Icons';
+import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
@@ -33,6 +35,7 @@ import {
   addShinySticker,
   addSticker,
   addStars,
+  celebratePages,
   createEmptyProgress,
   isSuperRoundNext,
   newBadges,
@@ -79,25 +82,6 @@ const emptyRoundReward = () => ({
   sticker: null,
   totalStars: 0,
 });
-
-const CONFETTI_PIECES = Object.freeze(
-  [
-    [-86, 84, 'var(--ps-grass)'],
-    [-62, 104, 'var(--ps-gold)'],
-    [-38, 90, 'var(--ps-coral)'],
-    [-14, 114, '#ffffff'],
-    [10, 98, 'var(--ps-grass)'],
-    [34, 110, 'var(--ps-gold)'],
-    [58, 92, 'var(--ps-coral)'],
-    [82, 112, '#ffffff'],
-    [118, 88, 'var(--ps-grass)'],
-    [150, 102, 'var(--ps-gold)'],
-    [210, 96, 'var(--ps-coral)'],
-    [242, 108, '#ffffff'],
-  ].map(([angle, distance, colour], index) =>
-    Object.freeze({ angle, distance, colour, delay: (index % 3) * 24 }),
-  ),
-);
 
 function pickVaried(list, lastIndexRef) {
   if (!Array.isArray(list) || list.length === 0) return '';
@@ -1104,6 +1088,13 @@ export default function App() {
     setStickerBookOpen(false);
   };
 
+  const celebrateBookPages = useCallback((pageIds) => {
+    progressRef.current = celebratePages(progressRef.current, pageIds);
+    setVisibleProgress(progressRef.current);
+    setStickerBookProgress(progressRef.current);
+    persistProgress();
+  }, [persistProgress]);
+
   const speakSticker = (word, stickerLocale) => {
     say(word, { locale: stickerLocale, rate: 0.78, pitch: 1.04 });
   };
@@ -1182,6 +1173,16 @@ export default function App() {
     : roundsRemaining === 1
       ? copy.superRoundCountdownOne
       : formatMessage(copy.superRoundCountdownMany, { count: roundsRemaining });
+  const mostRecentSticker = phase === 'complete'
+    ? roundReward.sticker ?? (roundReward.shiny
+      ? { codepoint: roundReward.shiny, id: `shiny/${roundReward.shiny}` }
+      : null)
+    : getStickerDetails(visibleProgress.stickers.at(-1)) ?? (visibleProgress.shinyStickers.at(-1)
+      ? {
+          codepoint: visibleProgress.shinyStickers.at(-1),
+          id: `shiny/${visibleProgress.shinyStickers.at(-1)}`,
+        }
+      : null);
 
   return (
     <div
@@ -1213,16 +1214,6 @@ export default function App() {
             <RepeatIcon />
           </button>
         )}
-        {(phase === 'welcome' || phase === 'complete') && (
-          <button
-            type="button"
-            className="icon-button"
-            onClick={openStickerBook}
-            aria-label={copy.openStickerBook}
-          >
-            <StickerIcon />
-          </button>
-        )}
         <button
           type="button"
           className="icon-button"
@@ -1235,6 +1226,14 @@ export default function App() {
           <SettingsIcon />
         </button>
       </header>
+      {(phase === 'welcome' || phase === 'complete') && (
+        <BookTab
+          ariaLabel={copy.openStickerBook}
+          bounce={phase === 'complete' && Boolean(roundReward.sticker || roundReward.shiny)}
+          onClick={openStickerBook}
+          recentSticker={mostRecentSticker}
+        />
+      )}
 
       {phase === 'welcome' && (
         <main className="welcome-screen">
@@ -1309,24 +1308,7 @@ export default function App() {
               />
             ))}
             {confettiVisible && (
-              <div
-                className="confetti"
-                aria-hidden="true"
-                onAnimationEnd={() => setConfettiVisible(false)}
-              >
-                {CONFETTI_PIECES.map((piece, index) => (
-                  <span
-                    key={`${piece.angle}-${index}`}
-                    style={{
-                      '--confetti-angle': `${piece.angle}deg`,
-                      '--confetti-distance': `${piece.distance}px`,
-                      '--confetti-colour': piece.colour,
-                      '--confetti-delay': `${piece.delay}ms`,
-                      '--confetti-spin': `${240 + index * 37}deg`,
-                    }}
-                  />
-                ))}
-              </div>
+              <CelebrationConfetti onAnimationEnd={() => setConfettiVisible(false)} />
             )}
             {heartBurstId > 0 && (
               <div
@@ -1402,7 +1384,7 @@ export default function App() {
           />
           {roundReward.sticker && (
             <div className="round-sticker-award">
-              <StickerPicture codepoint={roundReward.sticker.codepoint} />
+              <StickerPicture codepoint={roundReward.sticker.codepoint} className="die-cut" />
               <p>{copy.newStickerLine}</p>
               <strong>{roundReward.sticker.word}</strong>
             </div>
@@ -1410,7 +1392,7 @@ export default function App() {
           {roundReward.shiny && (
             <div className="round-sticker-award round-sticker-award--shiny">
               <span className="shiny-gift" aria-hidden="true">🎁</span>
-              <StickerPicture codepoint={roundReward.shiny} className="shiny" />
+              <StickerPicture codepoint={roundReward.shiny} className="die-cut shiny" />
               <p>{copy.newShinyStickerLine}</p>
             </div>
           )}
@@ -1445,7 +1427,10 @@ export default function App() {
       {stickerBookOpen && (
         <StickerBook
           copy={copy}
+          croc={croc}
+          locale={settings.locale}
           progress={stickerBookProgress}
+          onCelebratePages={celebrateBookPages}
           onClose={closeStickerBook}
           onSpeak={speakSticker}
         />

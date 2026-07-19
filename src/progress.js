@@ -22,6 +22,7 @@ export function createEmptyProgress() {
     stickers: [],
     shinyStickers: [],
     badges: [],
+    lastCelebratedPages: [],
     roundsTowardSuper: 0,
   };
 }
@@ -35,6 +36,7 @@ export function normaliseProgress(value) {
     stickers: normaliseIds(value.stickers),
     shinyStickers: normaliseIds(value.shinyStickers),
     badges: normaliseIds(value.badges),
+    lastCelebratedPages: normaliseIds(value.lastCelebratedPages),
     roundsTowardSuper: asCyclePosition(value.roundsTowardSuper),
   };
 }
@@ -118,4 +120,12 @@ export function addBadges(progress, ids) {
   const current = normaliseProgress(progress);
   const next = normaliseIds(ids).filter((id) => !current.badges.includes(id));
   return next.length ? { ...current, badges: [...current.badges, ...next] } : current;
+}
+
+export function celebratePages(progress, pageIds) {
+  const current = normaliseProgress(progress);
+  const next = normaliseIds(pageIds).filter((id) => !current.lastCelebratedPages.includes(id));
+  return next.length
+    ? { ...current, lastCelebratedPages: [...current.lastCelebratedPages, ...next] }
+    : current;
 }

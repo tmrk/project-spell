@@ -326,6 +326,47 @@ export const STICKER_CODEPOINTS = Object.freeze(
   ].sort(),
 );
 
+const ANIMAL_CODEPOINTS = Object.freeze([
+  '1f40a', '1f40b', '1f40c', '1f40d', '1f404', '1f407', '1f409', '1f410',
+  '1f411', '1f412', '1f414', '1f418', '1f419', '1f41c', '1f41d', '1f41e',
+  '1f41f', '1f422', '1f426', '1f427', '1f428', '1f42b', '1f42c', '1f42d',
+  '1f42f', '1f431', '1f434', '1f436', '1f437', '1f438', '1f439', '1f43a',
+  '1f43b', '1f43c', '1f43f', '1f440', '1f47b', '1f47d', '1f480', '1f577',
+  '1f981', '1f984', '1f985', '1f986', '1f987', '1f989', '1f98a', '1f98b',
+  '1f98d', '1f98e', '1f98f', '1f990', '1f992', '1f993', '1f994', '1f996',
+  '1f998', '1f99b', '1f99c', '1f99e', '1f99f', '1f9a2', '1f9a5', '1f9a9',
+  '1f9ab', '1f9b4', '1f9dc', '1f9e7',
+]);
+
+const FOOD_CODEPOINTS = Object.freeze([
+  '1f345', '1f347', '1f348', '1f349', '1f34a', '1f34b', '1f34c', '1f34d',
+  '1f34e', '1f352', '1f353', '1f354', '1f355', '1f35d', '1f35e', '1f366',
+  '1f369', '1f36a', '1f36f', '1f370', '1f33d', '1f374', '1f37d', '1f52a',
+  '1f944', '1f952', '1f954', '1f955', '1f95a', '1f95b', '1f95e', '1f964',
+  '1f966', '1f96c', '1f9c0', '1f9c1', '2615',
+]);
+
+const animalSet = new Set(ANIMAL_CODEPOINTS);
+const foodSet = new Set(FOOD_CODEPOINTS);
+
+export const STICKER_THEMES = Object.freeze({
+  animals: Object.freeze(STICKER_CODEPOINTS.filter((codepoint) => animalSet.has(codepoint))),
+  food: Object.freeze(STICKER_CODEPOINTS.filter((codepoint) => foodSet.has(codepoint))),
+  things: Object.freeze(
+    STICKER_CODEPOINTS.filter((codepoint) => !animalSet.has(codepoint) && !foodSet.has(codepoint)),
+  ),
+});
+
+export function getThemeFor(codepoint) {
+  if (animalSet.has(codepoint)) return 'animals';
+  if (foodSet.has(codepoint)) return 'food';
+  return 'things';
+}
+
+export function hashCode(value) {
+  return [...String(value ?? '')].reduce((sum, character) => sum + character.codePointAt(0), 0);
+}
+
 export function getStickerFor(word, locale) {
   if (typeof word !== 'string' || !STICKER_MAP[locale]) return null;
   const normalisedWord = word.trim().normalize('NFC').toLocaleLowerCase(locale);
@@ -340,4 +381,71 @@ export function getStickerDetails(id) {
   const word = id.slice(separator + 1);
   const codepoint = getStickerFor(word, locale);
   return codepoint ? { codepoint, id: `${locale}/${word}`, locale, word } : null;
+}
+
+function localeCandidates(locale) {
+  const safeLocale = STICKER_MAP[locale] ? locale : 'en-GB';
+  const seen = new Set();
+  return Object.entries(STICKER_MAP[safeLocale]).flatMap(([word, codepoint]) => {
+    if (!codepoint || seen.has(codepoint)) return [];
+    seen.add(codepoint);
+    return [{ codepoint, id: `${safeLocale}/${word}`, locale: safeLocale, owned: false, word }];
+  });
+}
+
+export function buildBookPages(progress, locale = 'en-GB') {
+  const stickerIds = Array.isArray(progress?.stickers) ? progress.stickers : [];
+  const ownedStickers = stickerIds.map(getStickerDetails).filter(Boolean);
+  const ownedCodepoints = new Set(ownedStickers.map(({ codepoint }) => codepoint));
+  const candidates = localeCandidates(locale);
+  const candidatesByTheme = Object.fromEntries(
+    Object.keys(STICKER_THEMES).map((theme) => [
+      theme,
+      candidates.filter(({ codepoint }) => getThemeFor(codepoint) === theme),
+    ]),
+  );
+  const ownedByTheme = Object.fromEntries(
+    Object.keys(STICKER_THEMES).map((theme) => [
+      theme,
+      ownedStickers
+        .filter(({ codepoint }) => getThemeFor(codepoint) === theme)
+        .map((sticker) => ({ ...sticker, owned: true })),
+    ]),
+  );
+  const firstIncompleteTheme = Object.keys(STICKER_THEMES).find((theme) =>
+    candidatesByTheme[theme].some(({ codepoint }) => !ownedCodepoints.has(codepoint)),
+  );
+
+  const pages = Object.keys(STICKER_THEMES).flatMap((theme) => {
+    const owned = ownedByTheme[theme];
+    if (!owned.length && theme !== firstIncompleteTheme) return [];
+    const missing = theme === firstIncompleteTheme
+      ? candidatesByTheme[theme]
+          .filter(({ codepoint }) => !ownedCodepoints.has(codepoint))
+          .slice(0, 4)
+      : [];
+    const complete = candidatesByTheme[theme].length > 0 &&
+      candidatesByTheme[theme].every(({ codepoint }) => ownedCodepoints.has(codepoint));
+    return [{ id: theme, complete, stickers: [...owned, ...missing] }];
+  });
+
+  const shinyStickers = Array.isArray(progress?.shinyStickers)
+    ? [...new Set(progress.shinyStickers.filter((codepoint) => typeof codepoint === 'string'))]
+    : [];
+  if (shinyStickers.length) {
+    pages.push({
+      id: 'shiny',
+      complete: SHINY_STICKER_SEQUENCE.every((codepoint) => shinyStickers.includes(codepoint)),
+      stickers: shinyStickers.map((codepoint) => ({
+        codepoint,
+        id: `shiny/${codepoint}`,
+        locale: null,
+        owned: true,
+        shiny: true,
+        word: '',
+      })),
+    });
+  }
+
+  return pages.length ? pages : [{ id: 'things', complete: false, stickers: [] }];
 }
