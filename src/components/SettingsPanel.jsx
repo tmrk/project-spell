@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CloseIcon } from './Icons';
+import NameTag from './NameTag';
+import { MAX_PROFILES, getActiveProfile } from '../profiles';
 import { DEFAULT_SETTINGS, PRESETS, getEligibleWords, normaliseSettings } from '../game';
 import { createEmptyStats, trickiestLetters } from '../stats';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
@@ -109,6 +111,53 @@ function ClearProgressDialog({ copy, onCancel, onConfirm }) {
   );
 }
 
+function DeleteProfileDialog({ copy, name, onCancel, onConfirm }) {
+  const cancelButtonRef = useRef(null);
+
+  useEffect(() => {
+    // Focus the safe choice: deleting takes a child's stars with it.
+    cancelButtonRef.current?.focus();
+  }, []);
+
+  return (
+    <div
+      className="confirmation-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <section
+        className="confirmation-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-profile-title"
+        aria-describedby="delete-profile-warning"
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onCancel();
+        }}
+      >
+        <h3 id="delete-profile-title">{formatMessage(copy.deleteProfileTitle, { name })}</h3>
+        <p id="delete-profile-warning">{formatMessage(copy.deleteProfileWarning, { name })}</p>
+        <div className="confirmation-dialog__actions">
+          <button ref={cancelButtonRef} type="button" className="text-button" onClick={onCancel}>
+            {copy.cancelName}
+          </button>
+          <button
+            type="button"
+            className="primary-button primary-button--small primary-button--danger"
+            onClick={onConfirm}
+          >
+            {copy.deleteProfileConfirm}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SwitchRow({ checked, label, onChange }) {
   return (
     <label className="toggle-row">
@@ -122,14 +171,20 @@ export default function SettingsPanel({
   settings,
   stats = null,
   progress = null,
+  profiles = null,
   onChange,
   onClose,
   onEraseProgress,
   onLocaleChange,
+  onAddProfile,
+  onDeleteProfile,
+  onRenameProfile,
+  onSelectProfile,
 }) {
   const [customWords, setCustomWords] = useState(settings.customWords);
   const [pendingLocale, setPendingLocale] = useState(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [savedVisible, setSavedVisible] = useState(false);
   const closeButtonRef = useRef(null);
   const languageSelectRef = useRef(null);
@@ -144,6 +199,8 @@ export default function SettingsPanel({
   const statsData = stats ?? EMPTY_STATS;
   const hasPlayData = statsData.totals.attempts > 0 || statsData.totals.wordsCompleted > 0;
   const trickyLetters = trickiestLetters(statsData);
+  const activeProfile = profiles ? getActiveProfile(profiles) : null;
+  const profileList = profiles?.profiles.filter((profile) => profile.name) ?? [];
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -229,7 +286,9 @@ export default function SettingsPanel({
         aria-labelledby="settings-title"
         onPointerDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !pendingLocale && !confirmingClear) closePanel();
+          if (event.key === 'Escape' && !pendingLocale && !confirmingClear && !pendingDelete) {
+            closePanel();
+          }
         }}
       >
         <header className="settings-panel__header">
@@ -253,6 +312,53 @@ export default function SettingsPanel({
         </header>
 
         <div className="settings-panel__body">
+          {profiles && (
+            <fieldset className="settings-group settings-group--compact">
+              <legend>{copy.groupProfiles}</legend>
+              <ul className="profile-list">
+                {profileList.map((profile) => (
+                  <li
+                    key={profile.id}
+                    className={`profile-row${profile.id === activeProfile?.id ? ' profile-row--active' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="profile-row__name"
+                      aria-pressed={profile.id === activeProfile?.id}
+                      aria-label={formatMessage(copy.switchProfile, { name: profile.name })}
+                      onClick={() => onSelectProfile?.(profile.id)}
+                    >
+                      <NameTag name={profile.name} showEyes={settings.eyes} size="chip" />
+                    </button>
+                    <span className="profile-row__actions">
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => onRenameProfile?.(profile.id)}
+                      >
+                        {copy.renameProfile}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button text-button--danger"
+                        onClick={() => setPendingDelete(profile)}
+                        // The last remaining child has nowhere to go if they are deleted.
+                        disabled={profileList.length < 2}
+                      >
+                        {copy.deleteProfile}
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {profiles.profiles.length < MAX_PROFILES && (
+                <button type="button" className="text-button" onClick={() => onAddProfile?.()}>
+                  {copy.addProfile}
+                </button>
+              )}
+            </fieldset>
+          )}
+
           <fieldset className="settings-group">
             <legend>{copy.groupGame}</legend>
             <label className="stacked-field">
@@ -427,6 +533,12 @@ export default function SettingsPanel({
 
           <fieldset className="settings-group settings-group--compact">
             <legend>{copy.groupProgress}</legend>
+            {activeProfile?.name && (
+              // Downloading and clearing act on one child only — say which one.
+              <p className="profile-data-note">
+                {formatMessage(copy.profileDataNote, { name: activeProfile.name })}
+              </p>
+            )}
             {hasPlayData ? (
               <ul className="progress-summary">
                 <li>{formatMessage(copy.progressWordsPractised, { count: statsData.totals.wordsCompleted })}</li>
@@ -500,6 +612,18 @@ export default function SettingsPanel({
           copy={copy}
           onCancel={() => setConfirmingClear(false)}
           onConfirm={confirmClearProgress}
+        />
+      )}
+
+      {pendingDelete && (
+        <DeleteProfileDialog
+          copy={copy}
+          name={pendingDelete.name}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            onDeleteProfile?.(pendingDelete.id);
+            setPendingDelete(null);
+          }}
         />
       )}
     </div>

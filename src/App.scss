@@ -222,6 +222,177 @@ input:focus-visible {
 .wordmark__tile--c3 { --lc: var(--ps-sunflower); --lcs: var(--ps-sunflower-shade); }
 .wordmark__tile--c4 { --lc: var(--ps-berry); --lcs: var(--ps-berry-shade); }
 
+// A child's name is written in the same letters they spell with (D-012): wheel colours,
+// solid offset shadows, faces. No frame, no pill, no label — one flat object.
+.name-tag {
+  display: inline-flex;
+  align-items: baseline;
+  font-weight: 900;
+  // Matches .letter so the shared per-letter eye offsets resolve to the same spot.
+  line-height: 1;
+  gap: 0.035em;
+}
+
+.name-tag--chip {
+  font-size: clamp(1.35rem, 4.4vw, 1.85rem);
+}
+
+.name-tag--hud {
+  font-size: clamp(1.25rem, 4vw, 1.8rem);
+}
+
+.name-tag__gap {
+  width: 0.3em;
+}
+
+.name-tag__tile {
+  position: relative;
+  display: grid;
+  color: var(--lc);
+  text-shadow: 0 0.055em 0 var(--lcs);
+  place-items: center;
+  transform: rotate(var(--tile-tilt, 0deg)) translateY(var(--tile-lift, 0));
+}
+
+.name-tag__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.name-tag__tile--c0 { --lc: var(--ps-coral); --lcs: var(--ps-coral-shade); }
+.name-tag__tile--c1 { --lc: var(--ps-sky); --lcs: var(--ps-sky-shade); }
+.name-tag__tile--c2 { --lc: var(--ps-leaf); --lcs: var(--ps-leaf-shade); }
+.name-tag__tile--c3 { --lc: var(--ps-sunflower); --lcs: var(--ps-sunflower-shade); }
+.name-tag__tile--c4 { --lc: var(--ps-berry); --lcs: var(--ps-berry-shade); }
+
+// Mirrors the star-jar chip's corner on the welcome screen, so the play screen keeps one
+// object top-left and one cluster top-right — never two stacked indicators.
+.play-name {
+  position: fixed;
+  z-index: 10;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: min(46vw, 320px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.profile-picker {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: clamp(16px, 3vh, 28px);
+  gap: 10px;
+  justify-content: center;
+}
+
+.profile-chip {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.profile-chip--active {
+  border-color: var(--ps-grass);
+  background: var(--ps-paper);
+  box-shadow: 0 4px 0 rgba(32, 48, 43, 0.12);
+}
+
+.profile-chip:active {
+  transform: translateY(1px);
+}
+
+.profile-chip--add {
+  justify-content: center;
+  min-width: 52px;
+  color: var(--ps-ink-soft);
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.profile-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+  list-style: none;
+}
+
+.profile-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 6px;
+  border-radius: 14px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.profile-row--active {
+  background: rgba(32, 48, 43, 0.05);
+}
+
+.profile-row__name {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.profile-row__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.profile-data-note {
+  margin: 0 0 8px;
+  color: var(--ps-ink-soft);
+  font-size: 0.92rem;
+}
+
+// Watching your own name turn into game letters is the point of this dialog, so the preview
+// gets the space a headline would.
+.name-dialog__preview {
+  display: flex;
+  align-items: center;
+  min-height: 72px;
+  margin-bottom: 10px;
+  justify-content: center;
+}
+
+.name-dialog__preview .name-tag {
+  font-size: clamp(2rem, 7vw, 2.9rem);
+}
+
+.name-dialog .confirmation-dialog__actions {
+  margin-top: 18px;
+}
+
+.name-dialog .stacked-field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid rgba(32, 48, 43, 0.16);
+  border-radius: 14px;
+  color: var(--ps-ink);
+  background-color: rgba(255, 255, 255, 0.64);
+  font-size: 16px;
+  text-align: center;
+}
+
 .complete-screen h1 {
   margin: 0;
   color: var(--ps-ink);
@@ -1972,6 +2143,13 @@ input:focus-visible {
   .star-jar-chip {
     top: max(9px, env(safe-area-inset-top));
     left: max(9px, env(safe-area-inset-left));
+  }
+
+  .play-name {
+    top: max(9px, env(safe-area-inset-top));
+    left: max(9px, env(safe-area-inset-left));
+    // Three icon buttons hold the right-hand corner; a long name must not reach them.
+    max-width: 42vw;
   }
 
   .icon-button {

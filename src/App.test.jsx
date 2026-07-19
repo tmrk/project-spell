@@ -4,6 +4,7 @@ import packageInfo from '../package.json';
 import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
 import { PROGRESS_KEY } from './progress';
+import { PROFILES_KEY } from './profiles';
 import { STATS_KEY } from './stats';
 import { STICKER_MAP, STICKER_THEMES } from './stickers/map';
 
@@ -1085,5 +1086,120 @@ describe('Project Spell', () => {
 
     expect(playSpy.mock.contexts.some((audio) => audio.src.endsWith('/fanfare.mp3'))).toBe(true);
     expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/fanfare.mp3'))).toHaveLength(1);
+  });
+
+  describe('local profiles', () => {
+    const addProfile = (name) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add a name' }));
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: name } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    };
+
+    it('offers only an add tile until somebody types a name', () => {
+      render(<App />);
+
+      expect(screen.getByRole('button', { name: 'Add a name' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Play as/u })).not.toBeInTheDocument();
+      // Nothing to show at the top of the play screen for an unnamed player.
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      expect(document.querySelector('.play-name')).toBeNull();
+    });
+
+    it('shows the name in game letters at the top of the play screen', () => {
+      render(<App />);
+      addProfile('Anna');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      const nameTag = document.querySelector('.play-name');
+      expect(nameTag).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Anna' })).toBeInTheDocument();
+      expect([...nameTag.querySelectorAll('.name-tag__tile')].map((tile) => tile.textContent))
+        .toEqual(['A', 'n', 'n', 'a']);
+    });
+
+    it('adopts existing progress for the first name rather than stranding it', () => {
+      window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({ version: 1, totalStars: 12 }));
+      render(<App />);
+      expect(screen.getByLabelText('★ 12 stars in your jar')).toBeInTheDocument();
+
+      addProfile('Anna');
+
+      // Naming the anonymous slot must not reset the stars already earned on this device.
+      expect(screen.getByLabelText('★ 12 stars in your jar')).toBeInTheDocument();
+      expect(window.localStorage.getItem(PROFILES_KEY)).toContain('Anna');
+    });
+
+    it('gives a second child their own empty jar and leaves the first intact', () => {
+      window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({ version: 1, totalStars: 12 }));
+      render(<App />);
+      addProfile('Anna');
+      addProfile('Bo');
+
+      expect(screen.queryByLabelText('★ 12 stars in your jar')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Play as Bo' })).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Play as Anna' }));
+      expect(screen.getByLabelText('★ 12 stars in your jar')).toBeInTheDocument();
+      // Anna keeps the original un-suffixed keys; Bo is stored alongside, not over the top.
+      expect(window.localStorage.getItem(PROGRESS_KEY)).toContain('"totalStars":12');
+    });
+
+    it('keeps each child on their own settings', () => {
+      render(<App />);
+      addProfile('Anna');
+      addProfile('Bo');
+
+      // The language select relabels itself in the chosen language, so query it by role.
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sv-SE' } });
+      expect(screen.getByRole('combobox')).toHaveValue('sv-SE');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Spela som Anna' }));
+      expect(screen.getByRole('combobox')).toHaveValue('en-GB');
+    });
+
+    it('returns to the welcome screen when a child is switched mid-round', () => {
+      render(<App />);
+      addProfile('Anna');
+      addProfile('Bo');
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
+
+      // Chips are welcome-screen only; mid-round switching belongs to the grown-ups panel.
+      fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play as Anna' }));
+
+      expect(screen.queryByRole('textbox', { name: 'Type the next letter' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    });
+
+    it('refuses a name with no letters in it', () => {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add a name' }));
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: '123' } });
+
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    it('deletes a child and clears only their stored data', () => {
+      render(<App />);
+      addProfile('Anna');
+      addProfile('Bo');
+      const boKey = JSON.parse(window.localStorage.getItem(PROFILES_KEY)).activeId;
+      // Settings persist on every change; progress only once a round is finished.
+      expect(window.localStorage.getItem(`${SETTINGS_KEY}#${boKey}`)).not.toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+      // The welcome chips stay mounted behind the panel, so scope to the panel itself.
+      const panel = screen.getByRole('dialog');
+      const boRow = within(panel).getByRole('button', { name: 'Play as Bo' }).closest('.profile-row');
+      fireEvent.click(within(boRow).getByRole('button', { name: 'Delete' }));
+      const dialog = screen.getByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Delete Bo?');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+      expect(window.localStorage.getItem(`${SETTINGS_KEY}#${boKey}`)).toBeNull();
+      expect(window.localStorage.getItem(SETTINGS_KEY)).not.toBeNull();
+      expect(window.localStorage.getItem(PROFILES_KEY)).not.toContain('Bo');
+    });
   });
 });

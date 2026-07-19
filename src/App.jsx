@@ -3,6 +3,8 @@ import Letter from './components/Letter';
 import BookTab from './components/BookTab';
 import CelebrationConfetti from './components/CelebrationConfetti';
 import JourneyStrip from './components/JourneyStrip';
+import NameDialog from './components/NameDialog';
+import NameTag from './components/NameTag';
 import Scenery from './components/Scenery';
 import SettingsPanel from './components/SettingsPanel';
 import StarJarChip from './components/StarJarChip';
@@ -46,6 +48,18 @@ import {
   pickStickerAward,
   recordRoundInCycle,
 } from './progress';
+import {
+  MAX_PROFILES,
+  PROFILES_KEY,
+  createEmptyProfiles,
+  createProfile,
+  getActiveProfile,
+  normaliseProfiles,
+  profileStorageKey,
+  removeProfile,
+  renameProfile,
+  selectProfile,
+} from './profiles';
 import { getStickerDetails } from './stickers/map';
 import {
   LOCALE_OPTIONS,
@@ -111,11 +125,23 @@ function randomWordPraiseGap() {
   return Math.random() < 0.5 ? 2 : 3;
 }
 
-function loadSettings() {
+function loadProfiles() {
+  try {
+    const stored = window.localStorage.getItem(PROFILES_KEY);
+    return stored ? normaliseProfiles(JSON.parse(stored)) : createEmptyProfiles();
+  } catch {
+    return createEmptyProfiles();
+  }
+}
+
+// Every load and save below is scoped to one child (decision D-012). The first profile reads
+// and writes the original un-suffixed keys, so a child who played before profiles existed
+// simply keeps their stars.
+function loadSettings(profileId) {
   const detectedLocale = detectDefaultLocale();
 
   try {
-    const stored = window.localStorage.getItem(SETTINGS_KEY);
+    const stored = window.localStorage.getItem(profileStorageKey(SETTINGS_KEY, profileId));
     return stored
       ? normaliseSettings({ locale: detectedLocale, ...JSON.parse(stored) })
       : normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
@@ -124,22 +150,32 @@ function loadSettings() {
   }
 }
 
-function loadStats() {
+function loadStats(profileId) {
   try {
-    const stored = window.localStorage.getItem(STATS_KEY);
+    const stored = window.localStorage.getItem(profileStorageKey(STATS_KEY, profileId));
     return stored ? normaliseStats(JSON.parse(stored)) : createEmptyStats();
   } catch {
     return createEmptyStats();
   }
 }
 
-function loadProgress() {
+function loadProgress(profileId) {
   try {
-    const stored = window.localStorage.getItem(PROGRESS_KEY);
+    const stored = window.localStorage.getItem(profileStorageKey(PROGRESS_KEY, profileId));
     return stored ? normaliseProgress(JSON.parse(stored)) : createEmptyProgress();
   } catch {
     return createEmptyProgress();
   }
+}
+
+function clearProfileStorage(profileId) {
+  [SETTINGS_KEY, STATS_KEY, PROGRESS_KEY].forEach((baseKey) => {
+    try {
+      window.localStorage.removeItem(profileStorageKey(baseKey, profileId));
+    } catch {
+      // Nothing stored means nothing to erase.
+    }
+  });
 }
 
 function useSpeech(enabled, locale, setSpeechDucking) {
@@ -493,7 +529,12 @@ function useGameAudio(soundEffectsEnabled) {
 }
 
 export default function App() {
-  const [settings, setSettings] = useState(loadSettings);
+  const [profiles, setProfiles] = useState(loadProfiles);
+  // Resolved during the first render so the state initialisers below can read the right keys.
+  const activeProfile = getActiveProfile(profiles);
+  const activeProfileId = activeProfile.id;
+  const [settings, setSettings] = useState(() => loadSettings(activeProfileId));
+  const [nameDialog, setNameDialog] = useState(null);
   const [phase, setPhase] = useState('welcome');
   const [roundWords, setRoundWords] = useState([]);
   const [wordIndex, setWordIndex] = useState(0);
@@ -513,14 +554,14 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
-  const [visibleProgress, setVisibleProgress] = useState(loadProgress);
+  const [visibleProgress, setVisibleProgress] = useState(() => loadProgress(activeProfileId));
 
   const inputRef = useRef(null);
   const settingsRef = useRef(settings);
   const missCountRef = useRef(0);
   // Stats live in refs so per-key bookkeeping never causes re-renders during play.
   const statsRef = useRef(null);
-  if (statsRef.current === null) statsRef.current = loadStats();
+  if (statsRef.current === null) statsRef.current = loadStats(activeProfileId);
   const progressRef = useRef(visibleProgress);
   const letterStartRef = useRef(0);
   const wordStartRef = useRef(0);
@@ -587,11 +628,24 @@ export default function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      window.localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
     } catch {
       // The game still works when browser storage is unavailable.
     }
-  }, [settings]);
+  }, [profiles]);
+
+  // Profile switches update the id and the settings in one batch, so this effect never writes
+  // one child's settings under another child's key.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        profileStorageKey(SETTINGS_KEY, activeProfileId),
+        JSON.stringify(settings),
+      );
+    } catch {
+      // The game still works when browser storage is unavailable.
+    }
+  }, [activeProfileId, settings]);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -695,19 +749,25 @@ export default function App() {
 
   const persistStats = useCallback(() => {
     try {
-      window.localStorage.setItem(STATS_KEY, JSON.stringify(statsRef.current));
+      window.localStorage.setItem(
+        profileStorageKey(STATS_KEY, activeProfileId),
+        JSON.stringify(statsRef.current),
+      );
     } catch {
       // Statistics are best-effort; the game works without storage.
     }
-  }, []);
+  }, [activeProfileId]);
 
   const persistProgress = useCallback(() => {
     try {
-      window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressRef.current));
+      window.localStorage.setItem(
+        profileStorageKey(PROGRESS_KEY, activeProfileId),
+        JSON.stringify(progressRef.current),
+      );
     } catch {
       // Reward progress is best-effort; the game works without storage.
     }
-  }, []);
+  }, [activeProfileId]);
 
   const startRound = useCallback(() => {
     const nextRoundKind = isSuperRoundNext(progressRef.current) ? 'super' : 'normal';
@@ -1141,9 +1201,10 @@ export default function App() {
   };
 
   const eraseProgress = useCallback(() => {
+    // Scoped to the active child only — a shared device must not lose a sibling's stars.
     try {
-      window.localStorage.removeItem(STATS_KEY);
-      window.localStorage.removeItem(PROGRESS_KEY);
+      window.localStorage.removeItem(profileStorageKey(STATS_KEY, activeProfileId));
+      window.localStorage.removeItem(profileStorageKey(PROGRESS_KEY, activeProfileId));
     } catch {
       // Nothing stored means nothing to erase.
     }
@@ -1153,15 +1214,13 @@ export default function App() {
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);
     setStickerBookProgress(progressRef.current);
-  }, []);
+  }, [activeProfileId]);
 
-  const restartWithSettings = (nextSettings) => {
+  const resetToWelcome = () => {
     clearRoundTimers();
     cancelSpeech();
     pauseMusic();
     transitioningRef.current = false;
-    settingsRef.current = nextSettings;
-    setSettings(nextSettings);
     setRoundWords([]);
     setWordIndex(0);
     setLetterIndex(0);
@@ -1180,6 +1239,53 @@ export default function App() {
     roundSettingsDirtyRef.current = false;
     setPhase('welcome');
     setSettingsOpen(false);
+  };
+
+  const restartWithSettings = (nextSettings) => {
+    settingsRef.current = nextSettings;
+    setSettings(nextSettings);
+    resetToWelcome();
+  };
+
+  // Switching child swaps three stores at once. Everything is set in this one handler so the
+  // batched render sees the new profile id and the new settings together.
+  const switchToProfile = (nextProfiles) => {
+    const nextId = getActiveProfile(nextProfiles).id;
+    if (nextId !== activeProfileId) {
+      const nextSettings = loadSettings(nextId);
+      statsRef.current = loadStats(nextId);
+      progressRef.current = loadProgress(nextId);
+      sessionStrugglesRef.current.clear();
+      sessionFilterKeyRef.current = null;
+      settingsRef.current = nextSettings;
+      setSettings(nextSettings);
+      setVisibleProgress(progressRef.current);
+      setStickerBookProgress(progressRef.current);
+      setSettingsStats(statsRef.current);
+      setSettingsProgress(progressRef.current);
+    }
+    setProfiles(nextProfiles);
+    resetToWelcome();
+  };
+
+  const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
+
+  const saveProfileName = (name) => {
+    if (nameDialog?.mode === 'rename' && nameDialog.profileId) {
+      setProfiles((current) => renameProfile(current, nameDialog.profileId, name));
+    } else {
+      switchToProfile(createProfile(profiles, name));
+    }
+    setNameDialog(null);
+  };
+
+  const deleteProfile = (profileId) => {
+    const next = removeProfile(profiles, profileId);
+    // removeProfile refuses to empty the list; nothing changed means nothing to clear.
+    if (next.profiles.length === profiles.profiles.length) return;
+    clearProfileStorage(profileId);
+    if (getActiveProfile(next).id !== activeProfileId) switchToProfile(next);
+    else setProfiles(next);
   };
 
   const applySettingsChange = (partial) => {
@@ -1220,6 +1326,8 @@ export default function App() {
     template: copy.letterLabel,
     hiddenTemplate: copy.letterHiddenLabel,
   };
+  // The unnamed default slot is never offered as a chip — there is nothing to tap on.
+  const namedProfiles = profiles.profiles.filter((profile) => profile.name);
   const roundsRemaining = SUPER_ROUND_EVERY - roundReward.journeyPosition;
   const journeyMessage = roundReward.kind === 'super'
     ? copy.superRoundDone
@@ -1295,6 +1403,30 @@ export default function App() {
           <button type="button" className="primary-button welcome-play-button" onClick={startRound}>
             {copy.play}
           </button>
+          <div className="profile-picker">
+            {namedProfiles.map((profile) => (
+              <button
+                type="button"
+                key={profile.id}
+                className={`profile-chip${profile.id === activeProfileId ? ' profile-chip--active' : ''}`}
+                aria-pressed={profile.id === activeProfileId}
+                aria-label={formatMessage(copy.switchProfile, { name: profile.name })}
+                onClick={() => switchToProfile(selectProfile(profiles, profile.id))}
+              >
+                <NameTag name={profile.name} showEyes={settings.eyes} size="chip" />
+              </button>
+            ))}
+            {profiles.profiles.length < MAX_PROFILES && (
+              <button
+                type="button"
+                className="profile-chip profile-chip--add"
+                aria-label={copy.addProfile}
+                onClick={() => openNameDialog('add')}
+              >
+                <span aria-hidden="true">+</span>
+              </button>
+            )}
+          </div>
           <div className="welcome-language">
             <select
               aria-label={copy.language}
@@ -1313,6 +1445,13 @@ export default function App() {
 
       {phase === 'playing' && (
         <main className="play-screen" onClick={focusInput}>
+          {activeProfile.name && (
+            // Flat letters, no widget chrome — the child's name belongs to the same world as
+            // the words they are spelling, not to a labelled status pill.
+            <div className="play-name" role="img" aria-label={activeProfile.name}>
+              <NameTag name={activeProfile.name} showEyes={settings.eyes} size="hud" />
+            </div>
+          )}
           <StarTrail
             total={roundWords.length}
             filled={filledWords}
@@ -1471,10 +1610,30 @@ export default function App() {
           settings={settings}
           stats={settingsStats}
           progress={settingsProgress}
+          profiles={profiles}
           onChange={applySettingsChange}
           onEraseProgress={eraseProgress}
           onClose={closeSettings}
           onLocaleChange={changeSettingsLocale}
+          onAddProfile={() => openNameDialog('add')}
+          onRenameProfile={(id) => openNameDialog('rename', id)}
+          onDeleteProfile={deleteProfile}
+          onSelectProfile={(id) => switchToProfile(selectProfile(profiles, id))}
+        />
+      )}
+
+      {nameDialog && (
+        <NameDialog
+          copy={copy}
+          title={nameDialog.mode === 'rename' ? copy.renameProfileTitle : copy.nameEntryTitle}
+          initialName={
+            nameDialog.mode === 'rename'
+              ? profiles.profiles.find((profile) => profile.id === nameDialog.profileId)?.name ?? ''
+              : ''
+          }
+          showEyes={settings.eyes}
+          onCancel={() => setNameDialog(null)}
+          onSave={saveProfileName}
         />
       )}
 
