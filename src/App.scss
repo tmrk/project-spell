@@ -154,44 +154,73 @@ input:focus-visible {
   text-align: center;
 }
 
+// Sit the lockup above the paper-cut ground rather than floating dead-centre.
+.welcome-screen {
+  padding-top: clamp(20px, 5vh, 64px);
+  padding-bottom: clamp(96px, 17vh, 210px);
+}
+
 .welcome-croc {
-  width: clamp(76px, 12vw, 112px);
-  height: clamp(76px, 12vw, 112px);
-  margin-bottom: 18px;
+  width: clamp(96px, 16vw, 148px);
+  height: clamp(96px, 16vw, 148px);
+  margin-bottom: clamp(2px, 0.8vh, 10px);
   animation: croc-float 3.2s ease-in-out infinite;
 }
 
+// The logo is built from the game's own letters rather than set as a headline (D-006).
 .wordmark {
   position: relative;
-  margin: -4px 0 28px;
-  color: var(--ps-ink);
-  font-size: clamp(3rem, 8vw, 5.1rem);
+  display: grid;
+  margin: 0 0 clamp(20px, 4vh, 40px);
+  justify-items: center;
+  gap: clamp(4px, 1vh, 10px);
+}
+
+.wordmark__eyebrow {
+  color: var(--ps-grass-shade);
+  font-size: clamp(0.78rem, 2.5vw, 1.1rem);
   font-weight: 900;
-  letter-spacing: -0.065em;
-  line-height: 0.94;
-  text-shadow: 0 0.055em 0 rgba(255, 255, 255, 0.45);
+  // The trailing track would otherwise push the word left of centre.
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  text-transform: uppercase;
 }
 
-.wordmark::after {
-  display: block;
-  width: 58%;
-  height: 0.1em;
-  margin: 0.16em auto 0;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--ps-coral), var(--ps-gold));
-  box-shadow: 0 0.045em 0 var(--ps-coral-shade);
-  content: '';
-  transform: rotate(-1.5deg);
+.wordmark__title {
+  display: flex;
+  align-items: baseline;
+  font-size: clamp(3.2rem, 14vw, 6.4rem);
+  font-weight: 900;
+  // Matches .letter so the shared per-letter eye offsets resolve to the same spot.
+  line-height: 1;
+  text-transform: uppercase;
+  gap: 0.035em;
 }
 
-.wordmark__project {
-  color: rgba(32, 48, 43, 0.72);
-  font-weight: 720;
+.wordmark__gap {
+  width: 0.26em;
 }
 
-.wordmark__spell {
-  color: color-mix(in srgb, var(--ps-coral-shade) 78%, var(--ps-ink));
+.wordmark__tile {
+  position: relative;
+  display: grid;
+  color: var(--lc);
+  text-shadow: 0 0.055em 0 var(--lcs);
+  place-items: center;
+  transform: rotate(var(--tile-tilt, 0deg)) translateY(var(--tile-lift, 0));
 }
+
+.wordmark__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.wordmark__tile--c0 { --lc: var(--ps-coral); --lcs: var(--ps-coral-shade); }
+.wordmark__tile--c1 { --lc: var(--ps-sky); --lcs: var(--ps-sky-shade); }
+.wordmark__tile--c2 { --lc: var(--ps-leaf); --lcs: var(--ps-leaf-shade); }
+.wordmark__tile--c3 { --lc: var(--ps-sunflower); --lcs: var(--ps-sunflower-shade); }
+.wordmark__tile--c4 { --lc: var(--ps-berry); --lcs: var(--ps-berry-shade); }
 
 .complete-screen h1 {
   margin: 0;
@@ -1754,15 +1783,61 @@ input:focus-visible {
   will-change: transform;
 }
 
-.scenery__tuft path {
-  fill: var(--ps-sun-deep);
-  opacity: 0.8;
+// Paper-cut floor: two stacked rises in deepening sun tones, so the screen has a ground
+// without introducing a second hue that would fight the letters.
+.scenery__ground {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: clamp(96px, 17vh, 210px);
 }
 
-.scenery--welcome .scenery__tuft {
-  bottom: -6px;
-  left: 24px;
-  width: 150px;
+.scenery__hill {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.scenery__hill--back path {
+  fill: var(--ps-sun-deep);
+  opacity: 0.6;
+}
+
+.scenery__hill--front path {
+  fill: color-mix(in srgb, var(--ps-sun-deep) 84%, var(--ps-grass));
+  opacity: 0.92;
+}
+
+.scenery__tuft path {
+  fill: var(--ps-sun-deep);
+}
+
+.scenery__tuft {
+  width: 120px;
+}
+
+.scenery__tuft--one {
+  bottom: clamp(38px, 7vh, 86px);
+  left: 3vw;
+  width: 132px;
+  opacity: 0.55;
+}
+
+.scenery__tuft--two {
+  bottom: clamp(30px, 5.5vh, 68px);
+  left: 46vw;
+  width: 96px;
+  opacity: 0.42;
+}
+
+.scenery__tuft--three {
+  right: 5vw;
+  bottom: clamp(44px, 8vh, 96px);
+  width: 112px;
+  opacity: 0.5;
 }
 
 .sr-only {
@@ -1922,12 +1997,29 @@ input:focus-visible {
     --trail-croc: 64px;
   }
 
-  .wordmark {
-    font-size: clamp(2.65rem, 13vw, 3.9rem);
+  .wordmark__title {
+    font-size: clamp(2.8rem, 17vw, 4.2rem);
   }
 
-  .scenery--welcome .scenery__tuft {
-    width: 110px;
+  // The book tab owns the bottom-right corner on a phone, so the language pill stops
+  // being centred and tucks into the space left of it.
+  .welcome-language {
+    left: max(12px, env(safe-area-inset-left));
+    width: min(240px, calc(100vw - 184px));
+    transform: none;
+  }
+
+  .welcome-language select {
+    padding-right: 30px;
+    background-position: calc(100% - 16px) 20px, calc(100% - 11px) 20px;
+  }
+
+  .scenery__tuft {
+    width: 92px;
+  }
+
+  .scenery__tuft--two {
+    display: none;
   }
 
   .settings-panel {

@@ -43,9 +43,12 @@ These coordination files may be intentionally untracked. Read them and inspect `
 - Custom words, stored only in the browser.
 - An optional parent setting to accept an unaccented key for an accented letter; exact accents are required by default.
 - Shape-aware animated letter eyes that can be switched off in the grown-ups panel.
-- Gentle stars, milestone badges, and a child-facing sticker book whose collected word pictures can be tapped to hear them again.
+- A crocodile star trail that walks the round letter by letter, with a gold star for each finished word and no numbers on the play screen.
+- Super rounds every fourth round: a golden theme, a short gift intro, words the child found tricky, and a shiny prize sticker.
+- Adaptive practice that quietly brings tricky words back sooner once there is enough play history; a default-on parent switch, invisible to the child.
+- Gentle stars, milestone badges, and a themed sticker book of die-cut rewards whose collected word pictures can be tapped to hear them again.
 - Optional spoken prompts, reusable sound effects, and rotating background music that ducks under speech.
-- A fixed-length round with progress, completion feedback, a short fanfare, and replay.
+- A fixed-length round with a star trail, completion ceremony, a journey strip toward the next super round, a short fanfare, and replay.
 - Responsive layouts for touch devices, iPad portrait/landscape, and desktop.
 - Installable PWA support with offline app, word, sound, and icon assets.
 - Reduced-motion and keyboard-focus support.
@@ -59,8 +62,12 @@ Settings are persisted in `localStorage` under `project-spell:settings:v1`. Anon
 - `src/locales/` contains the display and spoken copy for each supported locale.
 - `src/word-lists/` contains the regional entries and exclusions used to build each locale's word bank.
 - `src/components/Letter.jsx` renders one animated letter character.
+- `src/components/Wordmark.jsx` builds the logo from the same coloured, eyed letters the game uses.
+- `src/components/Scenery.jsx` draws the drifting paper-cut sky and the ground the welcome screen stands on.
+- `src/components/StarTrail.jsx` is the numeral-free play-screen progress trail.
+- `src/components/JourneyStrip.jsx` shows how near the next super round is.
 - `src/components/SettingsPanel.jsx` is the grown-ups configuration dialog.
-- `src/components/StickerBook.jsx` is the child-facing collection overlay.
+- `src/components/StickerBook.jsx` and `BookTab.jsx` are the child-facing collection overlay and its cover.
 - `src/stats.js` and `src/progress.js` contain pure local play and reward aggregation.
 - `src/stickers/map.js` maps concrete words in each locale to shared Noto Emoji artwork.
 - `src/credits.js` is the in-app asset and dependency attribution catalogue.
