@@ -1300,6 +1300,24 @@ describe('Project Spell', () => {
       expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
     });
 
+    it('drops the leaving slab on schedule even if Play is triggered again mid-hand-off', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      revealModes();
+
+      // The slab is out of the tab order and pointer-events:none while it leaves, but a key press
+      // can still reach it. Re-entering the reveal must not restart the unmount timer, or the slab
+      // lingers — flickering back over the cards that already replaced it.
+      const slab = document.querySelector('.welcome-play-button');
+      expect(slab).toHaveClass('welcome-play-button--leaving');
+
+      act(() => vi.advanceTimersByTime(200));
+      fireEvent.click(slab);
+      act(() => vi.advanceTimersByTime(100)); // 300ms total, past the 260ms the slab is given
+
+      expect(document.querySelector('.welcome-play-button')).not.toBeInTheDocument();
+    });
+
     it('skips the hand-off animation when the child has asked for reduced motion', () => {
       window.matchMedia.mockImplementation((query) => ({
         matches: query === '(prefers-reduced-motion: reduce)',

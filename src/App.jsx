@@ -1317,6 +1317,11 @@ export default function App() {
   // cards mount straight away and are usable immediately; the timer only drops the spent slab
   // once it has faded, so a fast tapper is never waiting on an animation.
   const revealModeCards = () => {
+    // Only the first press from the Play slab may start the hand-off. The slab is `pointer-events:
+    // none` and out of the tab order once it is leaving, but a key press can still reach a focused
+    // button that CSS has hidden; re-entering here would restart the unmount timer and make the
+    // slab flicker back over the cards. Guarding on the step keeps the transition one-way.
+    if (welcomeStep !== 'play') return;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true) {
       setWelcomeStep('modes');
       return;

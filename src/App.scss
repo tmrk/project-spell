@@ -66,6 +66,29 @@ input:focus-visible {
   isolation: isolate;
 }
 
+// The play screen is a fixed, non-scrolling stage. The welcome and complete screens are the tall
+// ones — croc, wordmark, the Play slab or the cards it becomes, the name chips — and on a short
+// viewport (a landscape phone, or iOS Safari once its address and tab bars take their cut of the
+// height) they are taller than the visible area. Bound these two phases to the viewport and let
+// them scroll, so nothing is clipped and the fixed corner chrome never ends up sitting on top of
+// the Play slab. `100vh` is only a fallback for the rare engine without `dvh`.
+.app[data-phase="welcome"],
+.app[data-phase="complete"] {
+  height: 100vh;
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+// The background is scenery, not content: pin it to the viewport so the paper-cut ground stays at
+// the bottom edge when one of these screens scrolls, instead of sliding up the page with the
+// lockup. (The play screen never scrolls, so its scenery stays absolute.)
+.app[data-phase="welcome"] .scenery,
+.app[data-phase="complete"] .scenery {
+  position: fixed;
+}
+
 .app[data-feedback="success"] {
   --page-background: var(--ps-flash-success);
 }
@@ -147,11 +170,13 @@ input:focus-visible {
 .welcome-screen,
 .complete-screen {
   display: flex;
-  align-self: center;
-  justify-self: center;
   flex-direction: column;
   align-items: center;
   width: min(90vw, 560px);
+  // Auto margins centre the lockup when there is room and collapse to zero when there is not, so
+  // a screen taller than the viewport starts at the top and scrolls (see the scroll rule on the
+  // welcome/complete `.app`) instead of being centre-clipped with the croc hidden off the top.
+  margin: auto;
   padding: 72px 24px 40px;
   text-align: center;
 }
@@ -3125,6 +3150,20 @@ input:focus-visible {
     height: 82px;
   }
 
+}
+
+// A phone in landscape is short enough that the welcome lockup scrolls. A language pill pinned to
+// the bottom edge would float over the Play slab there — and a tap meant for Play opens the
+// language menu instead, which is exactly the "Play does nothing" the slab is blamed for. On these
+// short screens the pill rejoins the scrolling flow beneath the content, where it can never cover
+// the primary action. (Tablets in landscape are taller than this and keep the pinned pill.)
+@media (max-height: 480px) {
+  .welcome-language {
+    position: static;
+    width: min(260px, 78vw);
+    margin: 16px 0 max(10px, env(safe-area-inset-bottom));
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
