@@ -7,6 +7,19 @@ const messages = Object.freeze({
   projectName: 'Project Spell',
   language: 'Språk',
   play: 'Spela',
+  home: 'Tillbaka till startsidan',
+  greetingFirstSpeeches: Object.freeze([
+    'Hej {name}!',
+    'Hallå {name}!',
+    'Välkommen, {name}!',
+    'Hejsan {name}!',
+  ]),
+  greetingReturningSpeeches: Object.freeze([
+    'Välkommen tillbaka, {name}!',
+    'Hej igen, {name}!',
+    'Kul att se dig, {name}!',
+    'Där är {name}!',
+  ]),
   spellPrompt: 'Stava ordet {word}',
   roundFinishedSpeeches: Object.freeze([
     'Fantastiskt! Du klarade rundan!',

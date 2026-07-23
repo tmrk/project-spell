@@ -8,6 +8,7 @@ import {
   createReviewRound,
   estimateSyllables,
   getEligibleWords,
+  letterColors,
   lettersMatch,
   normaliseSettings,
   parseCustomWords,
@@ -414,6 +415,50 @@ describe('adaptive rounds', () => {
 
     expect(counts.size).toBe(6);
     expect(Math.max(...totals) - Math.min(...totals)).toBeLessThan(Math.min(...totals) * 0.25);
+  });
+});
+
+describe('letter colours', () => {
+  const noAdjacentRepeat = (colours) =>
+    colours.every((colour, index) => index === 0 || colour !== colours[index - 1]);
+
+  it('keeps every colour inside the five-colour wheel', () => {
+    letterColors('elephant').forEach((colour) => {
+      expect(colour).toBeGreaterThanOrEqual(0);
+      expect(colour).toBeLessThan(5);
+    });
+  });
+
+  it('never repeats a colour on adjacent letters, even in a long word', () => {
+    expect(noAdjacentRepeat(letterColors('hippopotamus'))).toBe(true);
+    expect(noAdjacentRepeat(letterColors('cat'))).toBe(true);
+    expect(noAdjacentRepeat(letterColors('aaaaaa'))).toBe(true);
+  });
+
+  it('is stable for a given word and seed', () => {
+    expect(letterColors('rocket')).toEqual(letterColors('rocket'));
+    expect(letterColors('rocket', 3)).toEqual(letterColors('rocket', 3));
+  });
+
+  it('does not open every word on the same colour', () => {
+    const firstColours = new Set(
+      ['cat', 'dog', 'apple', 'tiger', 'rocket', 'banana', 'moon', 'star'].map(
+        (word) => letterColors(word)[0],
+      ),
+    );
+    expect(firstColours.size).toBeGreaterThan(1);
+  });
+
+  it('rotates the whole arrangement by the seed', () => {
+    const base = letterColors('garden');
+    const shifted = letterColors('garden', 1);
+    base.forEach((colour, index) => {
+      expect(shifted[index]).toBe((colour + 1) % 5);
+    });
+  });
+
+  it('returns nothing for an empty word', () => {
+    expect(letterColors('')).toEqual([]);
   });
 });
 

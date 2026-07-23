@@ -28,6 +28,16 @@ export function RepeatIcon() {
   );
 }
 
+export function HomeIcon() {
+  return (
+    <svg {...sharedProps}>
+      <path d="M4 11.4 12 4l8 7.4" />
+      <path d="M6 10.2V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-8.8" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
 export function SettingsIcon() {
   return (
     <svg {...sharedProps}>

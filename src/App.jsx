@@ -14,13 +14,14 @@ import StarJarChip from './components/StarJarChip';
 import StarTrail from './components/StarTrail';
 import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
 import Wordmark from './components/Wordmark';
-import { MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
+import { HomeIcon, MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
   createAdaptiveRound,
   createReviewRound,
   createRound,
+  letterColors,
   lettersMatch,
   normaliseSettings,
 } from './game';
@@ -98,19 +99,30 @@ const CONFETTI_DURATION = 700;
 // exactly the animation's length, ordinary timer jitter drops the slab while it is still
 // faintly visible and it reads as a pop rather than a fade.
 const MODE_REVEAL_MS = 260;
+// The welcome greeting is a quick, warm hello before the first word — spoken and animated. It
+// must stay short so it never gets between a child and playing: the word appears once the wave
+// animation has settled and the greeting has been said, whichever is slower, capped hard by
+// GREETING_MAX_MS so a stalled voice can never hold the round back.
+const GREETING_ANIM_MS = 1150;
+const GREETING_MAX_MS = 2600;
+const GREETING_REDUCED_MS = 240;
+const GREETING_REDUCED_MAX_MS = 520;
 const MUSIC_VOLUME = 0.12;
 const MUSIC_DUCKED_VOLUME = 0.05;
 const TRACKS = Object.freeze([townThemeMusic, bgMusic2, bgMusic3]);
+// Changing one of these mid-round re-selects which words a child sees, so the round has to be
+// rebuilt. Everything else — game mode (letters shown or hidden), accepting unaccented typing,
+// eyes, sound, palette, on-screen keys — reads live from settings during play, so it hot-swaps
+// without interrupting the round (owner request, 2026-07-23). `locale` stays here because it
+// swaps the word bank and the voice, and it already asks for confirmation of its own.
 const ROUND_SETTING_KEYS = Object.freeze([
   'locale',
-  'gameMode',
   'minLetters',
   'maxLetters',
   'syllables',
   'roundLength',
   'wordSource',
   'customWords',
-  'acceptUnaccented',
 ]);
 
 const emptyRoundReward = () => ({
@@ -134,6 +146,10 @@ function pickVaried(list, lastIndexRef) {
 
 function randomWordPraiseGap() {
   return Math.random() < 0.5 ? 2 : 3;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
 
 function loadProfiles() {
@@ -553,6 +569,12 @@ export default function App() {
   // while the slab fades off the top of them.
   const [welcomeStep, setWelcomeStep] = useState('play');
   const [phase, setPhase] = useState('welcome');
+  // A short spoken + animated hello, shown between the welcome screen and the first word each
+  // time a play session begins (new child, returning child, or a switch). Null the rest of the
+  // time. Its own `roundColorSeed` rotates the letter wheel so the same word looks different
+  // between rounds.
+  const [greeting, setGreeting] = useState(null);
+  const [roundColorSeed, setRoundColorSeed] = useState(0);
   const [roundWords, setRoundWords] = useState([]);
   const [wordIndex, setWordIndex] = useState(0);
   const [letterIndex, setLetterIndex] = useState(0);
@@ -594,6 +616,9 @@ export default function App() {
   const celebrationTimerRef = useRef(null);
   const promptTimerRef = useRef(null);
   const superIntroTimerRef = useRef(null);
+  const greetingTimerRef = useRef(null);
+  const greetingMaxTimerRef = useRef(null);
+  const lastGreetingIndexRef = useRef(-1);
   const modeRevealTimerRef = useRef(null);
   const transitioningRef = useRef(false);
   const lastCorrectIndexRef = useRef(-1);
@@ -629,6 +654,13 @@ export default function App() {
   const keyboardKeys = useMemo(
     () => buildKeys(settings.keyboard, currentWord, settings.locale),
     [currentWord, settings.keyboard, settings.locale],
+  );
+  // A fresh arrangement of the five-colour wheel per word: no longer always coral-first. The
+  // round seed plus the word's position vary it between rounds and between repeats within one
+  // round, while `letterColors` keeps adjacent letters different. Stable for the whole word.
+  const wordColors = useMemo(
+    () => letterColors(currentWord, roundColorSeed + wordIndex),
+    [currentWord, roundColorSeed, wordIndex],
   );
   const correctLetterCount = roundWords
     .slice(0, wordIndex)
@@ -751,6 +783,8 @@ export default function App() {
       window.clearTimeout(celebrationTimerRef.current);
       window.clearTimeout(promptTimerRef.current);
       window.clearTimeout(superIntroTimerRef.current);
+      window.clearTimeout(greetingTimerRef.current);
+      window.clearTimeout(greetingMaxTimerRef.current);
       pendingPromptRef.current = null;
       cancelSpeech();
     },
@@ -768,6 +802,8 @@ export default function App() {
     window.clearTimeout(celebrationTimerRef.current);
     window.clearTimeout(promptTimerRef.current);
     window.clearTimeout(superIntroTimerRef.current);
+    window.clearTimeout(greetingTimerRef.current);
+    window.clearTimeout(greetingMaxTimerRef.current);
     pendingPromptRef.current = null;
   }, []);
 
@@ -833,9 +869,19 @@ export default function App() {
       return;
     }
 
+    // A hello is shown only when a play session begins from the welcome screen (a fresh child, a
+    // returning one, or a switch). "Play again" and the automatic super round continue the same
+    // session, so they never re-greet — that would slow the game down and wear out its welcome.
+    const greetName = options.greet ? options.name ?? '' : '';
+    const wantsGreeting = Boolean(greetName);
+    // "Returning" simply means this child has spelled at least one letter before, so a brand-new
+    // name is greeted with a fresh hello and everyone else with a welcome-back.
+    const returning = statsRef.current.totals.attempts > 0;
+
     clearRoundTimers();
-    transitioningRef.current = nextRoundKind === 'super';
+    transitioningRef.current = nextRoundKind === 'super' || wantsGreeting;
     resetHintLadder();
+    setRoundColorSeed(Math.floor(Math.random() * 5));
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
     wordsSincePraiseRef.current = 0;
@@ -866,7 +912,18 @@ export default function App() {
     setRoundKind(nextRoundKind);
     setRoundReward(emptyRoundReward());
     setSuperIntroVisible(nextRoundKind === 'super');
-    setPhase('playing');
+    if (wantsGreeting) {
+      const greetCopy = getLocale(activeSettings.locale).messages;
+      const speeches = returning ? greetCopy.greetingReturningSpeeches : greetCopy.greetingFirstSpeeches;
+      setGreeting({
+        name: greetName,
+        returning,
+        text: formatMessage(pickVaried(speeches, lastGreetingIndexRef), { name: greetName }),
+      });
+    } else {
+      setGreeting(null);
+    }
+    setPhase(wantsGreeting ? 'greeting' : 'playing');
     primeEffects();
     selectNextMusicTrack();
     if (activeSettings.music) playMusic();
@@ -896,6 +953,54 @@ export default function App() {
     superIntroTimerRef.current = window.setTimeout(dismissSuperIntro, 2000);
     return () => window.clearTimeout(superIntroTimerRef.current);
   }, [copy.superRoundIntroSpeeches, dismissSuperIntro, phase, playEffect, roundKind, say, superIntroVisible]);
+
+  // Reveal the first word only once the greeting has both been said and finished its wave. Either
+  // one missing still lands the child in the round: no speech (setting off, or a browser without
+  // it) leaves the animation in charge, and a stalled voice is overridden by the hard max timer.
+  const finishGreeting = useCallback(() => {
+    window.clearTimeout(greetingTimerRef.current);
+    window.clearTimeout(greetingMaxTimerRef.current);
+    const now = performance.now();
+    roundStartRef.current = now;
+    wordStartRef.current = now;
+    letterStartRef.current = now;
+    // A super round re-arms this immediately in its own intro effect; an ordinary round is now
+    // ready for the child to type.
+    transitioningRef.current = false;
+    setPhase((current) => (current === 'greeting' ? 'playing' : current));
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'greeting' || !greeting) return undefined;
+    const reduced = prefersReducedMotion();
+    let animDone = false;
+    let voiceDone = false;
+    const maybeFinish = () => {
+      if (animDone && voiceDone) finishGreeting();
+    };
+    const spoke = say(greeting.text, {
+      rate: 0.92,
+      pitch: 1.12,
+      fallbackMs: 1500,
+      onEnd: () => {
+        voiceDone = true;
+        maybeFinish();
+      },
+    });
+    if (!spoke) voiceDone = true;
+    greetingTimerRef.current = window.setTimeout(() => {
+      animDone = true;
+      maybeFinish();
+    }, reduced ? GREETING_REDUCED_MS : GREETING_ANIM_MS);
+    greetingMaxTimerRef.current = window.setTimeout(
+      finishGreeting,
+      reduced ? GREETING_REDUCED_MAX_MS : GREETING_MAX_MS,
+    );
+    return () => {
+      window.clearTimeout(greetingTimerRef.current);
+      window.clearTimeout(greetingMaxTimerRef.current);
+    };
+  }, [phase, greeting, say, finishGreeting]);
 
   const repeatWord = useCallback(() => {
     speechTokenRef.current += 1;
@@ -1273,6 +1378,7 @@ export default function App() {
     // child left mid-flight.
     setWelcomeStep('play');
     setNamingMode(null);
+    setGreeting(null);
     cancelSpeech();
     pauseMusic();
     transitioningRef.current = false;
@@ -1343,11 +1449,13 @@ export default function App() {
     modeRevealTimerRef.current = window.setTimeout(() => setWelcomeStep('modes'), MODE_REVEAL_MS);
   };
 
-  const playInMode = (gameMode) => {
+  const playInMode = (gameMode, greetName) => {
     const next = normaliseSettings({ ...settingsRef.current, gameMode });
     settingsRef.current = next;
     setSettings(next);
-    startRound({ settings: next });
+    // Every start from the welcome screen greets the child by name; the name comes with the tap
+    // so a just-typed one does not have to wait a render for the active profile to catch up.
+    startRound({ settings: next, greet: Boolean(greetName), name: greetName });
   };
 
   // Choosing a card is choosing how to play *and* starting. A child who has never given their
@@ -1357,7 +1465,7 @@ export default function App() {
       setNamingMode(gameMode);
       return;
     }
-    playInMode(gameMode);
+    playInMode(gameMode, activeProfile.name);
   };
 
   const submitWelcomeName = () => {
@@ -1369,7 +1477,7 @@ export default function App() {
     setWelcomeName('');
     const mode = namingMode;
     setNamingMode(null);
-    if (mode) playInMode(mode);
+    if (mode) playInMode(mode, name);
   };
 
   const saveProfileName = (name) => {
@@ -1473,6 +1581,11 @@ export default function App() {
         />
       )}
       <header className="app-controls" aria-label={copy.appControls}>
+        {(phase === 'playing' || phase === 'complete') && (
+          <button type="button" className="icon-button" onClick={resetToWelcome} aria-label={copy.home}>
+            <HomeIcon />
+          </button>
+        )}
         {phase === 'playing' && (
           <button type="button" className="icon-button" onClick={repeatWord} aria-label={copy.hearAgain}>
             <RepeatIcon />
@@ -1606,6 +1719,30 @@ export default function App() {
         </main>
       )}
 
+      {phase === 'greeting' && greeting && (
+        <main className="greeting-screen">
+          {/* Tapping anywhere skips straight to the first word for a child who does not want to
+              wait — the same escape hatch the super-round gift gives. */}
+          <button
+            type="button"
+            className="greeting-screen__card"
+            onClick={finishGreeting}
+            aria-label={greeting.text}
+          >
+            <span className="greeting-screen__sparkles" aria-hidden="true">
+              <span>★</span>
+              <span>♥</span>
+              <span>✦</span>
+              <span>★</span>
+            </span>
+            <img className="greeting-screen__croc" src={croc} alt="" />
+            <span className="greeting-screen__name">
+              <NameTag name={greeting.name} showEyes={settings.eyes} size="field" />
+            </span>
+          </button>
+        </main>
+      )}
+
       {phase === 'playing' && (
         <main
           className={`play-screen${
@@ -1659,7 +1796,7 @@ export default function App() {
                 key={`${currentWord}-${index}`}
                 letter={letter}
                 state={index < letterIndex ? 'done' : index === letterIndex ? 'active' : 'waiting'}
-                colorIndex={index}
+                colorIndex={wordColors[index] ?? index}
                 onSpeak={speakLetter}
                 showEyes={settings.eyes}
                 hidden={settings.gameMode === 'normal'}

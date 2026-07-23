@@ -7,6 +7,19 @@ const messages = Object.freeze({
   projectName: 'Project Spell',
   language: 'Nyelv',
   play: 'Játék',
+  home: 'Vissza a kezdőképernyőre',
+  greetingFirstSpeeches: Object.freeze([
+    'Szia, {name}!',
+    'Helló, {name}!',
+    'Üdv, {name}!',
+    'Szia, {name}, hajrá!',
+  ]),
+  greetingReturningSpeeches: Object.freeze([
+    'Üdv újra, {name}!',
+    'Szia újra, {name}!',
+    'De jó, hogy itt vagy, {name}!',
+    'Megjött {name}!',
+  ]),
   spellPrompt: 'Betűzd azt a szót, hogy {word}',
   roundFinishedSpeeches: Object.freeze([
     'Nagyszerű! Befejezted a kört!',

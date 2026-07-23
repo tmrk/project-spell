@@ -24,6 +24,18 @@ const revealModes = (locale = 'en-GB') =>
 const playIn = (mode, locale = 'en-GB') => {
   revealModes(locale);
   fireEvent.click(screen.getByRole('button', { name: mode }));
+  // Starting a session from the welcome screen now plays a short spoken hello before the first
+  // word. These tests are about the round, so when a greeting appears skip it (tap-to-skip) and
+  // drop its own speak/cancel calls, leaving the round's speech assertions reading exactly as they
+  // did before the greeting existed. The greeting has its own dedicated tests. There is no greeting
+  // to skip when the tap leads elsewhere: an un-named device answers with the name question first,
+  // and a zero-match round opens settings on the welcome screen.
+  const greetingCard = document.querySelector('.greeting-screen__card');
+  if (greetingCard) {
+    window.speechSynthesis.speak.mockClear();
+    window.speechSynthesis.cancel.mockClear();
+    fireEvent.click(greetingCard);
+  }
 };
 
 describe('Project Spell', () => {
@@ -142,13 +154,93 @@ describe('Project Spell', () => {
     expect(document.querySelector('.app')).toHaveAttribute('data-feedback', 'idle');
   });
 
-  it('colours the letters of a word through the wheel in order', () => {
+  it('colours the letters of a word from the wheel with no two neighbours alike', () => {
     render(<App />);
     playIn(PLAY_EASY);
 
-    expect(screen.getByRole('button', { name: 'c, current letter' })).toHaveClass('letter--c0');
-    expect(screen.getByRole('button', { name: 'a, next' })).toHaveClass('letter--c1');
-    expect(screen.getByRole('button', { name: 't, next' })).toHaveClass('letter--c2');
+    const wheelClass = (button) =>
+      [...button.classList].find((name) => /^letter--c[0-4]$/u.test(name));
+    const colours = [
+      wheelClass(screen.getByRole('button', { name: 'c, current letter' })),
+      wheelClass(screen.getByRole('button', { name: 'a, next' })),
+      wheelClass(screen.getByRole('button', { name: 't, next' })),
+    ];
+
+    colours.forEach((name) => expect(name).toMatch(/^letter--c[0-4]$/u));
+    expect(colours[0]).not.toBe(colours[1]);
+    expect(colours[1]).not.toBe(colours[2]);
+  });
+
+  it('greets a new child by name and holds the first word until the hello is done', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(<App />);
+    revealModes();
+    fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'greeting');
+    expect(document.querySelector('.greeting-screen')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Type the next letter' })).not.toBeInTheDocument();
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Hi Zoe!');
+
+    act(() => vi.advanceTimersByTime(2700));
+
+    expect(document.querySelector('.greeting-screen')).not.toBeInTheDocument();
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Spell the word cat');
+  });
+
+  it('welcomes a returning child back by name', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(STATS_KEY, JSON.stringify({ totals: { attempts: 12 } }));
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(<App />);
+    revealModes();
+    fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+
+    expect(document.querySelector('.greeting-screen')).toBeInTheDocument();
+    expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('Welcome back, Zoe!');
+  });
+
+  it('skips straight to the word when the greeting is tapped', () => {
+    render(<App />);
+    revealModes();
+    fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+
+    fireEvent.click(document.querySelector('.greeting-screen__card'));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
+  });
+
+  it('lets a child return to the start screen from a round', () => {
+    render(<App />);
+    playIn(PLAY_EASY);
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+  });
+
+  it('hot-swaps live settings mid-round instead of ending it', () => {
+    render(<App />);
+    playIn(PLAY_EASY);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Accept unaccented typing' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Normal/u }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+
+    // Neither change re-selects which words appear, so the round keeps playing rather than
+    // dropping the child back to the welcome screen.
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).toMatchObject({
+      acceptUnaccented: true,
+      gameMode: 'normal',
+    });
   });
 
   it('speaks short praise after two words and lets it finish before the next prompt', () => {
@@ -1341,6 +1433,8 @@ describe('Project Spell', () => {
       expect(document.querySelector('.mode-cards')).toHaveClass('mode-cards--revealed');
 
       fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+      // The card starts the session, which opens on the spoken hello; skip it into the round.
+      fireEvent.click(document.querySelector('.greeting-screen__card'));
       expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
     });
 
@@ -1408,6 +1502,9 @@ describe('Project Spell', () => {
     const confirmName = (name) => {
       fireEvent.change(screen.getByLabelText('First name'), { target: { value: name } });
       fireEvent.click(screen.getByRole('button', { name: 'That\u2019s me!' }));
+      // Naming a child starts the session, which opens on the spoken hello; skip it into the round.
+      const greetingCard = document.querySelector('.greeting-screen__card');
+      if (greetingCard) fireEvent.click(greetingCard);
     };
     // Adds a sibling from the welcome chip row, which uses the dialog rather than the gate.
     const addProfile = (name) => {

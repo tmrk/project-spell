@@ -283,6 +283,31 @@ export function parseCustomWords(value = '', locale = DEFAULT_LOCALE) {
   return [...unique.values()];
 }
 
+// The five-colour letter wheel (decision D-006). Colours were previously assigned straight from
+// each letter's position, so every word opened on the same colour (coral) in the same order.
+const WHEEL_SIZE = 5;
+
+/**
+ * A per-word arrangement of the five-colour letter wheel. Deterministic, so a given word (and
+ * seed) always looks the same rather than flickering between renders, but seeded from the word
+ * itself so different words start on different colours instead of every word opening on coral.
+ *
+ * The step through the wheel is 1–4 — all coprime to five — so consecutive letters never share a
+ * colour and a five-letter run uses every colour once. `seed` rotates the whole arrangement, which
+ * lets a caller vary the same word between rounds (or by its position in a round) without ever
+ * breaking the no-adjacent-repeat guarantee.
+ */
+export function letterColors(word, seed = 0) {
+  const letters = [...String(word ?? '')];
+  let hash = 5381;
+  for (const character of letters) {
+    hash = (hash * 33 + character.codePointAt(0)) % 1000003;
+  }
+  const base = ((hash % WHEEL_SIZE) + (Math.trunc(seed) % WHEEL_SIZE) + WHEEL_SIZE) % WHEEL_SIZE;
+  const step = 1 + (hash % (WHEEL_SIZE - 1));
+  return letters.map((_unused, index) => (base + index * step) % WHEEL_SIZE);
+}
+
 const stripAccents = (value) => value.normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC');
 
 export function lettersMatch(expected, attempt, acceptUnaccented = false) {
