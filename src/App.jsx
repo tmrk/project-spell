@@ -26,6 +26,7 @@ import {
 } from './game';
 import {
   STATS_KEY,
+  completedWordsForLocale,
   createEmptyStats,
   normaliseStats,
   recordAttempt,
@@ -806,16 +807,29 @@ export default function App() {
   const startRound = useCallback((options = {}) => {
     const activeSettings = options.settings ?? settings;
     const nextRoundKind = isSuperRoundNext(progressRef.current) ? 'super' : 'normal';
+    const completedWords = completedWordsForLocale(statsRef.current, activeSettings.locale);
     const selectionSummary =
       activeSettings.adaptivePractice && statsRef.current.totals.attempts >= ADAPTIVE_MIN_ATTEMPTS
         ? summariseForSelection(statsRef.current, activeSettings.locale)
         : null;
     const words = nextRoundKind === 'super'
-      ? createReviewRound(activeSettings, sessionStrugglesRef.current, Math.random, selectionSummary)
+      ? createReviewRound(
+          activeSettings,
+          sessionStrugglesRef.current,
+          Math.random,
+          selectionSummary,
+          completedWords,
+        )
       : selectionSummary
-        ? createAdaptiveRound(activeSettings, selectionSummary)
-        : createRound(activeSettings);
+        ? createAdaptiveRound(activeSettings, selectionSummary, Math.random, completedWords)
+        : createRound(activeSettings, Math.random, completedWords);
     if (!words.length) {
+      // A child may have completed every word matching the current filters. Give the
+      // Grown-ups panel the live profile data so its clear-progress action can restore the
+      // word pool; a stale/null snapshot would leave that action disabled.
+      setSettingsStats(statsRef.current);
+      setSettingsProgress(progressRef.current);
+      roundSettingsDirtyRef.current = false;
       setSettingsOpen(true);
       return;
     }
@@ -1248,6 +1262,7 @@ export default function App() {
     }
     statsRef.current = createEmptyStats();
     progressRef.current = createEmptyProgress();
+    sessionStrugglesRef.current.clear();
     setVisibleProgress(progressRef.current);
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);

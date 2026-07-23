@@ -269,6 +269,32 @@ describe('round creation', () => {
     ).toEqual([]);
   });
 
+  it('excludes completed words from ordinary, adaptive, and review rounds', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      wordSource: 'custom',
+      customWords: 'cat\ndog\nfox',
+      roundLength: 5,
+    };
+    const completed = new Set(['CAT', 'dog']);
+    const summary = {
+      trickyLetters: ['c'],
+      strugglingWords: new Set(['cat', 'dog']),
+      masteredWords: new Set(),
+    };
+
+    expect(new Set(createRound(settings, () => 0, completed))).toEqual(new Set(['fox']));
+    expect(new Set(createAdaptiveRound(settings, summary, () => 0, completed)))
+      .toEqual(new Set(['fox']));
+    expect(new Set(createReviewRound(
+      settings,
+      new Set(['cat', 'dog']),
+      () => 0,
+      summary,
+      completed,
+    ))).toEqual(new Set(['fox']));
+  });
+
   it('puts eligible struggle words first and tops up without adjacent repeats', () => {
     const settings = {
       ...DEFAULT_SETTINGS,

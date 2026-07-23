@@ -300,13 +300,23 @@ export function lettersMatch(expected, attempt, acceptUnaccented = false) {
   );
 }
 
-export function getEligibleWords(value = DEFAULT_SETTINGS) {
+function normaliseExcludedWords(value, locale) {
+  const words = value instanceof Set ? [...value] : Array.isArray(value) ? value : [];
+  return new Set(
+    words
+      .filter((word) => typeof word === 'string' && word)
+      .map((word) => word.normalize('NFC').toLocaleLowerCase(locale)),
+  );
+}
+
+export function getEligibleWords(value = DEFAULT_SETTINGS, excludedWords = []) {
   const settings = normaliseSettings(value);
   const customWords = parseCustomWords(settings.customWords, settings.locale);
   const source = settings.wordSource === 'custom'
     ? customWords
     : [...WORD_BANKS[settings.locale], ...customWords];
   const unique = new Map(source.map((entry) => [entry.word, entry]));
+  const excluded = normaliseExcludedWords(excludedWords, settings.locale);
 
   return [...unique.values()].filter(({ word, syllables }) => {
     const letterCount = [...word].length;
@@ -315,7 +325,7 @@ export function getEligibleWords(value = DEFAULT_SETTINGS) {
       settings.syllables === 'any' ||
       settings.syllables === String(syllables) ||
       (settings.syllables === '4+' && syllables >= 4);
-    return isCorrectLength && isCorrectSyllableCount;
+    return isCorrectLength && isCorrectSyllableCount && !excluded.has(word);
   });
 }
 
@@ -328,9 +338,9 @@ function shuffle(values, random) {
   return result;
 }
 
-export function createRound(value = DEFAULT_SETTINGS, random = Math.random) {
+export function createRound(value = DEFAULT_SETTINGS, random = Math.random, excludedWords = []) {
   const settings = normaliseSettings(value);
-  const eligible = getEligibleWords(settings).map(({ word }) => word);
+  const eligible = getEligibleWords(settings, excludedWords).map(({ word }) => word);
   if (!eligible.length) return [];
 
   const round = [];
@@ -383,9 +393,14 @@ function drawWeighted(candidates, weights, random) {
   return candidates.at(-1);
 }
 
-export function createAdaptiveRound(value = DEFAULT_SETTINGS, summary = null, random = Math.random) {
+export function createAdaptiveRound(
+  value = DEFAULT_SETTINGS,
+  summary = null,
+  random = Math.random,
+  excludedWords = [],
+) {
   const settings = normaliseSettings(value);
-  const eligible = getEligibleWords(settings).map(({ word }) => word);
+  const eligible = getEligibleWords(settings, excludedWords).map(({ word }) => word);
   if (!eligible.length) return [];
 
   const weighting = normaliseSummary(summary);
@@ -412,9 +427,10 @@ export function createReviewRound(
   struggles = [],
   random = Math.random,
   summary = null,
+  excludedWords = [],
 ) {
   const settings = normaliseSettings(value);
-  const eligible = getEligibleWords(settings).map(({ word }) => word);
+  const eligible = getEligibleWords(settings, excludedWords).map(({ word }) => word);
   if (!eligible.length) return [];
 
   const normaliseWord = (word) => word.normalize('NFC').toLocaleLowerCase(settings.locale);

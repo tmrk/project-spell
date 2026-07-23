@@ -649,13 +649,26 @@ describe('Project Spell', () => {
     vi.useFakeTimers();
     const playSpy = vi.spyOn(Audio.prototype, 'play');
     vi.spyOn(Math, 'random').mockReturnValue(0);
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat\ndog\nfox\nhen\npig\nsun',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      }),
+    );
     render(<App />);
     playIn(PLAY_EASY);
 
     const finishRound = () => {
       for (let word = 1; word <= 3; word += 1) {
+        const spelling = [...document.querySelectorAll('.letter__visual')]
+          .map((letter) => letter.textContent.trim())
+          .join('');
         fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
-          target: { value: 'cat' },
+          target: { value: spelling },
         });
         const ding = playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/done.mp3')).at(-1);
 
@@ -755,6 +768,53 @@ describe('Project Spell', () => {
     expect(window.localStorage.getItem(STATS_KEY)).toBeNull();
     expect(window.localStorage.getItem(PROGRESS_KEY)).toBeNull();
     expect(screen.getByText(/No play data yet/)).toBeInTheDocument();
+  });
+
+  it('keeps completed words out of future rounds until that child clears progress', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat\ndog\nfox',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+        soundEffects: false,
+      }),
+    );
+
+    render(<App />);
+    playIn(PLAY_EASY);
+    const completed = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      const word = [...document.querySelectorAll('.letter__visual')]
+        .map((letter) => letter.textContent.trim())
+        .join('');
+      completed.push(word);
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: word },
+      });
+      act(() => vi.advanceTimersByTime(760));
+    }
+
+    expect(new Set(completed)).toEqual(new Set(['cat', 'dog', 'fox']));
+    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+
+    expect(screen.getByRole('dialog', { name: 'Settings (for parents)' })).toBeInTheDocument();
+    expect(screen.getByText(
+      'All matching words are complete. Clear progress below to play them again.',
+    )).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear progress' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear everything' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    expect(['cat', 'dog', 'fox']).toContain([...document.querySelectorAll('.letter__visual')]
+      .map((letter) => letter.textContent.trim())
+      .join(''));
   });
 
   it('exports valid local stats and reward progress as dated JSON', async () => {
@@ -1483,6 +1543,48 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('\u2605 12 stars in your jar')).toBeInTheDocument();
       // Zoe keeps the original un-suffixed keys; Bo is stored alongside, not over the top.
       expect(window.localStorage.getItem(PROGRESS_KEY)).toContain('"totalStars":12');
+    });
+
+    it('keeps completed-word exclusions scoped to the child who completed them', () => {
+      window.localStorage.setItem(PROFILES_KEY, JSON.stringify({
+        version: 1,
+        activeId: 'default',
+        profiles: [
+          { id: 'default', name: 'Zoe', createdAt: 0 },
+          { id: 'bo', name: 'Bo', createdAt: 1 },
+        ],
+      }));
+      const oneWordSettings = JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      });
+      window.localStorage.setItem(SETTINGS_KEY, oneWordSettings);
+      window.localStorage.setItem(`${SETTINGS_KEY}#bo`, oneWordSettings);
+      window.localStorage.setItem(STATS_KEY, JSON.stringify({
+        version: 1,
+        totals: { attempts: 3, wordsCompleted: 1 },
+        letters: {},
+        confusions: {},
+        words: {
+          'en-GB/cat': { seen: 1, completed: 1, mistakes: 0, perfect: true },
+        },
+        recentEvents: [],
+      }));
+
+      render(<App />);
+      playIn(PLAY_EASY);
+      expect(screen.getByText(
+        'All matching words are complete. Clear progress below to play them again.',
+      )).toBeInTheDocument();
+
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Play as Bo' }));
+      playIn(PLAY_EASY);
+
+      expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'c, current letter' })).toBeInTheDocument();
     });
 
     it('keeps each child on their own settings', () => {

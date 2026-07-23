@@ -169,6 +169,7 @@ const messages = Object.freeze({
   wordSingular: 'ord',
   wordPlural: 'ord',
   noWordsMatch: 'Inga ord matchar inställningarna',
+  allMatchingWordsCompleted: 'Alla matchande ord är klara. Rensa framstegen nedan för att spela dem igen.',
   matchingFilters: 'Matchar dina filter',
   matchPill: '✓ {count} {unit}',
   resetAll: 'Återställ alla inställningar',

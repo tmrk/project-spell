@@ -155,6 +155,20 @@ export function trickiestLetters(stats, { minAttempts = 5, count = 3 } = {}) {
     .map(([letter]) => letter);
 }
 
+export function completedWordsForLocale(stats, locale) {
+  const safe = stats?.words && typeof stats.words === 'object' ? stats : createEmptyStats();
+  const prefix = `${locale}/`;
+  const completedWords = new Set();
+
+  Object.entries(safe.words).forEach(([id, entry]) => {
+    if (typeof id !== 'string' || !id.startsWith(prefix) || !entry || typeof entry !== 'object') return;
+    const word = id.slice(prefix.length);
+    if (word && asCount(entry.completed) >= 1) completedWords.add(word);
+  });
+
+  return completedWords;
+}
+
 // Feeds adaptive word selection (roadmap G6). `perfect` records whether the *most recent*
 // completion was clean, so a struggling word is one the child last got wrong.
 export function summariseForSelection(stats, locale) {

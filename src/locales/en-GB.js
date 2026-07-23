@@ -169,6 +169,7 @@ const messages = Object.freeze({
   wordSingular: 'word',
   wordPlural: 'words',
   noWordsMatch: 'No words match these settings',
+  allMatchingWordsCompleted: 'All matching words are complete. Clear progress below to play them again.',
   matchingFilters: 'Matching your filters',
   matchPill: '✓ {count} {unit}',
   resetAll: 'Reset all settings',

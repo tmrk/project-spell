@@ -169,6 +169,7 @@ const messages = Object.freeze({
   wordSingular: 'szó',
   wordPlural: 'szó',
   noWordsMatch: 'Ezekkel a beállításokkal nincs megfelelő szó',
+  allMatchingWordsCompleted: 'Minden megfelelő szó elkészült. Az újbóli játékhoz töröld lent a haladást.',
   matchingFilters: 'A szűrőknek megfelelően',
   matchPill: '✓ {count} {unit}',
   resetAll: 'Minden beállítás visszaállítása',

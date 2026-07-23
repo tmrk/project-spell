@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   averageLetterMs,
+  completedWordsForLocale,
   createEmptyStats,
   normaliseStats,
   recordAttempt,
@@ -231,6 +232,28 @@ describe('summaries', () => {
     const swedish = summariseForSelection(stats, 'sv-SE');
     expect([...swedish.strugglingWords]).toEqual(['katt']);
     expect([...swedish.masteredWords]).toEqual([]);
+  });
+
+  it('lists completed words for one locale so each child can keep a fresh word pool', () => {
+    let stats = createEmptyStats();
+    stats = recordWordCompleted(stats, {
+      word: 'cat',
+      locale: 'en-GB',
+      mistakes: 0,
+      durationMs: 1000,
+      mode: 'easy',
+    });
+    stats = recordWordCompleted(stats, {
+      word: 'katt',
+      locale: 'sv-SE',
+      mistakes: 1,
+      durationMs: 1200,
+      mode: 'easy',
+    });
+
+    expect([...completedWordsForLocale(stats, 'en-GB')]).toEqual(['cat']);
+    expect([...completedWordsForLocale(stats, 'sv-SE')]).toEqual(['katt']);
+    expect(completedWordsForLocale(null, 'en-GB').size).toBe(0);
   });
 
   it('summarises tricky letters and survives an empty or malformed store', () => {

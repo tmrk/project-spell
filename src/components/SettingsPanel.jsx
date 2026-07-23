@@ -3,7 +3,13 @@ import { CloseIcon } from './Icons';
 import NameTag from './NameTag';
 import { MAX_PROFILES, getActiveProfile } from '../profiles';
 import { DEFAULT_SETTINGS, PALETTES, PRESETS, getEligibleWords, normaliseSettings } from '../game';
-import { buildLetterHeatMap, createEmptyStats, topConfusions, trickiestLetters } from '../stats';
+import {
+  buildLetterHeatMap,
+  completedWordsForLocale,
+  createEmptyStats,
+  topConfusions,
+  trickiestLetters,
+} from '../stats';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
 import { CREDITS } from '../credits';
 import packageInfo from '../../package.json';
@@ -200,8 +206,14 @@ export default function SettingsPanel({
     () => normaliseSettings({ ...settings, customWords }),
     [customWords, settings],
   );
-  const eligibleCount = useMemo(() => getEligibleWords(eligibleSettings).length, [eligibleSettings]);
   const statsData = stats ?? EMPTY_STATS;
+  const wordCounts = useMemo(() => {
+    const matching = getEligibleWords(eligibleSettings).length;
+    const completed = completedWordsForLocale(statsData, eligibleSettings.locale);
+    const remaining = getEligibleWords(eligibleSettings, completed).length;
+    return { matching, remaining };
+  }, [eligibleSettings, statsData]);
+  const allMatchingWordsCompleted = wordCounts.matching > 0 && wordCounts.remaining === 0;
   const hasPlayData = statsData.totals.attempts > 0 || statsData.totals.wordsCompleted > 0;
   const trickyLetters = trickiestLetters(statsData);
   const heatMap = useMemo(() => buildLetterHeatMap(statsData), [statsData]);
@@ -529,15 +541,17 @@ export default function SettingsPanel({
               />
             </label>
 
-            <div className={`filter-match${eligibleCount ? '' : ' filter-match--empty'}`}>
+            <div className={`filter-match${wordCounts.remaining ? '' : ' filter-match--empty'}`}>
               <span>{copy.matchingFilters}</span>
               <strong>
-                {eligibleCount
+                {wordCounts.remaining
                   ? formatMessage(copy.matchPill, {
-                      count: eligibleCount,
-                      unit: eligibleCount === 1 ? copy.wordSingular : copy.wordPlural,
+                      count: wordCounts.remaining,
+                      unit: wordCounts.remaining === 1 ? copy.wordSingular : copy.wordPlural,
                     })
-                  : copy.noWordsMatch}
+                  : allMatchingWordsCompleted
+                    ? copy.allMatchingWordsCompleted
+                    : copy.noWordsMatch}
               </strong>
             </div>
           </fieldset>
