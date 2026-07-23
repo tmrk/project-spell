@@ -980,9 +980,9 @@ describe('Project Spell', () => {
       act(() => vi.advanceTimersByTime(760));
     }
 
-    expect(screen.getByText('A shiny sticker for your book!')).toBeInTheDocument();
+    expect(screen.getByText('Shiny sticker!')).toBeInTheDocument();
     expect(screen.getByText('Super round finished — what a star!')).toBeInTheDocument();
-    expect(document.querySelectorAll('.journey-strip__socket--filled')).toHaveLength(3);
+    expect(document.querySelectorAll('.journey-strip__star--filled')).toHaveLength(3);
     expect(document.querySelector('.journey-strip__gift')).toHaveClass('journey-strip__gift--opened');
     expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({
       roundsTowardSuper: 0,
@@ -1061,7 +1061,7 @@ describe('Project Spell', () => {
       act(() => vi.advanceTimersByTime(760));
     }
 
-    expect(screen.getByText('A new sticker for your book!')).toBeInTheDocument();
+    expect(screen.getByText('New sticker!')).toBeInTheDocument();
     expect(screen.getByText('New badge: First round')).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({
       stickers: ['en-GB/cat'],

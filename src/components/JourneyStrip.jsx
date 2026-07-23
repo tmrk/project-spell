@@ -17,15 +17,15 @@ export default function JourneyStrip({ position = 0, wasSuper = false, message =
 
   return (
     <div className="journey-strip">
-      <div className="journey-strip__track" aria-hidden="true">
+      <div className="journey-strip__row" aria-hidden="true">
         {Array.from({ length: socketCount }, (_, index) => {
           const filled = wasSuper || index < safePosition;
           return (
             <span
-              className={`journey-strip__socket${filled ? ' journey-strip__socket--filled' : ''}`}
+              className={`journey-strip__star${filled ? ' journey-strip__star--filled' : ''}`}
               key={index}
             >
-              {filled && <StarIcon filled />}
+              <StarIcon filled={filled} />
             </span>
           );
         })}

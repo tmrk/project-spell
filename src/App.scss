@@ -158,15 +158,6 @@ input:focus-visible {
   height: 100%;
 }
 
-.eyebrow {
-  margin: 0 0 10px;
-  color: rgba(32, 48, 43, 0.58);
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-}
-
 .welcome-screen,
 .complete-screen {
   display: flex;
@@ -943,26 +934,12 @@ input:focus-visible {
   line-height: 0.98;
 }
 
-.complete-summary {
-  text-transform: uppercase;
-  margin: 22px 0 6px;
-  color: rgba(32, 48, 43, 0.67);
-  font-size: clamp(1rem, 2.2vw, 1.2rem);
-  line-height: 1.45;
-}
-
-.star-jar-line {
-  margin: 0 0 22px;
-  color: rgba(32, 48, 43, 0.72);
-  font-size: clamp(0.96rem, 2vw, 1.12rem);
-  font-weight: 800;
-  line-height: 1.4;
-}
-
+// One quiet reward beat between the headline and the next-round nudge — never a stack of
+// competing boxes. Flat and centred, like the rest of the child-facing screens (no card chrome).
 .round-sticker-award {
   display: grid;
   justify-items: center;
-  margin: 0 0 18px;
+  margin: 28px 0 4px;
   color: rgba(32, 48, 43, 0.7);
   gap: 2px;
 }
@@ -1003,7 +980,7 @@ input:focus-visible {
 }
 
 .badge-earned-line {
-  margin: -8px 0 18px;
+  margin: 8px 0 0;
   color: rgba(32, 48, 43, 0.62);
   font-size: 0.86rem;
   font-weight: 750;
@@ -1558,74 +1535,67 @@ input:focus-visible {
   animation: finish-pop 480ms cubic-bezier(0.2, 0.9, 0.25, 1.25) var(--star-delay) both;
 }
 
+// A quiet footnote toward the next surprise — flat glyphs in a row, no pill/track chrome, so it
+// reads as one small aside under the reward beat rather than a second progress widget.
 .journey-strip {
   display: grid;
   justify-items: center;
-  width: min(390px, 88vw);
-  margin: 10px 0 18px;
-  gap: 8px;
+  margin: 6px 0 20px;
+  gap: 6px;
 }
 
-.journey-strip__track {
-  position: relative;
+// Give the strip room to breathe when it follows the headline directly (no reward this round);
+// when a reward card comes first, its own bottom margin already provides the separation.
+.complete-screen h1 + .journey-strip {
+  margin-top: 28px;
+}
+
+.journey-strip__row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: clamp(6px, 1.6vw, 9px);
+}
+
+.journey-strip__star {
+  display: block;
+  width: 20px;
+  height: 20px;
+  color: rgba(32, 48, 43, 0.2);
+}
+
+.journey-strip__star--filled {
+  color: var(--ps-gold);
+  filter: drop-shadow(0 2px 0 var(--ps-gold-shade));
+}
+
+.journey-strip__star svg,
+.journey-strip__gift svg {
   width: 100%;
+  height: 100%;
 }
 
-.journey-strip__track::before {
-  position: absolute;
-  z-index: -1;
-  right: 34px;
-  left: 22px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(32, 48, 43, 0.1);
-  content: '';
-}
-
-.journey-strip__socket,
 .journey-strip__gift {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--ps-paper);
-  box-shadow: inset 0 3px 0 rgba(32, 48, 43, 0.1), 0 2px 0 rgba(32, 48, 43, 0.08);
-  place-items: center;
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  color: var(--ps-coral);
+  filter: drop-shadow(0 2px 0 var(--ps-coral-shade));
+}
+
+.journey-strip__gift svg {
+  fill: currentColor;
+  stroke: var(--ps-coral-shade);
+  stroke-width: 1;
 }
 
 .journey-strip__gift:not(.journey-strip__gift--opened) {
   animation: journey-gift-wobble 480ms ease 2s both;
 }
 
-.journey-strip__socket svg {
-  width: 35px;
-  height: 35px;
-  color: var(--ps-gold);
-  filter: drop-shadow(0 3px 0 var(--ps-gold-shade));
-}
-
-.journey-strip__gift {
-  width: 54px;
-  height: 54px;
-  border-radius: 17px;
-  color: var(--ps-coral);
-  box-shadow: 0 5px 0 var(--ps-coral-shade);
-}
-
-.journey-strip__gift svg {
-  width: 38px;
-  height: 38px;
-  fill: currentColor;
-  stroke: var(--ps-coral-shade);
-  stroke-width: 1;
-}
-
 .journey-strip__gift--opened {
   color: var(--ps-gold);
-  box-shadow: 0 5px 0 var(--ps-gold-shade);
+  filter: drop-shadow(0 2px 0 var(--ps-gold-shade));
   transform: rotate(-7deg) scale(1.05);
 }
 
@@ -1635,8 +1605,8 @@ input:focus-visible {
 
 .journey-strip p {
   margin: 0;
-  color: rgba(32, 48, 43, 0.55);
-  font-size: 0.76rem;
+  color: rgba(32, 48, 43, 0.5);
+  font-size: 0.74rem;
   font-weight: 750;
   line-height: 1.3;
 }
@@ -3008,34 +2978,9 @@ input:focus-visible {
     margin-bottom: 8px;
   }
 
-  .complete-summary {
-    margin-top: 10px;
-  }
-
   .journey-strip {
-    width: min(330px, 48vw);
     margin: 4px 0 8px;
     gap: 3px;
-  }
-
-  .journey-strip__socket {
-    width: 36px;
-    height: 36px;
-  }
-
-  .journey-strip__socket svg {
-    width: 29px;
-    height: 29px;
-  }
-
-  .journey-strip__gift {
-    width: 44px;
-    height: 44px;
-  }
-
-  .journey-strip__gift svg {
-    width: 31px;
-    height: 31px;
   }
 
   .star-ceremony {
@@ -3052,7 +2997,7 @@ input:focus-visible {
     grid-template-columns: auto auto;
     align-items: center;
     justify-content: center;
-    margin-bottom: 10px;
+    margin: 14px 0 4px;
     text-align: left;
     column-gap: 8px;
   }
@@ -3070,7 +3015,8 @@ input:focus-visible {
   }
 
   .badge-earned-line {
-    margin: -3px 0 10px;
+    grid-column: span 2;
+    margin: 4px 0 0;
   }
 
   .welcome-language {

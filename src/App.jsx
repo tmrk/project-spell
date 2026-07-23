@@ -556,7 +556,6 @@ export default function App() {
   const [roundWords, setRoundWords] = useState([]);
   const [wordIndex, setWordIndex] = useState(0);
   const [letterIndex, setLetterIndex] = useState(0);
-  const [mistakes, setMistakes] = useState(0);
   const [feedback, setFeedback] = useState('idle');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [hintLevel, setHintLevel] = useState('none');
@@ -859,7 +858,6 @@ export default function App() {
     setRoundWords(words);
     setWordIndex(0);
     setLetterIndex(0);
-    setMistakes(0);
     setFeedback('idle');
     setFeedbackMessage('');
     setCelebratingWord(false);
@@ -1060,7 +1058,6 @@ export default function App() {
             setLetterIndex(nextLetterIndex);
             resetHintLadder();
           }
-          setMistakes((count) => count + 1);
           missCountRef.current += 1;
           // Pointing at the right key sits between "try again" and giving the answer away,
           // so it applies in easy mode too — where there is no glyph left to reveal.
@@ -1739,40 +1736,37 @@ export default function App() {
               );
             })}
           </div>
-          <p className="eyebrow">{copy.roundComplete}</p>
           <h1>{copy.completeHeading}</h1>
-          <p className="complete-summary">
-            {formatMessage(copy.completeSummary, {
-              count: roundWords.length,
-              perfect: mistakes === 0 ? copy.completePerfect : '.',
-            })}
-          </p>
+          {(roundReward.sticker || roundReward.shiny || roundReward.badge) && (
+            <div className={`round-sticker-award${roundReward.shiny ? ' round-sticker-award--shiny' : ''}`}>
+              {roundReward.shiny && (
+                <>
+                  <span className="shiny-gift" aria-hidden="true">🎁</span>
+                  <StickerPicture codepoint={roundReward.shiny} className="die-cut shiny" />
+                  <p>{copy.newShinyStickerLine}</p>
+                </>
+              )}
+              {roundReward.sticker && !roundReward.shiny && (
+                <>
+                  <StickerPicture codepoint={roundReward.sticker.codepoint} className="die-cut" />
+                  <p>{copy.newStickerLine}</p>
+                  <strong>{roundReward.sticker.word}</strong>
+                </>
+              )}
+              {roundReward.badge && BADGE_LABEL_KEYS[roundReward.badge] && (
+                <p className="badge-earned-line">
+                  {formatMessage(copy.badgeEarnedLine, {
+                    badge: copy[BADGE_LABEL_KEYS[roundReward.badge]],
+                  })}
+                </p>
+              )}
+            </div>
+          )}
           <JourneyStrip
             position={roundReward.journeyPosition}
             wasSuper={roundReward.kind === 'super'}
             message={journeyMessage}
           />
-          {roundReward.sticker && (
-            <div className="round-sticker-award">
-              <StickerPicture codepoint={roundReward.sticker.codepoint} className="die-cut" />
-              <p>{copy.newStickerLine}</p>
-              <strong>{roundReward.sticker.word}</strong>
-            </div>
-          )}
-          {roundReward.shiny && (
-            <div className="round-sticker-award round-sticker-award--shiny">
-              <span className="shiny-gift" aria-hidden="true">🎁</span>
-              <StickerPicture codepoint={roundReward.shiny} className="die-cut shiny" />
-              <p>{copy.newShinyStickerLine}</p>
-            </div>
-          )}
-          {roundReward.badge && BADGE_LABEL_KEYS[roundReward.badge] && (
-            <p className="badge-earned-line">
-              {formatMessage(copy.badgeEarnedLine, {
-                badge: copy[BADGE_LABEL_KEYS[roundReward.badge]],
-              })}
-            </p>
-          )}
           <button type="button" className="primary-button" onClick={() => startRound()}>
             {copy.playAgain}
           </button>
