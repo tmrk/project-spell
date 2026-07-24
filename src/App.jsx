@@ -14,7 +14,7 @@ import StarJarChip from './components/StarJarChip';
 import StarTrail from './components/StarTrail';
 import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
 import Wordmark from './components/Wordmark';
-import { HomeIcon, MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
+import { ChevronIcon, HomeIcon, MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
@@ -67,7 +67,8 @@ import {
   renameProfile,
   selectProfile,
 } from './profiles';
-import { buildKeys } from './keyboard';
+import { buildKeyRows } from './keyboard';
+import { SESSION_KEY, createSession, isResumable, normaliseSession } from './session';
 import { getStickerDetails } from './stickers/map';
 import {
   LOCALE_OPTIONS,
@@ -195,8 +196,25 @@ function loadProgress(profileId) {
   }
 }
 
+function loadSession(profileId) {
+  try {
+    const stored = window.localStorage.getItem(profileStorageKey(SESSION_KEY, profileId));
+    return stored ? normaliseSession(JSON.parse(stored)) : null;
+  } catch {
+    return null;
+  }
+}
+
+// The resume offer a returning child sees on the welcome screen: their stored round, but only when
+// it is worth coming back to and still in the language on screen (a language switch rebuilds the
+// world, so an old-language round no longer belongs).
+function resumableFor(profileId, locale) {
+  const session = loadSession(profileId);
+  return isResumable(session) && session.locale === locale ? session : null;
+}
+
 function clearProfileStorage(profileId) {
-  [SETTINGS_KEY, STATS_KEY, PROGRESS_KEY].forEach((baseKey) => {
+  [SETTINGS_KEY, STATS_KEY, PROGRESS_KEY, SESSION_KEY].forEach((baseKey) => {
     try {
       window.localStorage.removeItem(profileStorageKey(baseKey, profileId));
     } catch {
@@ -594,6 +612,9 @@ export default function App() {
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
   const [visibleProgress, setVisibleProgress] = useState(() => loadProgress(activeProfileId));
+  // The mid-round snapshot a returning child can pick up from the welcome screen. Null unless a
+  // resumable round is stored for the active child in the current language.
+  const [resumable, setResumable] = useState(() => resumableFor(activeProfileId, settings.locale));
 
   const inputRef = useRef(null);
   const settingsRef = useRef(settings);
@@ -650,9 +671,10 @@ export default function App() {
         1,
       )
     : 0;
-  // Recomputed only when the word changes, so the simple tier's keys never move mid-word.
-  const keyboardKeys = useMemo(
-    () => buildKeys(settings.keyboard, currentWord, settings.locale),
+  // Recomputed only when the word changes, so the simple tier's keys never move mid-word. The
+  // full keyboard's rows follow the language's physical layout; the simple tier stays a short grid.
+  const keyboardRows = useMemo(
+    () => buildKeyRows(settings.keyboard, currentWord, settings.locale),
     [currentWord, settings.keyboard, settings.locale],
   );
   // A fresh arrangement of the five-colour wheel per word: no longer always coral-first. The
@@ -837,6 +859,56 @@ export default function App() {
     }
   }, [activeProfileId]);
 
+  const persistSession = useCallback((session) => {
+    try {
+      window.localStorage.setItem(
+        profileStorageKey(SESSION_KEY, activeProfileId),
+        JSON.stringify(session),
+      );
+    } catch {
+      // Resume is best-effort; the game still plays when storage is unavailable.
+    }
+  }, [activeProfileId]);
+
+  const clearSession = useCallback(() => {
+    try {
+      window.localStorage.removeItem(profileStorageKey(SESSION_KEY, activeProfileId));
+    } catch {
+      // Nothing stored means nothing to clear.
+    }
+  }, [activeProfileId]);
+
+  // Keep the resume snapshot in step with play, so pressing Home, closing the tab or a crash all
+  // come back to the same word and letter. The transient full-length letter index during a word's
+  // celebration is skipped (transitioningRef), so a resumed round never lands on a finished word.
+  useEffect(() => {
+    if (phase !== 'playing' || !roundWords.length || transitioningRef.current) return;
+    persistSession(
+      createSession({
+        locale: settings.locale,
+        gameMode: settings.gameMode,
+        roundKind,
+        words: roundWords,
+        wordIndex,
+        letterIndex,
+        colorSeed: roundColorSeed,
+        wordStars: wordStarsRef.current,
+        startStars: roundStartStarsRef.current,
+        journeyStart: roundAwardRef.current.journeyPosition,
+      }),
+    );
+  }, [
+    letterIndex,
+    persistSession,
+    phase,
+    roundColorSeed,
+    roundKind,
+    roundWords,
+    settings.gameMode,
+    settings.locale,
+    wordIndex,
+  ]);
+
   // `options.settings` lets the mode cards start a round with the mode they represent without
   // waiting a render for the settings state to catch up.
   const startRound = useCallback((options = {}) => {
@@ -879,6 +951,10 @@ export default function App() {
     const returning = statsRef.current.totals.attempts > 0;
 
     clearRoundTimers();
+    // A fresh round replaces anything resumable; the effect above starts saving the new one as
+    // soon as the child makes progress.
+    clearSession();
+    setResumable(null);
     transitioningRef.current = nextRoundKind === 'super' || wantsGreeting;
     resetHintLadder();
     setRoundColorSeed(Math.floor(Math.random() * 5));
@@ -927,7 +1003,7 @@ export default function App() {
     primeEffects();
     selectNextMusicTrack();
     if (activeSettings.music) playMusic();
-  }, [clearRoundTimers, playMusic, primeEffects, resetHintLadder, selectNextMusicTrack, settings]);
+  }, [clearRoundTimers, clearSession, playMusic, primeEffects, resetHintLadder, selectNextMusicTrack, settings]);
 
   const dismissSuperIntro = useCallback(() => {
     if (!superIntroVisible) return;
@@ -1111,6 +1187,9 @@ export default function App() {
       setFeedbackMessage('');
       setPhase('complete');
       transitioningRef.current = false;
+      // The round is done — it belongs on the complete screen, not back in the resume offer.
+      clearSession();
+      setResumable(null);
       pauseMusic();
       const praise = pickVaried(copy.roundFinishedSpeeches, lastRoundPraiseIndexRef);
       // Keep completion praise concise. Collected words are spoken only when a child
@@ -1128,7 +1207,7 @@ export default function App() {
     wordStartRef.current = advanceTime;
     letterStartRef.current = advanceTime;
     wordMissesRef.current = 0;
-  }, [copy.roundFinishedSpeeches, pauseMusic, resetHintLadder, roundWords.length, say, signalFeedback, wordIndex]);
+  }, [clearSession, copy.roundFinishedSpeeches, pauseMusic, resetHintLadder, roundWords.length, say, signalFeedback, wordIndex]);
 
   const handleAttempt = useCallback(
     (value) => {
@@ -1359,6 +1438,7 @@ export default function App() {
     try {
       window.localStorage.removeItem(profileStorageKey(STATS_KEY, activeProfileId));
       window.localStorage.removeItem(profileStorageKey(PROGRESS_KEY, activeProfileId));
+      window.localStorage.removeItem(profileStorageKey(SESSION_KEY, activeProfileId));
     } catch {
       // Nothing stored means nothing to erase.
     }
@@ -1369,9 +1449,14 @@ export default function App() {
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);
     setStickerBookProgress(progressRef.current);
+    setResumable(null);
   }, [activeProfileId]);
 
-  const resetToWelcome = () => {
+  // Home never throws a round away any more (owner request 2026-07-24): the mid-round snapshot is
+  // left on disk, so the welcome screen can offer to resume exactly where the child was. Callers
+  // that genuinely end the round — a rebuilt round, a new game — pass their own resume value
+  // (usually null) rather than the stored one.
+  const resetToWelcome = (nextResumable = resumableFor(activeProfileId, settingsRef.current.locale)) => {
     clearRoundTimers();
     window.clearTimeout(modeRevealTimerRef.current);
     // Coming back to the welcome screen means starting from the Play slab again, whatever the
@@ -1394,6 +1479,7 @@ export default function App() {
     setRoundReward(emptyRoundReward());
     setSuperIntroVisible(false);
     setStickerBookOpen(false);
+    setResumable(nextResumable);
     speechTokenRef.current += 1;
     speechBusyUntilRef.current = 0;
     wordStarsRef.current = [];
@@ -1402,16 +1488,86 @@ export default function App() {
     setSettingsOpen(false);
   };
 
+  // Pick a stored round back up on exactly the word and letter it was left on. Resume plays the
+  // very same words in the very same mode, whatever the current filters say, so "continue" always
+  // means continue — never a quietly different round.
+  const resumeRound = () => {
+    const session = resumable ?? resumableFor(activeProfileId, settingsRef.current.locale);
+    if (!session) {
+      setResumable(null);
+      return;
+    }
+    clearRoundTimers();
+    window.clearTimeout(modeRevealTimerRef.current);
+    cancelSpeech();
+
+    if (session.gameMode !== settingsRef.current.gameMode) {
+      const nextSettings = normaliseSettings({ ...settingsRef.current, gameMode: session.gameMode });
+      settingsRef.current = nextSettings;
+      setSettings(nextSettings);
+    }
+
+    // Restore the scoring context so the closing star ceremony and the journey still add up.
+    wordStarsRef.current = [...session.wordStars];
+    roundStartStarsRef.current = session.startStars;
+    roundAwardRef.current = {
+      badge: null,
+      journeyPosition: session.journeyStart,
+      shiny: null,
+      sticker: null,
+      wasSuper: false,
+    };
+    const now = performance.now();
+    roundStartRef.current = now;
+    wordStartRef.current = now;
+    letterStartRef.current = now;
+    wordMissesRef.current = 0;
+    roundMissesRef.current = 0;
+    resetHintLadder();
+    transitioningRef.current = false;
+    speechTokenRef.current += 1;
+    speechBusyUntilRef.current = 0;
+    wordsSincePraiseRef.current = 0;
+    wordPraiseGapRef.current = randomWordPraiseGap();
+
+    setWelcomeStep('play');
+    setNamingMode(null);
+    setGreeting(null);
+    setRoundColorSeed(session.colorSeed);
+    setRoundWords(session.words);
+    setWordIndex(session.wordIndex);
+    setLetterIndex(session.letterIndex);
+    setRoundKind(session.roundKind);
+    setRoundReward(emptyRoundReward());
+    setFeedback('idle');
+    setFeedbackMessage('');
+    setCelebratingWord(false);
+    setConfettiVisible(false);
+    setHeartBurstId(0);
+    setSuperIntroVisible(false);
+    setStickerBookOpen(false);
+    setSettingsOpen(false);
+    setResumable(null);
+    setPhase('playing');
+
+    primeEffects();
+    selectNextMusicTrack();
+    if (settingsRef.current.music) playMusic();
+  };
+
   const restartWithSettings = (nextSettings) => {
+    // A rebuilt round is a different round; the old snapshot no longer describes it.
+    clearSession();
     settingsRef.current = nextSettings;
     setSettings(nextSettings);
-    resetToWelcome();
+    resetToWelcome(null);
   };
 
   // Switching child swaps three stores at once. Everything is set in this one handler so the
   // batched render sees the new profile id and the new settings together.
   const switchToProfile = (nextProfiles) => {
     const nextId = getActiveProfile(nextProfiles).id;
+    let nextResumable = resumableFor(nextId, settingsRef.current.locale);
     if (nextId !== activeProfileId) {
       const nextSettings = loadSettings(nextId);
       statsRef.current = loadStats(nextId);
@@ -1424,9 +1580,11 @@ export default function App() {
       setStickerBookProgress(progressRef.current);
       setSettingsStats(statsRef.current);
       setSettingsProgress(progressRef.current);
+      // Each child keeps their own resumable round, read in their own saved language.
+      nextResumable = resumableFor(nextId, nextSettings.locale);
     }
     setProfiles(nextProfiles);
-    resetToWelcome();
+    resetToWelcome(nextResumable);
   };
 
   const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
@@ -1539,6 +1697,12 @@ export default function App() {
   // The unnamed default slot is never offered as a chip — there is nothing to tap on.
   const namedProfiles = profiles.profiles.filter((profile) => profile.name);
   const roundsRemaining = SUPER_ROUND_EVERY - roundReward.journeyPosition;
+  // After this round the child is one step further along the arc; when they have filled every
+  // step, the next round is the golden super round — the button says so.
+  const nextIsSuper = phase === 'complete' && roundReward.journeyPosition >= SUPER_ROUND_EVERY - 1;
+  // The welcome screen offers to resume only a stored round that is still in the language on
+  // screen — a language switch has already rebuilt the world.
+  const canResume = phase === 'welcome' && Boolean(resumable) && resumable.locale === settings.locale;
   const journeyMessage = roundReward.kind === 'super'
     ? copy.superRoundDone
     : roundsRemaining === 1
@@ -1582,7 +1746,7 @@ export default function App() {
       )}
       <header className="app-controls" aria-label={copy.appControls}>
         {(phase === 'playing' || phase === 'complete') && (
-          <button type="button" className="icon-button" onClick={resetToWelcome} aria-label={copy.home}>
+          <button type="button" className="icon-button" onClick={() => resetToWelcome()} aria-label={copy.home}>
             <HomeIcon />
           </button>
         )}
@@ -1641,6 +1805,25 @@ export default function App() {
                 disabled={!normaliseProfileName(welcomeName)}
               >
                 {copy.nameReady}
+              </button>
+            </div>
+          ) : canResume ? (
+            // A returning child picks up exactly where they left off. Starting over is still one
+            // quiet tap away, but continuing is the obvious thing to do.
+            <div className="welcome-resume">
+              <button
+                type="button"
+                className="primary-button welcome-resume__button"
+                onClick={resumeRound}
+              >
+                {copy.resumeRound}
+              </button>
+              <button
+                type="button"
+                className="text-button welcome-resume__fresh"
+                onClick={() => setResumable(null)}
+              >
+                {copy.startFresh}
               </button>
             </div>
           ) : (
@@ -1746,7 +1929,7 @@ export default function App() {
       {phase === 'playing' && (
         <main
           className={`play-screen${
-            keyboardKeys.length ? ` play-screen--keys-${settings.keyboard}` : ''
+            keyboardRows.length ? ` play-screen--keys-${settings.keyboard}` : ''
           }`}
           onClick={focusInput}
         >
@@ -1845,7 +2028,7 @@ export default function App() {
           />
 
           <LetterKeyboard
-            keys={keyboardKeys}
+            rows={keyboardRows}
             highlight={keyHint}
             label={copy.keyboardLabel}
             onPress={handleAttempt}
@@ -1904,8 +2087,13 @@ export default function App() {
             wasSuper={roundReward.kind === 'super'}
             message={journeyMessage}
           />
-          <button type="button" className="primary-button" onClick={() => startRound()}>
-            {copy.playAgain}
+          <button
+            type="button"
+            className={`primary-button next-round-button${nextIsSuper ? ' next-round-button--super' : ''}`}
+            onClick={() => startRound()}
+          >
+            {nextIsSuper ? copy.startSuperRound : copy.nextRound}
+            <ChevronIcon direction="next" />
           </button>
         </main>
       )}

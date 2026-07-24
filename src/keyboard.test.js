@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   KEYBOARD_MODES,
   SIMPLE_KEY_COUNT,
+  buildKeyRows,
   buildKeys,
   buildSimpleKeys,
   getAlphabet,
+  getKeyboardLayout,
   hashWord,
   seededRandom,
 } from './keyboard';
@@ -82,6 +84,52 @@ describe('key set by mode', () => {
     expect(buildKeys('full', 'cat', 'en-GB')).toEqual(getAlphabet('en-GB'));
     expect(buildKeys('system', 'cat', 'en-GB')).toEqual([]);
     expect(KEYBOARD_MODES).toEqual(['system', 'full', 'simple']);
+  });
+});
+
+describe('physical keyboard layout', () => {
+  const LOCALES = ['en-GB', 'en-US', 'sv-SE', 'hu-HU'];
+
+  it('lays the full keyboard out in rows that hold exactly the language alphabet', () => {
+    LOCALES.forEach((locale) => {
+      const rows = buildKeyRows('full', 'cat', locale);
+      const laidOut = rows.flatMap((row) => row.keys);
+      // No letter is missing and none is duplicated across the rows.
+      expect(new Set(laidOut)).toEqual(new Set(getAlphabet(locale)));
+      expect(laidOut).toHaveLength(getAlphabet(locale).length);
+    });
+  });
+
+  it('keeps each language in its own arrangement', () => {
+    // QWERTY / QWERTZ: the first key of the top row differs by language.
+    expect(getKeyboardLayout('en-GB')[0].keys.startsWith('qwerty')).toBe(true);
+    expect(getKeyboardLayout('hu-HU')[0].keys.startsWith('qwertz')).toBe(true);
+    // Swedish carries å ä ö on the letter rows; Hungarian carries í out to the left of the bottom.
+    expect(getKeyboardLayout('sv-SE').flatMap((row) => [...row.keys])).toEqual(
+      expect.arrayContaining(['å', 'ä', 'ö']),
+    );
+    expect(getKeyboardLayout('hu-HU')[2].keys[0]).toBe('í');
+  });
+
+  it('staggers the rows like a real board instead of stacking them flush', () => {
+    const offsets = buildKeyRows('full', 'cat', 'en-GB').map((row) => row.offset);
+    expect(offsets).toEqual([0, 0.25, 0.75]);
+  });
+
+  it('falls back to the default layout for an unknown locale', () => {
+    expect(getKeyboardLayout('xx-XX')).toEqual(getKeyboardLayout('en-GB'));
+  });
+
+  it('groups the simple tier into tidy rows without a stagger', () => {
+    const rows = buildKeyRows('simple', 'cat', 'en-GB', { random: seededRandom(1) });
+    expect(rows.every((row) => row.offset === 0)).toBe(true);
+    const flat = rows.flatMap((row) => row.keys);
+    expect(flat).toHaveLength(SIMPLE_KEY_COUNT);
+    [...'cat'].forEach((letter) => expect(flat).toContain(letter));
+  });
+
+  it('gives system mode no rows at all', () => {
+    expect(buildKeyRows('system', 'cat', 'en-GB')).toEqual([]);
   });
 });
 

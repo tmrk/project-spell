@@ -18,8 +18,48 @@ const ALPHABETS = Object.freeze({
 
 export const SIMPLE_KEY_COUNT = 9;
 
+// Physical keyboard layouts (owner request 2026-07-24). The full on-screen keyboard mirrors the
+// real keyboard a child is growing into — staggered rows and language-specific arrangement — so
+// the shape on screen matches the shape under their fingers, instead of a plain alphabetical grid.
+// Lowercase letters only: the game matches one character at a time, so no modifier, number or
+// punctuation keys appear. Each row's `offset` is a horizontal shift measured in key pitches (one
+// key plus one gap). The values are the true letter offsets of a real board: on QWERTY the home
+// row sits a quarter key right of the top row and the bottom row three quarters right; Hungarian's
+// ISO board carries the í key out to the left of the bottom row, so its rows climb a quarter key
+// at a time (í flush left, q indented, a indented more).
+const KEYBOARD_LAYOUTS = Object.freeze({
+  // QWERTY
+  'en-GB': [
+    { keys: 'qwertyuiop', offset: 0 },
+    { keys: 'asdfghjkl', offset: 0.25 },
+    { keys: 'zxcvbnm', offset: 0.75 },
+  ],
+  'en-US': [
+    { keys: 'qwertyuiop', offset: 0 },
+    { keys: 'asdfghjkl', offset: 0.25 },
+    { keys: 'zxcvbnm', offset: 0.75 },
+  ],
+  // Swedish QWERTY, with å after p and ö ä after l.
+  'sv-SE': [
+    { keys: 'qwertyuiopå', offset: 0 },
+    { keys: 'asdfghjklöä', offset: 0.25 },
+    { keys: 'zxcvbnm', offset: 0.75 },
+  ],
+  // Hungarian QWERTZ (ISO): accented vowels down the right-hand side, í out on its own to the
+  // left of the bottom row.
+  'hu-HU': [
+    { keys: 'qwertzuiopőú', offset: 0.25 },
+    { keys: 'asdfghjkléáű', offset: 0.5 },
+    { keys: 'íyxcvbnmöüó', offset: 0 },
+  ],
+});
+
 export function getAlphabet(locale) {
   return [...ALPHABETS[normaliseLocale(locale)]];
+}
+
+export function getKeyboardLayout(locale) {
+  return KEYBOARD_LAYOUTS[normaliseLocale(locale)] ?? KEYBOARD_LAYOUTS['en-GB'];
 }
 
 // A tiny deterministic generator so a word's simple keyboard looks the same every time the
@@ -70,5 +110,29 @@ export function buildSimpleKeys(word, locale, { size = SIMPLE_KEY_COUNT, random 
 export function buildKeys(mode, word, locale, options = {}) {
   if (mode === 'full') return getAlphabet(locale);
   if (mode === 'simple') return buildSimpleKeys(word, locale, options);
+  return [];
+}
+
+/**
+ * Keys grouped into the rows the on-screen keyboard draws.
+ *
+ * `full` follows the language's physical layout so the board looks like the real thing. `simple`
+ * has no real board to mirror — its letters are hand-picked per word — so it keeps its short
+ * shuffled set, balanced into one or two tidy centred rows with no stagger.
+ */
+export function buildKeyRows(mode, word, locale, options = {}) {
+  if (mode === 'full') {
+    return getKeyboardLayout(locale).map((row) => ({ keys: [...row.keys], offset: row.offset }));
+  }
+  if (mode === 'simple') {
+    const keys = buildSimpleKeys(word, locale, options);
+    if (!keys.length) return [];
+    const perRow = keys.length > 6 ? Math.ceil(keys.length / 2) : keys.length;
+    const rows = [];
+    for (let index = 0; index < keys.length; index += perRow) {
+      rows.push({ keys: keys.slice(index, index + perRow), offset: 0 });
+    }
+    return rows;
+  }
   return [];
 }

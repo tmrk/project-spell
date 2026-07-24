@@ -420,6 +420,31 @@ export default function SettingsPanel({
             {settings.gameMode === 'normal' && !settings.speech && (
               <small className="mode-note">{copy.modeNormalNeedsSpeech}</small>
             )}
+
+            <label className="stacked-field">
+              <span>{copy.onScreenKeyboard}</span>
+              <select
+                value={settings.keyboard}
+                onChange={(event) => applyChange({ keyboard: event.target.value })}
+              >
+                <option value="system">{copy.keyboardSystem}</option>
+                <option value="full">{copy.keyboardFull}</option>
+                <option value="simple">{copy.keyboardSimple}</option>
+              </select>
+              <small>{copy.keyboardHelp}</small>
+            </label>
+            <label className="toggle-row toggle-row--described">
+              <span className="toggle-copy">
+                <span>{copy.acceptUnaccented}</span>
+                <small>{copy.acceptUnaccentedHelp}</small>
+              </span>
+              <input
+                type="checkbox"
+                aria-label={copy.acceptUnaccented}
+                checked={settings.acceptUnaccented}
+                onChange={(event) => applyChange({ acceptUnaccented: event.target.checked })}
+              />
+            </label>
           </fieldset>
 
           <fieldset className="settings-group">
@@ -498,35 +523,11 @@ export default function SettingsPanel({
               <small>{copy.customWordsHelp}</small>
             </label>
             <label className="stacked-field">
-              <span>{copy.onScreenKeyboard}</span>
-              <select
-                value={settings.keyboard}
-                onChange={(event) => applyChange({ keyboard: event.target.value })}
-              >
-                <option value="system">{copy.keyboardSystem}</option>
-                <option value="full">{copy.keyboardFull}</option>
-                <option value="simple">{copy.keyboardSimple}</option>
-              </select>
-              <small>{copy.keyboardHelp}</small>
-            </label>
-            <label className="stacked-field">
               <span>{copy.chooseFrom}</span>
               <select value={settings.wordSource} onChange={(event) => applyChange({ wordSource: event.target.value })}>
                 <option value="all">{copy.allWords}</option>
                 <option value="custom">{copy.customWordsOnly}</option>
               </select>
-            </label>
-            <label className="toggle-row toggle-row--described">
-              <span className="toggle-copy">
-                <span>{copy.acceptUnaccented}</span>
-                <small>{copy.acceptUnaccentedHelp}</small>
-              </span>
-              <input
-                type="checkbox"
-                aria-label={copy.acceptUnaccented}
-                checked={settings.acceptUnaccented}
-                onChange={(event) => applyChange({ acceptUnaccented: event.target.checked })}
-              />
             </label>
             <label className="toggle-row toggle-row--described">
               <span className="toggle-copy">

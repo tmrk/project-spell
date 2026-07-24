@@ -5,6 +5,7 @@ import App from './App';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from './game';
 import { PROGRESS_KEY } from './progress';
 import { PROFILES_KEY } from './profiles';
+import { SESSION_KEY } from './session';
 import { STATS_KEY } from './stats';
 import { STICKER_MAP, STICKER_THEMES } from './stickers/map';
 
@@ -223,6 +224,49 @@ describe('Project Spell', () => {
 
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+  });
+
+  it('resumes the exact word and letter after a child goes Home mid-round', () => {
+    render(<App />);
+    playIn(PLAY_EASY);
+    // One letter of "cat" typed, then Home before the word is finished.
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'c' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
+
+    // The welcome screen offers to continue rather than losing the round.
+    expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep going' }));
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    // Back on the same word with the first letter already behind them.
+    expect(screen.getByRole('button', { name: 'c, completed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'a, current letter' })).toBeInTheDocument();
+  });
+
+  it('offers a fresh start instead of resuming when the child asks for one', () => {
+    render(<App />);
+    playIn(PLAY_EASY);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: 'c' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start a new game' }));
+
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Keep going' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer to resume a round the child never really started', () => {
+    render(<App />);
+    playIn(PLAY_EASY);
+    // No letters typed: pressing Home leaves nothing worth resuming.
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
+
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Keep going' })).not.toBeInTheDocument();
   });
 
   it('hot-swaps live settings mid-round instead of ending it', () => {
@@ -608,6 +652,9 @@ describe('Project Spell', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Försök en gång till');
     exactRound.unmount();
 
+    // The stalled first attempt is now a resumable round; this second pass is about a fresh start
+    // with accents accepted, so clear it (the equivalent of choosing "start a new game").
+    window.localStorage.removeItem(SESSION_KEY);
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
@@ -767,10 +814,10 @@ describe('Project Spell', () => {
         if (word < 3) {
           act(() => vi.advanceTimersByTime(760));
         } else {
-          expect(screen.queryByRole('button', { name: 'Play again' })).not.toBeInTheDocument();
+          expect(screen.queryByRole('button', { name: 'Next round' })).not.toBeInTheDocument();
           act(() => ding.dispatchEvent(new Event('ended')));
           act(() => vi.advanceTimersByTime(759));
-          expect(screen.queryByRole('button', { name: 'Play again' })).not.toBeInTheDocument();
+          expect(screen.queryByRole('button', { name: 'Next round' })).not.toBeInTheDocument();
           act(() => vi.advanceTimersByTime(1));
         }
       }
@@ -781,7 +828,7 @@ describe('Project Spell', () => {
     const firstPraise = window.speechSynthesis.speak.mock.calls.at(-1)[0].text;
     expect(firstPraise).toBe('Amazing! You finished the round!');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next round' }));
     finishRound();
 
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe(
@@ -892,7 +939,7 @@ describe('Project Spell', () => {
     }
 
     expect(new Set(completed)).toEqual(new Set(['cat', 'dog', 'fox']));
-    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next round' }));
 
     expect(screen.getByRole('dialog', { name: 'Settings (for parents)' })).toBeInTheDocument();
     expect(screen.getByText(
@@ -901,7 +948,7 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear progress' }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear everything' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next round' }));
 
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
     expect(['cat', 'dog', 'fox']).toContain([...document.querySelectorAll('.letter__visual')]

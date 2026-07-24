@@ -834,32 +834,51 @@ input:focus-visible {
   padding-bottom: max(268px, calc(env(safe-area-inset-bottom) + 258px));
 }
 
-// Optional on-screen letter keys (G8.3). Sits at the foot of the play screen so the word
-// keeps the centre of the stage; the system keyboard still works at the same time.
+// Optional on-screen letter keys (G8.3). Sits at the foot of the play screen so the word keeps
+// the centre of the stage; the system keyboard still works at the same time. The full keyboard is
+// laid out like a real physical keyboard — staggered rows in the language's own arrangement — so
+// every key is sized from the widest staggered row (`--max-units`, set per render) and the board
+// fits the screen without scrolling. `--kb-pitch` is one key plus one gap, the unit each row's
+// stagger offset is measured in.
 .letter-keyboard {
+  --kb-gap: clamp(3px, 0.9vw, 7px);
+  --kb-width: min(96vw, 760px);
+  --kb-key: min(3.3rem, calc((var(--kb-width) - (var(--max-units) - 1) * var(--kb-gap)) / var(--max-units)));
+  --kb-pitch: calc(var(--kb-key) + var(--kb-gap));
   position: absolute;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  bottom: max(16px, env(safe-area-inset-bottom));
   left: 50%;
   display: flex;
-  flex-wrap: wrap;
-  width: min(94vw, 720px);
+  flex-direction: column;
+  align-items: flex-start;
+  width: fit-content;
+  max-width: var(--kb-width);
   transform: translateX(-50%);
-  gap: 8px;
-  justify-content: center;
+  gap: var(--kb-gap);
+}
+
+.letter-keyboard__row {
+  display: flex;
+  gap: var(--kb-gap);
+  // The physical stagger: each row begins a fraction of a key to the right of the top row.
+  margin-left: calc(var(--row-offset, 0) * var(--kb-pitch));
 }
 
 .letter-key {
-  min-width: 52px;
-  min-height: 52px;
-  padding: 6px 10px;
-  border-radius: 14px;
+  display: grid;
+  width: var(--kb-key);
+  height: var(--kb-key);
+  padding: 0;
+  border: 0;
+  border-radius: clamp(9px, 1.5vw, 14px);
   color: var(--ps-ink);
-  font-size: 1.5rem;
+  font-size: calc(var(--kb-key) * 0.46);
   font-weight: 900;
   background: var(--ps-paper);
   box-shadow: 0 4px 0 rgba(32, 48, 43, 0.16);
   cursor: pointer;
   text-transform: lowercase;
+  place-items: center;
   transition: transform 90ms ease, box-shadow 90ms ease;
 }
 
@@ -879,18 +898,6 @@ input:focus-visible {
 @keyframes key-hint-pulse {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-3px); }
-}
-
-@media (max-width: 600px) {
-  .letter-keyboard {
-    gap: 6px;
-  }
-
-  .letter-key {
-    min-width: 44px;
-    min-height: 44px;
-    font-size: 1.25rem;
-  }
 }
 
 // Per-child ground colour (G8.7). Swatches show the real thing rather than a label.
@@ -1181,6 +1188,63 @@ input:focus-visible {
   font-size: 0.96rem;
 }
 
+// A returning child picks up mid-round. Continuing is the big, obvious button; starting over is a
+// quiet text link below it, so there is still only one dominant call to action.
+.welcome-resume {
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  gap: clamp(10px, 2.4vw, 18px);
+}
+
+.welcome-resume__button.primary-button {
+  width: min(520px, 88vw);
+  min-height: clamp(92px, 14vw, 128px);
+  border-radius: 28px;
+  box-shadow: 0 12px 0 var(--ps-grass-shade);
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  letter-spacing: 0.01em;
+  animation: play-button-wiggle 5.8s ease-in-out infinite;
+}
+
+.welcome-resume__button.primary-button:active {
+  box-shadow: 0 4px 0 var(--ps-grass-shade);
+}
+
+.welcome-resume__fresh {
+  color: var(--ps-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+// The round-complete button moves the child on rather than repeating: "Next round" with a forward
+// chevron, or the golden super round when the journey strip has just filled up.
+.next-round-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.next-round-button svg {
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: -4px;
+}
+
+.next-round-button--super.primary-button {
+  color: var(--ps-ink);
+  background: var(--ps-gold);
+  box-shadow: 0 8px 0 var(--ps-gold-shade);
+}
+
+.next-round-button--super.primary-button:hover {
+  background: color-mix(in srgb, var(--ps-gold) 92%, var(--ps-ink));
+}
+
+.next-round-button--super.primary-button:active {
+  box-shadow: 0 3px 0 var(--ps-gold-shade);
+}
+
 .play-screen {
   position: relative;
   display: grid;
@@ -1240,8 +1304,10 @@ input:focus-visible {
   padding: 0 var(--trail-pad);
   overflow: hidden;
   border-radius: 999px;
-  background: var(--ps-paper);
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--ps-ink) 10%, transparent);
+  // The empty road is translucent so it reads as a paler tint of the ground rather than a solid
+  // bar. The green fill, the checkpoints and the crocodile paint over it at full strength.
+  background: color-mix(in srgb, var(--ps-paper) 46%, transparent);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--ps-ink) 7%, transparent);
 }
 
 .star-trail__line-route {
@@ -2182,22 +2248,41 @@ input:focus-visible {
 .settings-group {
   min-width: 0;
   margin: 0;
-  padding: 26px 0;
+  padding: 28px 0;
   border: 0;
-  border-top: 1px solid rgba(32, 48, 43, 0.1);
+  border-top: 1px solid rgba(32, 48, 43, 0.09);
 }
 
 .settings-group:first-child {
   border-top: 0;
+  padding-top: 22px;
 }
 
+// Section headers read as quiet eyebrow labels with one small grass marker, so the panel has a
+// clear, repeating rhythm instead of a stack of same-weight bold lines.
 .settings-group legend {
+  position: relative;
   float: left;
   width: 100%;
-  margin-bottom: 17px;
-  padding: 0;
-  font-size: 1.05rem;
-  font-weight: 900;
+  margin-bottom: 20px;
+  padding-left: 16px;
+  color: var(--ps-ink);
+  font-size: 0.8rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.settings-group legend::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ps-grass);
+  transform: translateY(-50%);
 }
 
 .settings-group legend + * {
@@ -2214,12 +2299,13 @@ input:focus-visible {
 .preset-button {
   display: flex;
   min-height: 82px;
-  padding: 13px 12px;
+  padding: 13px 13px;
   border: 1px solid rgba(32, 48, 43, 0.12);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.62);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
   text-align: left;
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
   flex-direction: column;
   gap: 5px;
 }
@@ -2227,6 +2313,11 @@ input:focus-visible {
 .preset-button:hover {
   border-color: color-mix(in srgb, var(--ps-grass) 60%, transparent);
   background: #fff;
+  transform: translateY(-1px);
+}
+
+.preset-button:active {
+  transform: translateY(0);
 }
 
 .preset-button strong {
@@ -2250,11 +2341,12 @@ input:focus-visible {
   display: flex;
   align-items: center;
   min-height: 60px;
-  padding: 11px 12px;
+  padding: 11px 13px;
   border: 2px solid rgba(32, 48, 43, 0.1);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.62);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
   gap: 10px;
 }
 
@@ -2318,14 +2410,21 @@ input:focus-visible {
 .stacked-field select,
 .stacked-field textarea {
   width: 100%;
-  min-height: 48px;
-  padding: 10px 12px;
-  border: 1px solid rgba(32, 48, 43, 0.16);
-  border-radius: 12px;
+  min-height: 50px;
+  padding: 11px 13px;
+  border: 1px solid rgba(32, 48, 43, 0.14);
+  border-radius: 14px;
   color: var(--ps-ink);
   background: #fff;
   font-size: 16px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
   -webkit-appearance: none;
+}
+
+.field-grid select:hover,
+.stacked-field select:hover,
+.stacked-field textarea:hover {
+  border-color: color-mix(in srgb, var(--ps-grass) 45%, rgba(32, 48, 43, 0.14));
 }
 
 .field-grid select,
