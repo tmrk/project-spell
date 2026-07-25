@@ -1,5 +1,7 @@
-// Design tokens for the sunshine identity (decision D-006).
-// Every colour in component styles must go through one of these tokens.
+// Design tokens for the sunshine identity (decision D-006) and the v3 design language (D-016).
+// Every colour, type size, spacing step, radius and lift in component styles must go through one
+// of these tokens. Nothing below is a suggestion: if a screen needs a value that is not here, the
+// value is wrong or the scale needs extending — in that order.
 :root {
   // ground
   --ps-sun: #ffd84d;        // page background (was #ffee99)
@@ -7,7 +9,19 @@
   --ps-cloud: #ffe47f;      // paper-cut clouds
   --ps-paper: #fff7e0;      // panels, dialogs, book pages (was #fffaf0)
   --ps-ink: #20302b;        // unchanged
+
+  // Ink opacity is part of colour discipline: only four inks exist, and no screen may invent a
+  // fifth. Soft is parent-facing secondary text; faint is disabled/waiting states and empty
+  // reward sockets; ghost is waiting letters, silhouettes and hairlines.
   --ps-ink-soft: rgba(32, 48, 43, 0.6);
+  --ps-ink-faint: rgba(32, 48, 43, 0.3);
+  --ps-ink-ghost: rgba(32, 48, 43, 0.13);
+
+  // The two ink uses that are not text. A scrim darkens the page behind a modal; the ambient
+  // shadow is the one sanctioned blurred lift (under floating panels and die-cut stickers).
+  // Everything else casts the solid offset shadow of the chunky-object recipe below.
+  --ps-scrim: rgba(32, 48, 43, 0.38);
+  --ps-shadow-ambient: rgba(32, 48, 43, 0.22);
 
   // action + reward
   --ps-grass: #20b967;      // unchanged primary
@@ -25,6 +39,102 @@
   // feedback flashes (soften the current #33ff66 / #ff2222)
   --ps-flash-success: #3fd67f;
   --ps-flash-error: #ff6a5c;
+
+  // Spacing scale. Every layout margin, gap and block padding comes from these eight steps.
+  // Optical nudges inside a component (an eye offset, a 3px shadow, the trail geometry) are
+  // exempt and stay literal with a comment. Stack rhythm rule: one vertical stack uses at most
+  // three distinct steps — small for related things, large for sections.
+  --ps-space-1: 4px;
+  --ps-space-2: 8px;
+  --ps-space-3: 12px;
+  --ps-space-4: 16px;
+  --ps-space-5: 24px;
+  --ps-space-6: 32px;
+  --ps-space-7: 48px;
+  --ps-space-8: 64px;
+
+  // Shape. Three radii, three lift depths.
+  --ps-radius-tile: 18px;   // letter cards, keys, mode cards, buttons, selects
+  --ps-radius-panel: 26px;  // settings panel, dialogs, book
+  --ps-radius-pill: 999px;  // chips, word tags, the road
+
+  // The chunky-object recipe: flat fill, `box-shadow: 0 var(--ps-lift-n) 0 <shade>`, and on
+  // press translate down by the lift and drop the shadow towards 0.
+  --ps-lift-1: 3px;
+  --ps-lift-2: 5px;
+  --ps-lift-3: 8px;
+
+  // Letter-object sizes. These are *not* type: they size things drawn in the game's own letter
+  // language (the wordmark, name tags, the spelled word, keyboard keys, the miniature stages on
+  // the mode cards) or computed from layout. Their eye offsets, tile geometry and cartoon shades
+  // are all em-relative to these boxes, so sizing them from a type role would both break that
+  // maths and shrink the game's heroes. Every value still lives here, so no screen invents one.
+  --ps-size-wordmark: clamp(3.2rem, 14vw, 6.4rem);
+  --ps-size-wordmark-compact: clamp(2.8rem, 17vw, 4.2rem);
+  --ps-size-name-chip: clamp(1.35rem, 4.4vw, 1.85rem);
+  --ps-size-name-hud: clamp(1.25rem, 4vw, 1.8rem);
+  --ps-size-name-field: clamp(2.4rem, 9vw, 3.4rem);
+  --ps-size-play-slab: clamp(3.5rem, 9vw, 6.5rem);
+  --ps-size-play-slab-short: clamp(3rem, 10vh, 4.6rem);
+  --ps-size-resume-slab: clamp(2rem, 6vw, 3.2rem);
+  --ps-size-mode-stage: clamp(1.6rem, 10vw, 3.6rem);
+  --ps-size-tile-face: 1.7em;
+  --ps-size-toggle-tile: 13px;
+  // The spelled word and the keyboard keys are sized from values the layout supplies further
+  // down the tree (`--letter-size` on the word, `--kb-key` on the board). A `var()` inside a
+  // custom property is substituted where that property is *declared* — here, on `:root` — so
+  // these two must stay bounds and ratios that the call site assembles, not finished sizes.
+  --ps-size-letter-min: 1.1rem;
+  --ps-size-letter-max: 11.5rem;
+  --ps-size-key-ratio: 0.46;
+
+  // Decorative glyph sizes (sparkles, gift emoji, floating hearts) — pictures set in text.
+  --ps-size-sparkle: clamp(1.1rem, 3.6vw, 1.8rem);
+  --ps-size-heart: clamp(1.25rem, 3vw, 2.15rem);
+  --ps-size-gift-super: 5rem;
+  --ps-size-gift-shiny: 4.6rem;
+}
+
+// Type roles. One family (the `ui-rounded` system stack — no webfonts, ever), five roles, used
+// via `@extend`. No `font-size` literal may appear outside this file.
+//
+// Child-facing screens use Display, Headline and Label only; Caption appears there solely as a
+// parent-facing aside, always in ink-soft. Child copy is uppercased at the call site (the case
+// depends on the audience, not the role) — except Display, which is always a celebration
+// headline and therefore always upper.
+//
+// The roles carry size and line-height. Weight is deliberately left to the call site for now:
+// the chunky objects sit at 900 today and harmonising them down to the role weights would be a
+// visible redesign, which F1 forbids. F2 (ceremony) and F12 (settings) settle weight per screen.
+
+%ps-type-display {
+  font-size: clamp(2.7rem, 7vw, 5.8rem);
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+  text-transform: uppercase;
+}
+
+%ps-type-headline {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  line-height: 1.1;
+}
+
+%ps-type-label {
+  font-size: clamp(1rem, 2.2vw, 1.15rem);
+  line-height: 1.2;
+}
+
+// The 16px is a floor, not a preference: anything smaller makes iOS Safari zoom the page when a
+// field takes focus, and this role is what every form control in the app is set in. `max()` keeps
+// the guard even for a reader whose browser default is below 16px.
+%ps-type-body {
+  font-size: max(1rem, 16px);
+  line-height: 1.45;
+}
+
+%ps-type-caption {
+  font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 // Alternative grounds (roadmap G8.7), chosen per child. Only the three ground tokens move —
