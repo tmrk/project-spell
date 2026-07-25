@@ -1,3 +1,8 @@
+// Where each letter wears its eyes, in `em` from the centre of its glyph box. Hand-tuned against
+// the one family the app now ships (Nunito — see `styles/_fonts.scss`); before D-019 they were
+// tuned against SF Pro Rounded, which only Safari ever resolved, so the same numbers landed the
+// faces somewhere different on every other browser. Retune these only alongside a font change,
+// and check all 26 at play size when you do.
 export const EYE_OFFSETS = Object.freeze({
   a: [[-0.105, -0.1], [0.105, -0.1]],
   b: [[-0.105, -0.26], [0.085, -0.26]],
@@ -8,7 +13,9 @@ export const EYE_OFFSETS = Object.freeze({
   g: [[-0.06, -0.255], [0.075, -0.255]],
   h: [[-0.235, -0.09], [0.235, -0.09]],
   i: [[0, -0.12]],
-  j: [[0.14, -0.12]],
+  // Nunito's J hangs its hook to the left of the box centre, so the stem the eye rides on is
+  // barely right of centre — 0.14em put the eye half off the letter.
+  j: [[0.045, -0.12]],
   k: [[-0.2, -0.15], [0.09, -0.15]],
   l: [[-0.055, 0.29], [0.125, 0.29]],
   m: [[-0.255, -0.165], [0.255, -0.165]],

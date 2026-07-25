@@ -51,7 +51,10 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{html,js,css,ico,png,svg,mp3}'],
+        // woff2 is not optional decoration: the letter faces are positioned against this font's
+        // metrics, so an offline launch without it would render the wrong glyphs *and* slide
+        // every eye off its letter.
+        globPatterns: ['**/*.{html,js,css,ico,png,svg,mp3,woff2}'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
     }),

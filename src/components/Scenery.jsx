@@ -182,7 +182,7 @@ function GroundBand() {
 }
 
 // --- compositions --------------------------------------------------------------------------
-// One recipe per screen, inside the §6 budget (welcome and greeting ≤ 7, complete ≤ 5, play ≤ 2,
+// One recipe per screen, inside the §6 budget (welcome and greeting ≤ 7, complete ≤ 5, play ≤ 5,
 // book/settings 1–2 — the book's croc peek already covers it and settings stays clean). The centre
 // of every screen belongs to content, so everything here hugs an edge or a corner. Those numbers
 // live in `Scenery.test.jsx`, which fails if a composition outgrows its budget.
@@ -214,11 +214,19 @@ const COMPOSITIONS = {
     </>
   ),
   greeting: Meadow,
-  // The play screen's calm is load-bearing: two pale clouds at the edges, nothing on the ground.
+  // The play screen's calm is still load-bearing — no ground, nothing planted, nothing near the
+  // word — but two clouds at 0.3 opacity read as an empty sky rather than a calm one (owner call,
+  // 2026-07-25; D-019). It keeps the meadow's corner sun so the world survives the cut from the
+  // greeting, and adds a cloud and a bird that actually travel. Both travellers are confined to
+  // the band between the star trail and the word: §7's rule that nothing moves behind the word a
+  // child is reading is the reason this screen is allowed to be alive at all.
   play: () => (
     <>
+      <Sun className="scenery__sun--play" />
       <Cloud className="scenery__cloud--edge-left" />
       <Cloud className="scenery__cloud--edge-right" />
+      <Cloud className="scenery__cloud--drift" />
+      <Bird className="scenery__bird--sky" tone="coral" />
     </>
   ),
   welcome: Meadow,

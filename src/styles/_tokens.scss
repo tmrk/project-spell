@@ -100,7 +100,7 @@
   --ps-size-gift-shiny: 4.6rem;
 }
 
-// Type roles. One family (the `ui-rounded` system stack — no webfonts, ever), five roles, used
+// Type roles. One family (Nunito, self-hosted — see `_fonts.scss` and D-019), five roles, used
 // via `@extend`. No `font-size` literal may appear outside this file.
 //
 // Child-facing screens use Display, Headline and Label only; Caption appears there solely as a

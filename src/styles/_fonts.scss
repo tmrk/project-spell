@@ -1,0 +1,43 @@
+// The one family (design guidelines §3, amended by D-019).
+//
+// The app used to ask for `ui-rounded` and hope. That generic family is a WebKit extension: only
+// Safari resolves it, and macOS keeps the real file behind a dot-prefixed name (`.SF NS Rounded`)
+// that no browser will match by name. So `ui-rounded`, `"SF Pro Rounded"` and `"Nunito Sans"` all
+// fell through in Chrome — measured, not guessed — leaving Chrome/macOS on SF Pro and
+// Chrome/Windows on Segoe UI. Two bugs came out of that: the letters were not rounded anywhere
+// outside Safari, and because the letter faces are positioned in `em` against the glyph's line
+// box, every font's own ascent/descent moved the eyes up or down the letter per platform.
+//
+// One self-hosted file fixes both at once: the same glyphs and the same metrics everywhere, so the
+// eye offsets in `EyeStyle.jsx` are tuned once and hold on every system.
+//
+// Nunito (SIL OFL 1.1, licence in `../assets/fonts/OFL.txt`) is the pick because it is a rounded
+// humanist face in the SF Pro Rounded family of shapes *and* a variable font whose weight axis
+// reaches 1000 — the chunky letter objects sit at 900, and `font-synthesis: none` means a font
+// that stops at 700 would silently render them light.
+//
+// Two subsets, split on `unicode-range` exactly as Google Fonts ships them: `latin` covers
+// en-GB/en-US/sv-SE, and the Hungarian ő/ű pull in `latin-ext` only when a child plays in
+// Hungarian. `font-display: block` is deliberate — the faces are positioned against these
+// metrics, so a flash of the fallback's metrics would visibly slide every eye.
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('../assets/fonts/nunito-latin.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: block;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('../assets/fonts/nunito-latin-ext.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: block;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}

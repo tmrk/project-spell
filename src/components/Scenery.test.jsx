@@ -9,7 +9,7 @@ import Scenery from './Scenery';
 const SCENERY_BUDGETS = {
   complete: 5,
   greeting: 7,
-  play: 2,
+  play: 5,
   welcome: 7,
 };
 
@@ -39,10 +39,16 @@ describe('Scenery', () => {
     expect(container.querySelector('.scenery__sparkle--super')).not.toBeNull();
   });
 
-  it('leaves the play screen its two edge clouds and no ground decor', () => {
+  // The play screen earned a bigger sky in D-019, but the thing that keeps it playable is what it
+  // still refuses: nothing planted, no ground band, nothing that could sit under the word.
+  it('gives the play screen a sky and no ground decor', () => {
     const { container } = render(<Scenery phase="playing" />);
-    expect(container.querySelectorAll('.scenery__cloud')).toHaveLength(2);
+    expect(container.querySelectorAll('.scenery__cloud')).toHaveLength(3);
+    expect(container.querySelectorAll('.scenery__sun')).toHaveLength(1);
+    expect(container.querySelectorAll('.scenery__bird')).toHaveLength(1);
     expect(container.querySelector('.scenery__ground')).toBeNull();
+    expect(container.querySelector('.scenery__flower')).toBeNull();
+    expect(container.querySelector('.scenery__sprout')).toBeNull();
     expect(container.querySelector('.scenery--play')).not.toBeNull();
   });
 
