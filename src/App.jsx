@@ -91,6 +91,10 @@ import star3Sfx from './sounds/star3.mp3';
 import './App.scss';
 
 const WORD_COMPLETION_PAUSE = 760;
+// The longest the last word of a round may sit finished before the ceremony arrives regardless of
+// what the word-done chime reports. Comfortably past the chime plus its usual pause, so a working
+// sound path always wins the race and this only ever rescues a silent or stalled one.
+const LAST_WORD_ADVANCE_CEILING = 2000;
 // Adaptive practice needs a little history before it can weight anything sensibly;
 // below this the child gets the plain random round (roadmap G6).
 const ADAPTIVE_MIN_ATTEMPTS = 20;
@@ -1330,7 +1334,21 @@ export default function App() {
         }
 
         if (isLastWord) {
+          // Landing the ceremony on the end of the chime is the pleasant path, but it must never
+          // be the *only* path: audio is an optional enhancement (AGENTS.md), and when playback
+          // is blocked, silent or simply stalls, `onFinished` never arrives and the child is
+          // stranded on a finished word with no way forward. So arm the hand-off now — on
+          // `advanceTimerRef`, so every existing cleanup still cancels it — and let the chime,
+          // if it does report back, bring it forward.
+          let handedOff = false;
+          advanceTimerRef.current = window.setTimeout(() => {
+            handedOff = true;
+            completeWord();
+          }, LAST_WORD_ADVANCE_CEILING);
           playEffect(doneSfx, 0.7, () => {
+            if (handedOff) return;
+            handedOff = true;
+            window.clearTimeout(advanceTimerRef.current);
             advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
           });
         } else {

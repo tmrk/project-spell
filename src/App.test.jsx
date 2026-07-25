@@ -1315,6 +1315,37 @@ describe('Project Spell', () => {
     expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/fanfare.mp3'))).toHaveLength(1);
   });
 
+  it('reaches the ceremony even when the word-done chime never reports back', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Audio.prototype, 'play');
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+      }),
+    );
+
+    render(<App />);
+    playIn(PLAY_EASY);
+
+    // Deliberately never dispatch `ended` on the ding. A blocked, muted or stalled sound path
+    // gives no callback at all, and a child must still be carried to the ceremony.
+    for (let word = 1; word <= 3; word += 1) {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+      act(() => vi.advanceTimersByTime(760));
+    }
+
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
+    act(() => vi.advanceTimersByTime(1300));
+    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'complete');
+  });
+
   describe('on-screen letter keyboard', () => {
     const withKeyboard = (keyboard) => {
       window.localStorage.setItem(
