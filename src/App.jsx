@@ -307,8 +307,12 @@ function useSpeech(enabled, locale, setSpeechDucking) {
     (text, options = {}) => {
       if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false;
 
-      activeFinishRef.current?.(false);
-      window.speechSynthesis.cancel();
+      const replacedFinish = activeFinishRef.current;
+      replacedFinish?.(false);
+      // `cancel()` is only needed when this utterance replaces one the app still owns. Calling it
+      // after a real `end` and immediately before `speak()` creates an avoidable queue race in some
+      // engines — most visibly, an occasional missing next-word prompt.
+      if (replacedFinish) window.speechSynthesis.cancel();
       const utterance = new window.SpeechSynthesisUtterance(text);
       const utteranceCode = options.locale ? getLocale(options.locale).code : code;
       utterance.lang = utteranceCode;
@@ -361,8 +365,9 @@ function useSpeech(enabled, locale, setSpeechDucking) {
       if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
         return false;
       }
-      activeFinishRef.current?.(false);
-      if (cancelBeforeSpeak) window.speechSynthesis.cancel();
+      const replacedFinish = activeFinishRef.current;
+      replacedFinish?.(false);
+      if (cancelBeforeSpeak && replacedFinish) window.speechSynthesis.cancel();
 
       let finished = false;
       let hardTimer = null;
@@ -919,19 +924,24 @@ export default function App() {
     window.clearTimeout(promptTimerRef.current);
     pendingPromptRef.current = null;
     const speakPrompt = () => {
+      // The speech-hold release and its fallback timer can land in the same event-loop turn.
+      // Whichever gets here first owns the prompt; a stale second call must not cancel/restart it.
+      if (pendingPromptRef.current !== speakPrompt) return;
+      window.clearTimeout(promptTimerRef.current);
+      promptTimerRef.current = null;
       pendingPromptRef.current = null;
       say(formatMessage(copy.spellPrompt, { word: currentWord }));
     };
+    pendingPromptRef.current = speakPrompt;
     const delay = Math.max(0, speechBusyUntilRef.current - performance.now());
     if (delay > 0) {
-      pendingPromptRef.current = speakPrompt;
       promptTimerRef.current = window.setTimeout(speakPrompt, delay);
     } else {
       speakPrompt();
     }
     return () => {
       window.clearTimeout(promptTimerRef.current);
-      pendingPromptRef.current = null;
+      if (pendingPromptRef.current === speakPrompt) pendingPromptRef.current = null;
     };
   }, [copy.spellPrompt, currentWord, phase, say, settingsOpen, superIntroVisible, wordIndex]);
 
@@ -1276,7 +1286,6 @@ export default function App() {
     speechBusyUntilRef.current = 0;
     window.clearTimeout(promptTimerRef.current);
     const pendingPrompt = pendingPromptRef.current;
-    pendingPromptRef.current = null;
     pendingPrompt?.();
   }, []);
 

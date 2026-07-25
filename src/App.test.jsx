@@ -1618,6 +1618,9 @@ describe('Project Spell', () => {
       expect(document.querySelector('.word')).not.toHaveClass('word--spelling');
       expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
       expect(spokenTexts()).toEqual(['c, a, t.', 'cat', 'Spell the word cat']);
+      // The completed utterance has already left the queue. A redundant cancel immediately before
+      // the prompt can make some engines discard that new prompt, so this is one continuous handoff.
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
     });
 
     it('lights both boundaryless speech stages and waits for each real end', () => {
@@ -1941,7 +1944,12 @@ describe('Project Spell', () => {
       expect(spokenTexts()).toEqual(['c, a, t.', 'cat']);
       // Praise lands after the whole-word stage reports its real end, never over either stage.
       endSpellBackSpeech(wordUtterance);
-      expect(spokenTexts().at(-1)).toBe('Great!');
+      const praiseUtterance = spellBackUtterance();
+      expect(praiseUtterance.text).toBe('Great!');
+      const cancelCountAfterPraise = window.speechSynthesis.cancel.mock.calls.length;
+      act(() => praiseUtterance.onend());
+      expect(spokenTexts().at(-1)).toBe('Spell the word cat');
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPraise);
     });
 
     it('reveals the letters without leaking a glyph early in listening mode', () => {
