@@ -35,7 +35,7 @@ const messages = Object.freeze({
   superRoundCountdownOne: 'En runda kvar till superrundan!',
   superRoundCountdownMany: '{count} rundor till superrundan',
   superRoundDone: 'Superrundan är klar — vilken stjärna!',
-  newShinyStickerLine: 'Glänsande klistermärke!',
+  newShinyStickerAria: 'Ett glittrigt klistermärke till din bok!',
   tryAgain: 'Försök en gång till',
   wordFinished: 'Helt rätt!',
   wordFinishedSpeeches: Object.freeze([
@@ -80,7 +80,7 @@ const messages = Object.freeze({
   previousPage: 'Föregående sida',
   openStickerBook: 'Öppna klistermärkesboken',
   closeStickerBook: 'Stäng klistermärkesboken',
-  newStickerLine: 'Nytt klistermärke!',
+  newStickerAria: 'Nytt klistermärke: {word}',
   badgeEarnedLine: 'Nytt märke: {badge}',
   badgesHeading: 'Märken',
   badgeFirstRound: 'Första rundan',

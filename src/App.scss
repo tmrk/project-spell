@@ -175,6 +175,12 @@ input:focus-visible {
   text-align: center;
 }
 
+.complete-screen {
+  width: 100%;
+  max-width: 520px;
+  gap: var(--ps-space-5);
+}
+
 // Sit the lockup above the paper-cut ground rather than floating dead-centre.
 .welcome-screen {
   padding-top: clamp(20px, 5vh, 64px);
@@ -1018,20 +1024,29 @@ input:focus-visible {
   font-weight: 850;
 }
 
-// One quiet reward beat between the headline and the next-round nudge — never a stack of
-// competing boxes. Flat and centred, like the rest of the child-facing screens (no card chrome).
-.round-sticker-award {
+// One permanent slot holds the ceremony's single reward object. It reserves the word-sticker
+// lockup (the tallest state), so shiny, sticker and no-reward rounds leave every later slot at
+// exactly the same y-position.
+.complete-reward-slot {
   display: grid;
-  justify-items: center;
-  margin: var(--ps-space-5) 0 var(--ps-space-1);
-  color: var(--ps-ink-soft);
-  gap: 2px;
+  width: 100%;
+  min-height: calc(var(--ps-size-reward-sticker) + var(--ps-space-7));
+  place-items: center;
 }
 
-.round-sticker-award img {
-  width: clamp(72px, 11vw, 104px);
-  height: clamp(72px, 11vw, 104px);
-  margin-bottom: 3px;
+.round-reward {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  width: 100%;
+  color: var(--ps-ink);
+  gap: var(--ps-space-3);
+}
+
+.round-reward img {
+  width: var(--ps-size-reward-sticker);
+  height: var(--ps-size-reward-sticker);
+  object-fit: contain;
   animation: finish-pop 480ms cubic-bezier(0.2, 0.9, 0.25, 1.25) 560ms both;
 }
 
@@ -1043,31 +1058,6 @@ input:focus-visible {
     drop-shadow(0 -3px 0 #fff)
     drop-shadow(0 6px 5px var(--ps-shadow-ambient));
   transform: rotate(var(--sticker-rotation, 0deg));
-}
-
-.round-sticker-award p,
-.round-sticker-award strong,
-.badge-earned-line {
-  text-transform: uppercase;
-  margin: 0;
-  line-height: 1.35;
-}
-
-.round-sticker-award p {
-  @extend %ps-type-label;
-}
-
-.round-sticker-award strong {
-  @extend %ps-type-label;
-  color: var(--ps-ink);
-  text-transform: capitalize;
-}
-
-.badge-earned-line {
-  @extend %ps-type-label;
-  margin: var(--ps-space-2) 0 0;
-  color: var(--ps-ink-soft);
-  font-weight: 750;
 }
 
 .welcome-language {
@@ -1659,17 +1649,17 @@ input:focus-visible {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: var(--ps-space-5);
+  margin: 0;
   // Empty reward sockets read at ink-faint everywhere — the trail markers, the journey road and
   // these ceremony stars are the same promise waiting to be filled.
   color: var(--ps-ink-faint);
-  gap: clamp(5px, 1.2vw, 12px);
+  gap: var(--ps-space-2);
 }
 
 .star-ceremony__star {
   display: block;
-  width: clamp(58px, 8vw, 78px);
-  height: clamp(58px, 8vw, 78px);
+  width: var(--ps-size-ceremony-star);
+  height: var(--ps-size-ceremony-star);
 }
 
 .star-ceremony__star svg {
@@ -1679,59 +1669,74 @@ input:focus-visible {
 
 .star-ceremony__star--filled {
   color: var(--ps-gold);
-  filter: drop-shadow(0 5px 0 var(--ps-gold-shade));
+  filter: drop-shadow(0 var(--ps-lift-2) 0 var(--ps-gold-shade));
   animation: finish-pop 480ms cubic-bezier(0.2, 0.9, 0.25, 1.25) var(--star-delay) both;
 }
 
-// A quiet footnote toward the next surprise — flat glyphs in a row, no pill/track chrome, so it
-// reads as one small aside under the reward beat rather than a second progress widget.
+// A small paper road carries the story. It borrows the play trail's translucent lane and inset
+// star stones, without an outer capsule or widget frame.
 .journey-strip {
   display: grid;
   justify-items: center;
-  margin: var(--ps-space-2) 0 var(--ps-space-4);
+  width: 100%;
+  margin: 0;
   gap: var(--ps-space-2);
 }
 
-// Give the strip room to breathe when it follows the headline directly (no reward this round);
-// when a reward card comes first, its own bottom margin already provides the separation.
-.complete-screen h1 + .journey-strip {
-  margin-top: var(--ps-space-5);
-}
-
-.journey-strip__row {
-  display: flex;
+.journey-strip__road {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--journey-sockets), minmax(0, 1fr)) var(--ps-space-7);
   align-items: center;
-  gap: clamp(6px, 1.6vw, 9px);
+  width: min(100%, calc(var(--ps-space-8) * 5));
+  min-height: var(--ps-space-7);
 }
 
-.journey-strip__star {
-  display: block;
-  width: 20px;
-  height: 20px;
+.journey-strip__track {
+  position: absolute;
+  right: calc(var(--ps-space-7) / 2);
+  left: calc(var(--ps-space-6) / 2);
+  height: var(--ps-space-5);
+  border-radius: var(--ps-radius-pill);
+  background: color-mix(in srgb, var(--ps-paper) 46%, transparent);
+  box-shadow: 0 var(--ps-lift-1) 0 color-mix(in srgb, var(--ps-ink) 7%, transparent);
+}
+
+.journey-strip__socket {
+  z-index: 1;
+  display: grid;
+  width: var(--ps-space-6);
+  height: var(--ps-space-6);
+  border-radius: 50%;
   color: var(--ps-ink-faint);
+  background: color-mix(in srgb, var(--ps-ink) 14%, var(--ps-paper));
+  box-shadow: inset 0 var(--ps-lift-1) 0 color-mix(in srgb, var(--ps-ink) 10%, transparent);
+  place-items: center;
 }
 
-.journey-strip__star--filled {
-  color: var(--ps-gold);
-  filter: drop-shadow(0 2px 0 var(--ps-gold-shade));
+.journey-strip__socket--filled {
+  color: var(--ps-paper);
+  background: var(--ps-gold);
+  box-shadow: 0 var(--ps-lift-1) 0 var(--ps-gold-shade);
 }
 
-.journey-strip__star svg,
-.journey-strip__gift svg {
-  width: 100%;
-  height: 100%;
+.journey-strip__socket svg {
+  width: calc(100% - var(--ps-space-2));
+  height: calc(100% - var(--ps-space-2));
 }
 
 .journey-strip__gift {
+  z-index: 1;
   display: block;
-  width: 24px;
-  height: 24px;
-  margin-left: 2px;
+  width: var(--ps-space-7);
+  height: var(--ps-space-7);
   color: var(--ps-coral);
-  filter: drop-shadow(0 2px 0 var(--ps-coral-shade));
+  filter: drop-shadow(0 var(--ps-lift-1) 0 var(--ps-coral-shade));
 }
 
 .journey-strip__gift svg {
+  width: 100%;
+  height: 100%;
   fill: currentColor;
   stroke: var(--ps-coral-shade);
   stroke-width: 1;
@@ -1743,7 +1748,7 @@ input:focus-visible {
 
 .journey-strip__gift--opened {
   color: var(--ps-gold);
-  filter: drop-shadow(0 2px 0 var(--ps-gold-shade));
+  filter: drop-shadow(0 var(--ps-lift-1) 0 var(--ps-gold-shade));
   transform: rotate(-7deg) scale(1.05);
 }
 
@@ -1757,36 +1762,44 @@ input:focus-visible {
   margin: 0;
   color: var(--ps-ink-soft);
   font-weight: 750;
+  white-space: nowrap;
 }
 
-.round-sticker-award--shiny {
+.round-reward--shiny {
   position: relative;
-  min-height: 118px;
+  width: var(--ps-size-reward-sticker);
+  height: var(--ps-size-reward-sticker);
 }
 
-.round-sticker-award--shiny .shiny-gift {
+.round-reward--shiny .shiny-gift {
   position: absolute;
   z-index: 2;
   top: var(--ps-space-2);
   font-size: var(--ps-size-gift-shiny);
-  filter: drop-shadow(0 6px 0 var(--ps-gold-shade));
+  filter: drop-shadow(0 var(--ps-lift-2) 0 var(--ps-gold-shade));
   animation: shiny-gift-open 480ms ease-out 420ms both;
 }
 
-.round-sticker-award--shiny img.shiny {
+.round-reward--shiny img.shiny {
   position: relative;
   z-index: 1;
   animation-delay: 760ms;
 }
 
-.round-sticker-award--shiny::before {
+.round-reward--shiny::before {
   position: absolute;
-  top: -16px;
-  width: 140px;
-  height: 140px;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + var(--ps-space-7));
+  aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 197, 49, 0.62), rgba(255, 197, 49, 0));
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ps-gold) 62%, transparent),
+    transparent
+  );
   content: '';
+  transform: translate(-50%, -50%);
 }
 
 .settings-backdrop,
@@ -1964,8 +1977,9 @@ input:focus-visible {
   pointer-events: none;
 }
 
-.sticker-card span {
-  max-width: calc(100% - 8px);
+.sticker-card span,
+.round-reward__word {
+  max-width: calc(100% - var(--ps-space-2));
   overflow: hidden;
   @extend %ps-type-label;
   padding: var(--ps-space-1) var(--ps-space-3);
@@ -3060,7 +3074,8 @@ input:focus-visible {
     height: 86px;
   }
 
-  .sticker-card span {
+  .sticker-card span,
+  .round-reward__word {
     padding: var(--ps-space-1) var(--ps-space-2);
   }
 
@@ -3163,47 +3178,6 @@ input:focus-visible {
     width: 62px;
     height: 62px;
     margin-bottom: var(--ps-space-2);
-  }
-
-  .journey-strip {
-    margin: var(--ps-space-1) 0 var(--ps-space-2);
-    gap: 3px;
-  }
-
-  .star-ceremony {
-    margin-bottom: var(--ps-space-3);
-  }
-
-  .star-ceremony__star {
-    width: 52px;
-    height: 52px;
-  }
-
-  .round-sticker-award {
-    display: grid;
-    grid-template-columns: auto auto;
-    align-items: center;
-    justify-content: center;
-    margin: var(--ps-space-3) 0 var(--ps-space-1);
-    text-align: left;
-    column-gap: var(--ps-space-2);
-  }
-
-  .round-sticker-award img {
-    grid-row: span 2;
-    width: 58px;
-    height: 58px;
-    margin: 0;
-  }
-
-  .round-sticker-award p,
-  .round-sticker-award strong {
-    justify-self: start;
-  }
-
-  .badge-earned-line {
-    grid-column: span 2;
-    margin: var(--ps-space-1) 0 0;
   }
 
   .welcome-language {

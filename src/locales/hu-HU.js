@@ -35,7 +35,7 @@ const messages = Object.freeze({
   superRoundCountdownOne: 'Még egy kör a szuper körig!',
   superRoundCountdownMany: 'Még {count} kör a szuper körig',
   superRoundDone: 'Kész a szuper kör — igazi csillag vagy!',
-  newShinyStickerLine: 'Csillogó matrica!',
+  newShinyStickerAria: 'Egy csillogó matrica a könyvedbe!',
   tryAgain: 'Próbáld meg még egyszer',
   wordFinished: 'Ez az!',
   wordFinishedSpeeches: Object.freeze([
@@ -80,7 +80,7 @@ const messages = Object.freeze({
   previousPage: 'Előző oldal',
   openStickerBook: 'Matricás könyv megnyitása',
   closeStickerBook: 'Matricás könyv bezárása',
-  newStickerLine: 'Új matrica!',
+  newStickerAria: 'Új matrica: {word}',
   badgeEarnedLine: 'Új jelvény: {badge}',
   badgesHeading: 'Jelvények',
   badgeFirstRound: 'Első kör',

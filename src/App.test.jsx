@@ -38,6 +38,14 @@ const playIn = (mode, locale = 'en-GB') => {
     fireEvent.click(greetingCard);
   }
 };
+const completeCurrentRound = (word = 'cat', wordCount = 3) => {
+  for (let index = 0; index < wordCount; index += 1) {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+      target: { value: word },
+    });
+    act(() => vi.advanceTimersByTime(760));
+  }
+};
 
 describe('Project Spell', () => {
   beforeEach(() => {
@@ -1046,7 +1054,56 @@ describe('Project Spell', () => {
     expect(document.querySelectorAll('.star-ceremony__star--filled')).toHaveLength(3);
     expect(screen.getByLabelText('★ 9 stars in your jar')).toBeInTheDocument();
     expect(screen.getByText('3 rounds to the super round')).toBeInTheDocument();
+    expect(document.querySelector('.complete-reward-slot')).toBeInTheDocument();
+    expect(document.querySelector('.journey-strip__road')).toHaveAttribute('data-position', '1');
+    expect(document.querySelectorAll('.journey-strip__socket--filled')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '3 stars for this round. New sticker: cat. 3 rounds to the super round.',
+    );
   });
+
+  it.each([
+    [0, 1, 1, '3 rounds to the super round'],
+    [1, 2, 2, '2 rounds to the super round'],
+    [2, 3, 3, 'One more round to the super round!'],
+  ])(
+    'renders journey position %i → %i with %i filled road sockets',
+    (startPosition, endPosition, filledCount, message) => {
+      vi.useFakeTimers();
+      window.localStorage.setItem(
+        PROGRESS_KEY,
+        JSON.stringify({
+          version: 1,
+          totalStars: 0,
+          stickers: ['en-GB/cat'],
+          shinyStickers: [],
+          badges: ['first-round', 'perfect-round'],
+          roundsTowardSuper: startPosition,
+        }),
+      );
+      window.localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({
+          ...DEFAULT_SETTINGS,
+          customWords: 'cat',
+          wordSource: 'custom',
+          roundLength: 3,
+          music: false,
+          soundEffects: false,
+        }),
+      );
+
+      render(<App />);
+      playIn(PLAY_EASY);
+      completeCurrentRound();
+
+      const road = document.querySelector('.journey-strip__road');
+      expect(road).toHaveAttribute('data-position', String(endPosition));
+      expect(road.querySelectorAll('.journey-strip__socket--filled')).toHaveLength(filledCount);
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(document.querySelector('.complete-reward-slot')).toBeEmptyDOMElement();
+    },
+  );
 
   it('does not create confetti when reduced motion is requested', () => {
     vi.useFakeTimers();
@@ -1119,10 +1176,17 @@ describe('Project Spell', () => {
       act(() => vi.advanceTimersByTime(760));
     }
 
-    expect(screen.getByText('Shiny sticker!')).toBeInTheDocument();
+    expect(within(document.querySelector('.complete-screen')).queryByText(/shiny sticker/iu))
+      .not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'A shiny sticker for your book!' })).toBeInTheDocument();
     expect(screen.getByText('Super round finished — what a star!')).toBeInTheDocument();
-    expect(document.querySelectorAll('.journey-strip__star--filled')).toHaveLength(3);
+    expect(document.querySelector('.complete-reward-slot')).toBeInTheDocument();
+    expect(document.querySelector('.journey-strip__road')).toHaveAttribute('data-position', '0');
+    expect(document.querySelectorAll('.journey-strip__socket--filled')).toHaveLength(3);
     expect(document.querySelector('.journey-strip__gift')).toHaveClass('journey-strip__gift--opened');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'A shiny sticker for your book! Super round finished — what a star!',
+    );
     expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({
       roundsTowardSuper: 0,
       shinyStickers: ['1f451'],
@@ -1200,8 +1264,13 @@ describe('Project Spell', () => {
       act(() => vi.advanceTimersByTime(760));
     }
 
-    expect(screen.getByText('New sticker!')).toBeInTheDocument();
-    expect(screen.getByText('New badge: First round')).toBeInTheDocument();
+    const completeScreen = document.querySelector('.complete-screen');
+    expect(within(completeScreen).queryByText(/new sticker/iu)).not.toBeInTheDocument();
+    const reward = screen.getByRole('img', { name: 'New sticker: cat' });
+    expect(reward).toHaveClass('round-reward');
+    expect(within(reward).getByText('cat')).toHaveClass('round-reward__word');
+    expect(document.querySelector('.complete-reward-slot')).toContainElement(reward);
+    expect(within(completeScreen).queryByText(/new badge/iu)).not.toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY))).toMatchObject({
       stickers: ['en-GB/cat'],
       badges: expect.arrayContaining(['first-round', 'perfect-round']),

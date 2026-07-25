@@ -12,7 +12,7 @@ import Scenery from './components/Scenery';
 import SettingsPanel from './components/SettingsPanel';
 import StarJarChip from './components/StarJarChip';
 import StarTrail from './components/StarTrail';
-import StickerBook, { BADGE_LABEL_KEYS, StickerPicture } from './components/StickerBook';
+import StickerBook, { StickerPicture } from './components/StickerBook';
 import Wordmark from './components/Wordmark';
 import { ChevronIcon, HomeIcon, MusicIcon, RepeatIcon, SettingsIcon, StarIcon } from './components/Icons';
 import {
@@ -151,6 +151,13 @@ function pickVaried(list, lastIndexRef) {
 
 function randomWordPraiseGap() {
   return Math.random() < 0.5 ? 2 : 3;
+}
+
+function joinAnnouncements(messages) {
+  return messages
+    .filter(Boolean)
+    .map((message) => (/[.!?]$/u.test(message) ? message : `${message}.`))
+    .join(' ');
 }
 
 function prefersReducedMotion() {
@@ -1726,6 +1733,15 @@ export default function App() {
     : roundsRemaining === 1
       ? copy.superRoundCountdownOne
       : formatMessage(copy.superRoundCountdownMany, { count: roundsRemaining });
+  const roundStarsMessage = formatMessage(copy.roundStarsEarned, { count: earnedRoundStars });
+  const rewardAriaLabel = roundReward.shiny
+    ? copy.newShinyStickerAria
+    : roundReward.sticker
+      ? formatMessage(copy.newStickerAria, { word: roundReward.sticker.word })
+      : '';
+  const completeStatusMessage = phase === 'complete'
+    ? joinAnnouncements([roundStarsMessage, rewardAriaLabel, journeyMessage])
+    : '';
   const mostRecentSticker = phase === 'complete'
     ? roundReward.sticker ?? (roundReward.shiny
       ? { codepoint: roundReward.shiny, id: `shiny/${roundReward.shiny}` }
@@ -2059,7 +2075,7 @@ export default function App() {
           <div
             className="star-ceremony"
             role="img"
-            aria-label={formatMessage(copy.roundStarsEarned, { count: earnedRoundStars })}
+            aria-label={roundStarsMessage}
           >
             {[0, 1, 2].map((index) => {
               const filled = index < earnedRoundStars;
@@ -2075,31 +2091,23 @@ export default function App() {
             })}
           </div>
           <h1>{copy.completeHeading}</h1>
-          {(roundReward.sticker || roundReward.shiny || roundReward.badge) && (
-            <div className={`round-sticker-award${roundReward.shiny ? ' round-sticker-award--shiny' : ''}`}>
-              {roundReward.shiny && (
-                <>
-                  <span className="shiny-gift" aria-hidden="true">🎁</span>
-                  <StickerPicture codepoint={roundReward.shiny} className="die-cut shiny" />
-                  <p>{copy.newShinyStickerLine}</p>
-                </>
-              )}
-              {roundReward.sticker && !roundReward.shiny && (
-                <>
-                  <StickerPicture codepoint={roundReward.sticker.codepoint} className="die-cut" />
-                  <p>{copy.newStickerLine}</p>
-                  <strong>{roundReward.sticker.word}</strong>
-                </>
-              )}
-              {roundReward.badge && BADGE_LABEL_KEYS[roundReward.badge] && (
-                <p className="badge-earned-line">
-                  {formatMessage(copy.badgeEarnedLine, {
-                    badge: copy[BADGE_LABEL_KEYS[roundReward.badge]],
-                  })}
-                </p>
-              )}
-            </div>
-          )}
+          <div className="complete-reward-slot">
+            {roundReward.shiny ? (
+              <div
+                className="round-reward round-reward--shiny"
+                role="img"
+                aria-label={rewardAriaLabel}
+              >
+                <span className="shiny-gift" aria-hidden="true">🎁</span>
+                <StickerPicture codepoint={roundReward.shiny} className="die-cut shiny" />
+              </div>
+            ) : roundReward.sticker ? (
+              <div className="round-reward" role="img" aria-label={rewardAriaLabel}>
+                <StickerPicture codepoint={roundReward.sticker.codepoint} className="die-cut" />
+                <span className="round-reward__word">{roundReward.sticker.word}</span>
+              </div>
+            ) : null}
+          </div>
           <JourneyStrip
             position={roundReward.journeyPosition}
             wasSuper={roundReward.kind === 'super'}
@@ -2117,7 +2125,7 @@ export default function App() {
       )}
 
       <p className="sr-only" role="status" aria-live="polite">
-        {feedbackMessage}
+        {completeStatusMessage || feedbackMessage}
       </p>
 
       {settingsOpen && (

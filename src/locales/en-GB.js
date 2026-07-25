@@ -35,7 +35,7 @@ const messages = Object.freeze({
   superRoundCountdownOne: 'One more round to the super round!',
   superRoundCountdownMany: '{count} rounds to the super round',
   superRoundDone: 'Super round finished — what a star!',
-  newShinyStickerLine: 'Shiny sticker!',
+  newShinyStickerAria: 'A shiny sticker for your book!',
   tryAgain: 'Try once more',
   wordFinished: 'That’s the word!',
   wordFinishedSpeeches: Object.freeze([
@@ -80,7 +80,7 @@ const messages = Object.freeze({
   previousPage: 'Previous page',
   openStickerBook: 'Open sticker book',
   closeStickerBook: 'Close sticker book',
-  newStickerLine: 'New sticker!',
+  newStickerAria: 'New sticker: {word}',
   badgeEarnedLine: 'New badge: {badge}',
   badgesHeading: 'Badges',
   badgeFirstRound: 'First round',
