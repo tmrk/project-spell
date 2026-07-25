@@ -76,6 +76,7 @@ import {
   formatMessage,
   getLetterSpeechText,
   getLocale,
+  getSpellBackSpeech,
 } from './locales';
 import croc from './assets/croc.svg';
 import bgMusic2 from './sounds/bgmusic2.mp3';
@@ -100,38 +101,27 @@ const LAST_WORD_ADVANCE_CEILING = 2000;
 const ADAPTIVE_MIN_ATTEMPTS = 20;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
-// Spell-it-back (roadmap F4, D-020): a finished word is spelled back to the child — each letter
-// re-lit and re-named in turn, then the whole word — while attention is at its peak.
-//
-// **The spoken pace is not ours to choose** (owner note, 2026-07-25). It was, at 280ms per letter,
-// and it was wrong: `speechSynthesis.speak()` has real and variable start-up latency, so most letters
-// had not begun sounding before the next one cancelled them. The voice now owns the pace — every
-// utterance is queued in one go and the light follows each utterance's actual `onstart`. So there is
-// no spoken step constant here to tune, by design.
-//
-// With no voice the beat still has to feel complete, and there the roadmap's fast stagger is right
-// because a pop is instant. `min(120, 900 / length)`, capped so a long word tightens rather than drags.
+// Spell-it-back (roadmap F4, D-020): one compact utterance says every letter and then the word.
+// Keeping it in one phrase removes the costly engine hand-off that used to happen between every
+// queued letter. Boundary events keep the light with the voice where they exist; a short monotonic
+// fallback keeps the visual beat lively on engines that omit or stop sending them.
 const SPELL_BACK_SILENT_STEP = 120;
 const SPELL_BACK_SILENT_MAX = 1500;
-// A beat between the last letter and the end of the silent sequence, so it lands rather than stops.
 const SPELL_BACK_WORD_GAP = 140;
-// A brisk but unhurried letter name. Slower than ordinary speech (0.82) would drag over five of
-// them; faster starts swallowing short names in some engines.
-const SPELL_BACK_LETTER_RATE = 0.95;
-// Same reasoning as `LAST_WORD_ADVANCE_CEILING`: the sequence must never be the only way forward.
-// Generous, because the engine's own pace is the point and this only ever rescues a broken one — the
-// stall watchdog inside `speakSequence` is what catches an engine that stops reporting.
-const SPELL_BACK_SPOKEN_CEILING_BASE = 1500;
-const SPELL_BACK_SPOKEN_CEILING_PER_ENTRY = 1100;
-// A queue that never starts gets a short leash. Once an entry really starts it gets more room,
-// because Web Speech emits no progress event while it is talking and cancelling a slow-but-working
-// voice would recreate the clipping this path exists to remove. Long whole words scale beyond that.
-const SPEECH_SEQUENCE_START_STALL = 1600;
-const SPEECH_SEQUENCE_ENTRY_STALL = 2600;
-const SPEECH_SEQUENCE_MS_PER_CHAR = 220;
+const SPELL_BACK_SPEECH_RATE = 1.08;
+const SPELL_BACK_VISUAL_STEP = 210;
+const SPELL_BACK_VISUAL_MAX = 1050;
+const SPELL_BACK_BOUNDARY_WAIT = 280;
+const SPELL_BACK_SPOKEN_CEILING_BASE = 1600;
+const SPELL_BACK_SPOKEN_CEILING_PER_CHAR = 160;
+const TRACKED_SPEECH_START_STALL = 1200;
+const TRACKED_SPEECH_ACTIVE_STALL = 3000;
+const TRACKED_SPEECH_MS_PER_CHAR = 160;
 
 const spellBackSilentStep = (length) =>
   Math.min(SPELL_BACK_SILENT_STEP, 900 / length, SPELL_BACK_SILENT_MAX / length);
+const spellBackVisualStep = (length) =>
+  Math.min(SPELL_BACK_VISUAL_STEP, SPELL_BACK_VISUAL_MAX / Math.max(1, length));
 // Comfortably longer than the Play slab's 180ms exit in `App.scss`. The headroom matters: at
 // exactly the animation's length, ordinary timer jitter drops the slab while it is still
 // faintly visible and it reads as a pop rather than a fade.
@@ -346,18 +336,11 @@ function useSpeech(enabled, locale, setSpeechDucking) {
     [code, enabled, setSpeechDucking],
   );
 
-  // A whole sequence, queued in one go — the letters of a word and then the word itself (F4/D-020).
-  // Unlike `say`, nothing is cancelled *between* entries. That is the entire point: `speechSynthesis`
-  // is a queue, so the engine plays them back to back at its own natural pace, which is the only pace
-  // at which a letter name is neither clipped nor still waiting to start. Utterances genuinely cannot
-  // overlap — the API has one voice and a queue, not a mixer — so seamless is what is on offer, and
-  // it is enough.
-  //
-  // `onEntryStart(index)` fires when an entry *actually begins speaking*, so the caller can light the
-  // letter the voice is on rather than the letter a timer guessed at. `speak()` has real and variable
-  // start-up latency, which is exactly what made a fixed stagger fall apart.
-  const speakSequence = useCallback(
-    (entries, { onEntryStart, onFinished } = {}) => {
+  // One phrase whose speech progress can drive a visual. This removes the audible gaps and repeated
+  // start-up cost of one Web Speech utterance per letter. `boundary` is optional in the platform, so
+  // callers still need their own visual fallback; this helper forwards it when the engine reports it.
+  const speakTracked = useCallback(
+    (text, { onBoundary, onFinished, onStart, ...options } = {}) => {
       if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
         return false;
       }
@@ -365,69 +348,55 @@ function useSpeech(enabled, locale, setSpeechDucking) {
       window.speechSynthesis.cancel();
 
       let finished = false;
-      let failed = false;
       let stallTimer = null;
-      // Keep strong references until the sequence settles. Some WebKit speech implementations have
-      // historically dropped utterance callbacks when the page releases its last reference early.
-      let utterances = [];
-      const finish = (notify = true, cancelQueue = false) => {
+      // Keep a strong reference until speech settles. Some WebKit implementations have historically
+      // dropped callbacks when the page releases its last reference early.
+      let utterance = new window.SpeechSynthesisUtterance(text);
+      const finish = (notify = true, cancelUtterance = false) => {
         if (finished) return;
         finished = true;
         window.clearTimeout(stallTimer);
         if (activeFinishRef.current === finish) activeFinishRef.current = null;
-        utterances = [];
+        utterance = null;
         setSpeechDucking?.(false);
-        // Mark the sequence finished before cancelling: engines may synchronously report `error`
-        // for cancelled entries, and those callbacks must not re-arm the watchdog.
-        if (cancelQueue) window.speechSynthesis.cancel();
+        // Mark speech finished before cancelling: an engine may synchronously report `error` for a
+        // cancelled utterance, and that callback must not re-arm the watchdog.
+        if (cancelUtterance) window.speechSynthesis.cancel();
         if (notify) onFinished?.();
       };
-      // Progress resets the clock. While the engine keeps reporting, the sequence keeps its own pace
-      // however long that takes; this long a silence means it has stopped talking to us, and the beat
-      // must never wait on a voice that is not coming.
-      const keepAlive = (timeout = SPEECH_SEQUENCE_START_STALL) => {
+      const activeTimeout = Math.max(
+        TRACKED_SPEECH_ACTIVE_STALL,
+        String(text).length * TRACKED_SPEECH_MS_PER_CHAR,
+      );
+      const keepAlive = (timeout = TRACKED_SPEECH_START_STALL) => {
         window.clearTimeout(stallTimer);
         stallTimer = window.setTimeout(() => finish(true, true), timeout);
       };
+
+      const utteranceCode = options.locale ? getLocale(options.locale).code : code;
+      utterance.lang = utteranceCode;
+      utterance.voice = utteranceCode === code ? voiceRef.current : null;
+      utterance.rate = options.rate ?? 0.82;
+      utterance.pitch = options.pitch ?? 1.04;
+      utterance.onstart = () => {
+        if (finished) return;
+        keepAlive(activeTimeout);
+        onStart?.();
+      };
+      utterance.onboundary = (event) => {
+        if (finished) return;
+        keepAlive(activeTimeout);
+        onBoundary?.(event);
+      };
+      utterance.onend = () => finish(true);
+      utterance.onerror = () => finish(true);
       activeFinishRef.current = finish;
       setSpeechDucking?.(true);
       keepAlive();
 
-      entries.forEach((entry, index) => {
-        if (failed) return;
-        const utterance = new window.SpeechSynthesisUtterance(entry.text);
-        const utteranceCode = entry.locale ? getLocale(entry.locale).code : code;
-        utterance.lang = utteranceCode;
-        utterance.voice = utteranceCode === code ? voiceRef.current : null;
-        utterance.rate = entry.rate ?? 0.82;
-        utterance.pitch = entry.pitch ?? 1.04;
-        utterance.onstart = () => {
-          if (finished) return;
-          keepAlive(
-            Math.max(
-              SPEECH_SEQUENCE_ENTRY_STALL,
-              String(entry.text).length * SPEECH_SEQUENCE_MS_PER_CHAR,
-            ),
-          );
-          onEntryStart?.(index);
-        };
-        const settled = () => {
-          if (finished) return;
-          if (index === entries.length - 1) finish(true);
-          else keepAlive();
-        };
-        utterance.onend = settled;
-        utterance.onerror = settled;
-        utterances.push(utterance);
-        try {
-          window.speechSynthesis.speak(utterance);
-        } catch {
-          failed = true;
-        }
-      });
-
-      if (failed) {
-        // The complete queue was not accepted, so the caller is free to use its silent path.
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch {
         finish(false, true);
         return false;
       }
@@ -436,7 +405,7 @@ function useSpeech(enabled, locale, setSpeechDucking) {
     [code, enabled, setSpeechDucking],
   );
 
-  return { cancel, say, speakSequence };
+  return { cancel, say, speakTracked };
 }
 
 function useGameAudio(soundEffectsEnabled) {
@@ -838,7 +807,7 @@ export default function App() {
     selectNextMusicTrack,
     setMusicDucked,
   } = useGameAudio(settings.soundEffects);
-  const { cancel: cancelSpeech, say, speakSequence } = useSpeech(
+  const { cancel: cancelSpeech, say, speakTracked } = useSpeech(
     settings.speech,
     settings.locale,
     setMusicDucked,
@@ -1298,8 +1267,6 @@ export default function App() {
         onDone();
       };
       spellBackRef.current = { finish, timers };
-      // The first beat lands in the same frame as the finished word — nothing about this sequence
-      // should wait for a timer tick to become visible.
       const at = (delay, action) => {
         if (delay <= 0) action();
         else timers.push(window.setTimeout(action, delay));
@@ -1310,44 +1277,79 @@ export default function App() {
       const namedLetters = reducedMotion ? [] : letters;
 
       if (spoken) {
-        // One queue, letters then the word. No `speechBusyUntilRef` juggling on this path: the beat
-        // *is* the speech, so it ends when the speech does and the next word's prompt cannot collide
-        // with it. Praise, which runs inside `onDone`, lands after the word for the same reason.
-        const entries = [
-          ...namedLetters.map((letter) => ({
-            text: getLetterSpeechText(letter, settings.locale),
-            pitch: 1.08,
-            rate: SPELL_BACK_LETTER_RATE,
-          })),
-          { text: word },
-        ];
-        const wordEntry = entries.length - 1;
-        // Establish the honest resting frame before handing the queue to the browser. Speech events
-        // are normally asynchronous, but doing this first also makes a synchronous test double (or
-        // unusual engine) unable to overwrite a real `onstart` highlight with the waiting state.
-        setSpellBack({ index: reducedMotion ? letters.length : -1 });
-        const queued = speakSequence(entries, {
-          // The light follows the voice, never a guessed timer: a letter brightens as its own name
-          // begins to sound. The final entry is the whole word, which lights nothing in particular.
-          onEntryStart: (index) => setSpellBack({ index: index === wordEntry ? letters.length : index }),
-          onFinished: finish,
+        // Every letter and the whole word travel through one utterance. Engines impose a start-up
+        // cost at utterance boundaries, so this is materially faster than a queue of tiny entries.
+        // It also means `onend` is the exact hand-off: praise and the next prompt cannot overlap it.
+        const phrase = reducedMotion
+          ? { marks: [0], text: word }
+          : getSpellBackSpeech(namedLetters, word, settings.locale);
+        const visualStep = spellBackVisualStep(letters.length);
+        const boundaryWait = Math.max(SPELL_BACK_BOUNDARY_WAIT, visualStep * 1.5);
+        let visualIndex = reducedMotion ? letters.length : 0;
+        let fallbackTimer = null;
+        let timedFallback = false;
+
+        const showVisual = (index) => {
+          if (finished || index <= visualIndex) return false;
+          visualIndex = Math.min(index, letters.length);
+          setSpellBack({ index: visualIndex, pop: visualStep });
+          return true;
+        };
+        const armVisualFallback = (delay = visualStep) => {
+          window.clearTimeout(fallbackTimer);
+          if (finished || visualIndex >= letters.length) return;
+          fallbackTimer = window.setTimeout(() => {
+            timedFallback = true;
+            showVisual(visualIndex + 1);
+            armVisualFallback();
+          }, delay);
+          timers.push(fallbackTimer);
+        };
+        const markAt = (charIndex) => {
+          let mark = 0;
+          phrase.marks.forEach((offset, index) => {
+            if (offset <= charIndex) mark = index;
+          });
+          return mark;
+        };
+
+        // The first letter responds in the completion frame and stays there while the voice starts.
+        // It never races ahead before `onstart`, which preserves the sync fix from v2.17.1.
+        setSpellBack({
+          index: reducedMotion ? letters.length : 0,
+          ...(reducedMotion ? null : { pop: visualStep }),
         });
-        if (queued) {
-          // Nothing is lit until the voice arrives, so the word simply sits finished for the moment
-          // the engine takes to start — which is honest, and much better than lighting a letter that
-          // is not being spoken. The ceiling cancels the queue before moving on, so a very late voice
-          // can never begin talking over the next word.
-          advanceTimerRef.current = window.setTimeout(
-            () => {
-              cancelSpeech();
-              finish();
-            },
-            SPELL_BACK_SPOKEN_CEILING_BASE + entries.length * SPELL_BACK_SPOKEN_CEILING_PER_ENTRY,
-          );
+        const accepted = speakTracked(phrase.text, {
+          onStart: () => {
+            if (!reducedMotion) armVisualFallback(boundaryWait);
+          },
+          onBoundary: (event) => {
+            if (reducedMotion || timedFallback || !Number.isFinite(event.charIndex)) return;
+            const progressed = showVisual(markAt(event.charIndex));
+            // A single initial boundary is not enough to trust the engine forever. Each boundary
+            // gets one short window to deliver the next; after that the steady fallback takes over.
+            if (progressed || fallbackTimer === null) armVisualFallback(boundaryWait);
+          },
+          onFinished: finish,
+          pitch: 1.08,
+          rate: reducedMotion ? 0.82 : SPELL_BACK_SPEECH_RATE,
+        });
+        if (accepted) {
+          // A synchronous engine/test double can finish during `speakTracked`; do not leave behind a
+          // timer that could later cancel the next word's prompt.
+          if (!finished) {
+            advanceTimerRef.current = window.setTimeout(
+              () => {
+                cancelSpeech();
+                finish();
+              },
+              SPELL_BACK_SPOKEN_CEILING_BASE
+                + phrase.text.length * SPELL_BACK_SPOKEN_CEILING_PER_CHAR,
+            );
+          }
           return;
         }
-        // The engine refused the queue outright; fall through to the silent beat rather than skip
-        // the ceremony.
+        // The engine refused the phrase outright; fall through to the silent beat rather than skip.
       }
 
       // No voice: the pops carry the whole beat, and here a fast stagger is right because a pop is
@@ -1369,7 +1371,7 @@ export default function App() {
         lettersPhase + SPELL_BACK_WORD_GAP + WORD_COMPLETION_PAUSE + SPELL_BACK_SPOKEN_CEILING_BASE,
       );
     },
-    [cancelSpeech, playEffect, settings.locale, settings.speech, speakSequence],
+    [cancelSpeech, playEffect, settings.locale, settings.speech, speakTracked],
   );
 
   // A tap or a keypress during the spell-back means "I've heard it" — the beat jumps to its end and

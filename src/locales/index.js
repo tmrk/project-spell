@@ -75,6 +75,24 @@ export function getLetterSpeechText(letter, localeCode) {
   return code === 'hu-HU' && HUNGARIAN_ACCENTED_VOWELS.has(text) ? `${text}.` : text;
 }
 
+export function getSpellBackSpeech(letters, word, localeCode) {
+  const marks = [];
+  let text = '';
+
+  letters.forEach((letter, index) => {
+    if (text) text += ' ';
+    marks.push(text.length);
+    const spokenLetter = getLetterSpeechText(letter, localeCode);
+    text += spokenLetter;
+    if (!/[.!?]$/u.test(spokenLetter)) text += index === letters.length - 1 ? '.' : ',';
+  });
+
+  if (text) text += ' ';
+  marks.push(text.length);
+  text += String(word ?? '');
+  return { marks, text };
+}
+
 export function formatMessage(template, values = {}) {
   return template.replace(/\{(\w+)\}/gu, (match, key) => String(values[key] ?? match));
 }

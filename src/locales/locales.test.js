@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOCALES, getLetterSpeechText } from './index';
+import { LOCALES, getLetterSpeechText, getSpellBackSpeech } from './index';
 
 const REFERENCE_CODE = 'en-GB';
 
@@ -53,5 +53,16 @@ describe('letter speech text', () => {
   it('leaves plain Hungarian and non-Hungarian letters unchanged', () => {
     expect(getLetterSpeechText('B', 'hu-HU')).toBe('b');
     expect(getLetterSpeechText('É', 'en-GB')).toBe('é');
+  });
+
+  it('builds one compact phrase with exact boundary offsets', () => {
+    expect(getSpellBackSpeech(['C', 'a', 't'], 'cat', 'en-GB')).toEqual({
+      marks: [0, 3, 6, 9],
+      text: 'c, a, t. cat',
+    });
+    expect(getSpellBackSpeech(['É', 'v', 'a'], 'éva', 'hu-HU')).toEqual({
+      marks: [0, 3, 6, 9],
+      text: 'é. v, a. éva',
+    });
   });
 });
