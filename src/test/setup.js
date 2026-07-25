@@ -53,7 +53,9 @@ Object.defineProperty(window, 'speechSynthesis', {
     addEventListener: vi.fn(),
     cancel: vi.fn(),
     getVoices: vi.fn(() => []),
+    pending: false,
     removeEventListener: vi.fn(),
+    speaking: false,
     speak: vi.fn(),
   },
 });
@@ -79,5 +81,7 @@ afterEach(() => {
   window.localStorage.clear();
   vi.clearAllMocks();
   window.matchMedia.mockImplementation(matchMediaResult);
+  window.speechSynthesis.pending = false;
+  window.speechSynthesis.speaking = false;
   vi.useRealTimers();
 });
