@@ -519,6 +519,31 @@ describe('Project Spell', () => {
     expect(document.documentElement).toHaveAttribute('lang', 'en-US');
   });
 
+  it('prefers a local same-region voice over a matching remote voice', () => {
+    vi.useFakeTimers();
+    const remotePreferredVoice = {
+      lang: 'en-GB',
+      localService: false,
+      name: 'Google UK English Female',
+    };
+    const localRegionalVoice = {
+      lang: 'en-GB',
+      localService: true,
+      name: 'Daniel',
+    };
+    window.speechSynthesis.getVoices.mockReturnValue([
+      remotePreferredVoice,
+      localRegionalVoice,
+    ]);
+
+    render(<App />);
+    playIn(PLAY_EASY);
+    act(() => vi.advanceTimersByTime(121));
+
+    const utterance = window.speechSynthesis.speak.mock.calls.at(-1)[0];
+    expect(utterance.voice).toBe(localRegionalVoice);
+  });
+
   it.each([
     {
       code: 'sv-SE',
@@ -1541,10 +1566,12 @@ describe('Project Spell', () => {
       // The completed word already has its chime/confetti. No letter pretends to be spoken before
       // the engine reports a real position.
       expect(spellingLetter()).toBeUndefined();
+      expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
       act(() => vi.advanceTimersByTime(1500));
       expect(spellingLetter()).toBeUndefined();
 
       startSpellBackSpeech(utterance);
+      expect(document.querySelector('.word')).toHaveClass('word--speech-active');
       act(() => utterance.onboundary({ charIndex: 0, name: 'word' }));
       expect(spellingLetter()).toBe('c');
       // A slow voice may spend seconds on one name. The visual does not run ahead and a browser
@@ -1567,10 +1594,11 @@ describe('Project Spell', () => {
       endSpellBackSpeech(utterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       expect(document.querySelector('.word')).not.toHaveClass('word--spelling');
+      expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
       expect(spokenTexts()).toEqual(['c, a, t. cat', 'Spell the word cat']);
     });
 
-    it('omits guessed highlights and waits for the real end when boundaries are unavailable', () => {
+    it('lights the whole spoken word and waits for the real end when boundaries are unavailable', () => {
       vi.useFakeTimers();
       render(<App />);
       playIn(PLAY_EASY);
@@ -1580,13 +1608,18 @@ describe('Project Spell', () => {
       const cancelCountAfterPhrase = window.speechSynthesis.cancel.mock.calls.length;
 
       expect(spellingLetter()).toBeUndefined();
+      expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
       startSpellBackSpeech(utterance);
+      expect(document.querySelector('.word')).toHaveClass('word--speech-active');
+      expect(document.querySelectorAll('.word--speech-active .letter')).toHaveLength(3);
       act(() => vi.advanceTimersByTime(8000));
       expect(spellingLetter()).toBeUndefined();
+      expect(document.querySelector('.word')).toHaveClass('word--speech-active');
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
       endSpellBackSpeech(utterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
     });
 
     it('lets a keypress and a tap skip straight to the next word', () => {
@@ -1655,6 +1688,7 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       startSpellBackSpeech(wordUtterance);
       expect(spellingLetter()).toBeUndefined();
+      expect(document.querySelector('.word')).toHaveClass('word--speech-active');
       endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });

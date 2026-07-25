@@ -1459,9 +1459,10 @@ input:focus-visible {
 .word--celebrating .letter:nth-child(14) { --hop-delay: 520ms; }
 
 // Spell-it-back (roadmap F4, D-020). There is deliberately no staggered `animation-delay` here:
-// JavaScript moves one class only when the compact phrase reports a real speech boundary. Engines
-// that omit boundaries get no travelling light rather than a fabricated, out-of-sync one. The
-// celebration hop stands down, so only one animation owns a letter.
+// JavaScript moves one class only when the compact phrase reports a real speech boundary. The
+// word-level light is separately tied to the phrase's real start/end, so engines that omit
+// boundaries still give synchronized feedback without inventing a current letter. The celebration
+// hop stands down, so only one animation owns a letter.
 //
 // `--spell-pop` lets the silent beat, which does still run on a timer, shorten the pop to its own
 // faster step instead of having it cut off mid-flight.
@@ -1603,6 +1604,14 @@ input:focus-visible {
 
 .letter--was-hidden.letter--done .letter__visual {
   animation: letter-reveal 220ms ease-out;
+}
+
+// The voice is audibly spelling this completed word. This quiet group light starts from the real
+// utterance `start` and disappears at its real `end`; it is the truthful fallback when an engine
+// cannot identify individual word boundaries. A reported boundary leaves one letter out of this
+// selector so its stronger light below remains visually distinct.
+.word--speech-active .letter:not(.letter--spelling) {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 // The letter being named right now — lit like the active letter, so a child's eye follows the voice

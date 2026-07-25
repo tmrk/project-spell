@@ -103,9 +103,9 @@ const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
 // Spell-it-back (roadmap F4, D-020): one compact utterance says every letter and then the word.
 // Keeping it in one phrase removes the costly engine hand-off that used to happen between every
-// queued letter. Boundary events keep the light with the voice where they exist. Where they do not,
-// the completed word stays still: inventing a visual clock is worse than omitting the travelling
-// light because no timer can know how quickly an installed voice is actually speaking.
+// queued letter. Boundary events keep the travelling light with the voice where they exist. Where
+// they do not, the whole word lights as one for the real spoken interval: no timer can know how
+// quickly an installed voice is moving between its letters.
 const SPELL_BACK_SILENT_STEP = 120;
 const SPELL_BACK_SILENT_MAX = 1500;
 const SPELL_BACK_WORD_GAP = 140;
@@ -271,7 +271,21 @@ function useSpeech(enabled, locale, setSpeechDucking) {
       const regionalVoices = languageVoices.filter(
         (voice) => voice.lang?.replace('_', '-').toLowerCase() === normalisedCode,
       );
+      const localRegionalVoices = regionalVoices.filter(
+        (voice) => voice.localService !== false,
+      );
+      const localLanguageVoices = languageVoices.filter(
+        (voice) => voice.localService !== false,
+      );
+      // Native/local voices avoid remote start-up latency and are the voices whose platform
+      // backends are most likely to expose real word ranges. Prefer one even when a remote voice's
+      // display name is a closer match: exact speech-driven highlighting is more useful here than
+      // a particular voice name.
       voiceRef.current =
+        localRegionalVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
+        localRegionalVoices[0] ??
+        localLanguageVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
+        localLanguageVoices[0] ??
         regionalVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
         regionalVoices[0] ??
         languageVoices.find((voice) => voiceNamePattern.test(voice.name)) ??
@@ -1314,11 +1328,12 @@ export default function App() {
           ? { marks: [0], text: word }
           : getSpellBackSpeech(namedLetters, word, settings.locale);
         let visualIndex = -1;
+        let speechActive = false;
 
         const showVisual = (index) => {
           if (finished || index <= visualIndex) return;
           visualIndex = Math.min(index, letters.length);
-          setSpellBack({ index: visualIndex });
+          setSpellBack({ index: visualIndex, speechActive });
         };
         const markAt = (charIndex) => {
           let mark = 0;
@@ -1328,12 +1343,18 @@ export default function App() {
           return mark;
         };
 
-        // A finished word already has confetti, hearts and its done chime, so it does not need a
-        // guessed light to feel responsive. Start with no individual highlight. If the installed
-        // engine reports boundaries they are the only honest positions; if it does not, the phrase
-        // is still heard in full over the calm completed word.
+        // Start with no speech light. `onStart` lights the completed word for exactly the audible
+        // lifetime of the phrase. Real boundaries add the stronger travelling letter light; an
+        // engine without them still gives the child visible, genuinely synchronized feedback.
         setSpellBack({ index: letters.length });
         const accepted = speakTracked(phrase.text, {
+          onStart: () => {
+            speechActive = true;
+            setSpellBack({
+              index: visualIndex < 0 ? letters.length : visualIndex,
+              speechActive: true,
+            });
+          },
           onBoundary: (event) => {
             if (reducedMotion || !Number.isFinite(event.charIndex)) return;
             showVisual(markAt(event.charIndex));
@@ -2298,7 +2319,7 @@ export default function App() {
           <div
             className={`word${celebratingWord ? ' word--celebrating' : ''}${
               spellBack ? ' word--spelling' : ''
-            }`}
+            }${spellBack?.speechActive ? ' word--speech-active' : ''}`}
             style={{
               '--letter-count': currentWordLetters.length,
               '--letter-size': `${Math.min(15, 94 / currentWordLetters.length)}vw`,
