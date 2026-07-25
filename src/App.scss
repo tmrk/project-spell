@@ -1220,18 +1220,23 @@ input:focus-visible {
   margin-right: -4px;
 }
 
-.next-round-button--super.primary-button {
-  color: var(--ps-ink);
-  background: var(--ps-gold);
-  box-shadow: 0 var(--ps-lift-3) 0 var(--ps-gold-shade);
+// The super round used to make the button itself gold, which put a gold object on a gold page: at
+// arm's length the CTA disappeared into the background (owner, 2026-07-25). Gold stays the reward
+// colour and green stays the one action colour, so the super round keeps the ordinary green slab
+// and wears its gold as a star. Nothing here overrides the fill on purpose.
+.next-round-button--super {
+  padding-left: var(--ps-space-5);
 }
 
-.next-round-button--super.primary-button:hover {
-  background: color-mix(in srgb, var(--ps-gold) 92%, var(--ps-ink));
+.next-round-button__star {
+  display: inline-flex;
+  color: var(--ps-gold);
 }
 
-.next-round-button--super.primary-button:active {
-  box-shadow: 0 var(--ps-lift-1) 0 var(--ps-gold-shade);
+.next-round-button__star svg {
+  width: 1.25em;
+  height: 1.25em;
+  margin-right: 0;
 }
 
 .play-screen {
@@ -2675,8 +2680,12 @@ input:focus-visible {
   display: block;
 }
 
-// Nothing in the scenery moves. Liveliness comes from the child's actions, so every shape below
-// is placed once and stays there (design guidelines §6; ambient decor animation is forbidden).
+// The meadow breathes (owner call, 2026-07-25 — it superseded §6's "static decor"). Every loop in
+// here is ambient, so it obeys four rules: transform and opacity only, one period no shorter than
+// 2.8s, an amplitude measured in a few pixels or a couple of degrees, and a resting state that is
+// the shape's own un-animated style — which is what reduced motion falls back to. Clouds travel;
+// everything else sways in place. The hills never move: the floor is the one thing that has to
+// stay put, or the whole screen looks like it is sliding.
 .scenery__cloud path {
   fill: var(--ps-cloud);
 }
@@ -2688,57 +2697,85 @@ input:focus-visible {
   width: clamp(120px, 21vw, 200px);
 }
 
+// Both halves pivot on the disc's centre, which sits at the corner of the view box (0 0), so the
+// sun swells and its rays shimmer out of the same point instead of orbiting it.
 .scenery__sun-disc {
+  transform-box: view-box;
+  transform-origin: 0 0;
   fill: var(--ps-cloud);
   opacity: 0.85;
+  animation: sun-breathe 11s ease-in-out infinite;
 }
 
 .scenery__sun-rays {
+  transform-box: view-box;
+  transform-origin: 0 0;
   fill: var(--ps-cloud);
   opacity: 0.55;
+  animation: sun-shimmer 17s ease-in-out infinite;
 }
 
+// The two welcome/greeting clouds cross the whole sky, entering and leaving fully off-screen so
+// the loop has no visible seam. `left: 0` puts the travel in the keyframes' hands; the base
+// `transform` is only the resting spot, which is where reduced motion parks them. The negative
+// delays start both mid-flight, so the sky is already populated on the first paint.
 .scenery__cloud--high {
   top: 6%;
-  right: 3vw;
+  left: 0;
   width: clamp(124px, 21vw, 210px);
+  transform: translateX(66vw);
   opacity: 0.6;
+  animation: cloud-drift 96s linear -31s infinite;
 }
 
 .scenery__cloud--low {
   top: 47%;
-  left: 1vw;
+  left: 0;
   width: clamp(96px, 15vw, 152px);
+  transform: translateX(6vw);
   opacity: 0.36;
+  animation: cloud-drift 134s linear -78s infinite;
 }
 
 .scenery__butterfly--wordmark {
   top: 17%;
   right: 15vw;
   width: clamp(30px, 5.2vw, 46px);
+  animation: butterfly-float 17s ease-in-out infinite;
 }
 
+// Both wings are one path either side of x=30, so a single scaleX about the centre closes and
+// opens them together.
 .scenery__butterfly-wings {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
   fill: var(--shape-fill);
+  animation: butterfly-flutter 2.9s ease-in-out infinite;
 }
 
 .scenery__butterfly-body {
   fill: var(--shape-shade);
 }
 
-// Play: the calm here is load-bearing. Two pale clouds at the edges, nothing on the ground.
+// Play: the calm here is load-bearing, and §6 keeps these two clouds at the screen edges — so they
+// sway on the spot instead of crossing. A cloud drifting behind the word is exactly the kind of
+// movement the play screen must not have.
 .scenery__cloud--edge-left {
   top: 11%;
   left: -5vw;
   width: clamp(120px, 18vw, 188px);
   opacity: 0.3;
+  animation: cloud-hover 52s ease-in-out infinite;
 }
 
 .scenery__cloud--edge-right {
+  // Drifts against its neighbour, so the two never move as a pair.
+  --cloud-sway: -2.2vw;
   top: 63%;
   right: -4vw;
   width: clamp(108px, 16vw, 168px);
   opacity: 0.26;
+  animation: cloud-hover 64s ease-in-out -19s infinite;
 }
 
 // Complete: a bird on the hill and gold sparkles beside the earned stars.
@@ -2747,22 +2784,31 @@ input:focus-visible {
   bottom: clamp(58px, 10.5vh, 128px);
   left: 11vw;
   width: clamp(34px, 5.4vw, 52px);
+  animation: bird-bob 5.4s ease-in-out infinite;
 }
 
 .scenery__bird-body {
   fill: var(--shape-fill);
 }
 
+// The wing lifts from its shoulder — the corner of the path nearest the bird's back.
 .scenery__bird-wing {
+  transform-box: fill-box;
+  transform-origin: 8% 90%;
   fill: var(--shape-shade);
+  animation: bird-wing-lift 3.6s ease-in-out infinite;
 }
 
 .scenery__bird-eye {
   fill: var(--ps-ink);
 }
 
+// Each sparkle carries its own brightness, and the twinkle dips towards it rather than to a
+// literal, so one keyframe serves all three without flattening them to the same gold.
 .scenery__sparkle {
   width: clamp(14px, 2.4vw, 22px);
+  opacity: var(--sparkle-glow, 0.9);
+  animation: sparkle-twinkle 3.4s ease-in-out infinite;
 }
 
 .scenery__sparkle path {
@@ -2770,24 +2816,28 @@ input:focus-visible {
 }
 
 .scenery__sparkle--left {
+  --sparkle-glow: 0.95;
   top: 24%;
   left: calc(50% - clamp(148px, 26vw, 240px));
-  opacity: 0.95;
 }
 
 .scenery__sparkle--right {
+  --sparkle-glow: 0.8;
   top: 20%;
   left: calc(50% + clamp(138px, 24vw, 224px));
-  opacity: 0.8;
+  animation-duration: 4.2s;
+  animation-delay: -1.5s;
 }
 
 // The third sparkle belongs to the super round only, so the normal ceremony keeps its budget.
 // Both selectors are qualified with `svg` to outrank `.scenery svg { display: block }` above.
 svg.scenery__sparkle--super {
+  --sparkle-glow: 0.88;
   top: 31%;
   left: calc(50% + clamp(168px, 28vw, 262px));
   display: none;
-  opacity: 0.88;
+  animation-duration: 3.8s;
+  animation-delay: -2.6s;
 }
 
 [data-round="super"] svg.scenery__sparkle--super {
@@ -2828,11 +2878,22 @@ svg.scenery__sparkle--super {
   fill: color-mix(in srgb, var(--ps-sun-deep) 58%, var(--ps-grass-shade));
 }
 
+// Everything planted on the rise sways from where it meets the ground, and each one has its own
+// period and phase so the meadow ripples instead of marching. `--sway` sets the amplitude: blades
+// bend less than a flower head nods.
+.scenery__tuft,
+.scenery__flower,
+.scenery__sprout {
+  transform-origin: 50% 100%;
+  animation: decor-sway 9.5s ease-in-out infinite;
+}
+
 .scenery__tuft {
   width: 120px;
 }
 
 .scenery__tuft--one {
+  --sway: 2deg;
   bottom: clamp(38px, 7vh, 86px);
   left: 3vw;
   width: 132px;
@@ -2841,10 +2902,13 @@ svg.scenery__sparkle--super {
 
 // Left of centre rather than the far right: the whole bottom-right corner belongs to the book tab.
 .scenery__tuft--two {
+  --sway: 2.6deg;
   bottom: clamp(44px, 8vh, 96px);
   left: 31vw;
   width: 112px;
   opacity: 0.5;
+  animation-duration: 11.5s;
+  animation-delay: -3.4s;
 }
 
 // A little planting on the front rise. Accent shapes keep wheel colours at full strength but
@@ -2858,16 +2922,22 @@ svg.scenery__sparkle--super {
 }
 
 .scenery__flower--one {
+  --sway: 3.4deg;
   bottom: clamp(28px, 5.2vh, 66px);
   left: 17vw;
   width: clamp(26px, 4.4vw, 40px);
+  animation-duration: 8.2s;
+  animation-delay: -1.9s;
 }
 
 // Kept off the bottom-right corner: the sticker-book tab lives there and would cover it.
 .scenery__flower--two {
+  --sway: 3deg;
   left: 58vw;
   bottom: clamp(40px, 7.2vh, 90px);
   width: clamp(22px, 3.8vw, 34px);
+  animation-duration: 10.4s;
+  animation-delay: -5.1s;
 }
 
 .scenery__sprout-stem {
@@ -2880,9 +2950,12 @@ svg.scenery__sparkle--super {
 }
 
 .scenery__sprout--one {
+  --sway: 3.8deg;
   bottom: clamp(24px, 4.6vh, 58px);
   left: 41vw;
   width: clamp(22px, 3.8vw, 36px);
+  animation-duration: 12.5s;
+  animation-delay: -7.2s;
 }
 
 .sr-only {
@@ -3056,6 +3129,62 @@ svg.scenery__sparkle--super {
   0% { transform: translateY(58px) rotate(-5deg) scale(0.88); }
   62% { transform: translateY(-12px) rotate(-2deg) scale(1.03); }
   100% { transform: translateY(0) rotate(-5deg) scale(1); }
+}
+
+// Ambient scenery loops. These are the only animations in the app that are not a reaction to the
+// child, so they are held to minutes and millimetres — see the note above `.scenery__cloud path`.
+// A cloud starts and ends its crossing completely off-screen, which is what makes the wrap
+// invisible; `.app` clips the overflow, so nothing here can widen the page.
+@keyframes cloud-drift {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(calc(100vw + 30%)); }
+}
+
+@keyframes cloud-hover {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(var(--cloud-sway, 2.6vw), -7px); }
+}
+
+@keyframes sun-breathe {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.035); }
+}
+
+@keyframes sun-shimmer {
+  0%, 100% { opacity: 0.5; transform: rotate(-3.5deg); }
+  50% { opacity: 0.62; transform: rotate(3.5deg); }
+}
+
+@keyframes decor-sway {
+  0%, 100% { transform: rotate(calc(var(--sway, 2.4deg) * -1)); }
+  50% { transform: rotate(var(--sway, 2.4deg)); }
+}
+
+// A lazy three-beat loop, so the butterfly wanders rather than ticking back and forth.
+@keyframes butterfly-float {
+  0%, 100% { transform: translate(0, 0) rotate(-3deg); }
+  32% { transform: translate(-1.7vw, -15px) rotate(4deg); }
+  68% { transform: translate(1.2vw, -6px) rotate(-1deg); }
+}
+
+@keyframes butterfly-flutter {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.74); }
+}
+
+@keyframes bird-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes bird-wing-lift {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(-9deg); }
+}
+
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: calc(var(--sparkle-glow, 0.9) * 0.4); transform: scale(0.84); }
+  50% { opacity: var(--sparkle-glow, 0.9); transform: scale(1.08); }
 }
 
 @media (max-width: 600px) {

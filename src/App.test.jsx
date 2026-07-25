@@ -1195,6 +1195,63 @@ describe('Project Spell', () => {
     });
   });
 
+  it('marks the round-complete CTA with a gold star only when the super round is next', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      PROGRESS_KEY,
+      JSON.stringify({
+        version: 1,
+        totalStars: 6,
+        stickers: [],
+        shinyStickers: [],
+        badges: [],
+        roundsTowardSuper: 1,
+      }),
+    );
+    window.localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        ...DEFAULT_SETTINGS,
+        customWords: 'cat\ndog\nfox\nhen\npig\nsun',
+        wordSource: 'custom',
+        roundLength: 3,
+        music: false,
+        soundEffects: false,
+      }),
+    );
+
+    render(<App />);
+    playIn(PLAY_EASY);
+
+    // Completed words stay out of later rounds (D-013), so each round spells whatever it is dealt.
+    const finishRound = () => {
+      for (let word = 0; word < 3; word += 1) {
+        const spelling = [...document.querySelectorAll('.letter__visual')]
+          .map((letter) => letter.textContent.trim())
+          .join('');
+        fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+          target: { value: spelling },
+        });
+        act(() => vi.advanceTimersByTime(760));
+      }
+    };
+
+    finishRound();
+
+    const nextRound = screen.getByRole('button', { name: 'Next round' });
+    expect(nextRound).not.toHaveClass('next-round-button--super');
+    expect(nextRound.querySelector('.next-round-button__star')).toBeNull();
+
+    fireEvent.click(nextRound);
+    finishRound();
+
+    // The road is full, so the next round is the golden one. The slab itself stays green — a gold
+    // button on the sun-yellow page stopped reading as the call to action — and wears a gold star.
+    const superRound = screen.getByRole('button', { name: 'Super round' });
+    expect(superRound).toHaveClass('next-round-button--super');
+    expect(superRound.querySelector('.next-round-button__star')).not.toBeNull();
+  });
+
   it('lets grown-ups pick normal mode and reminds them it needs speech', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));

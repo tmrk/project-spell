@@ -2118,6 +2118,13 @@ export default function App() {
             className={`primary-button next-round-button${nextIsSuper ? ' next-round-button--super' : ''}`}
             onClick={() => startRound()}
           >
+            {/* The super round is announced by a gold star on the ordinary green slab: a gold
+                button on the sun-yellow page stopped reading as the call to action at all. */}
+            {nextIsSuper && (
+              <span className="next-round-button__star" aria-hidden="true">
+                <StarIcon filled />
+              </span>
+            )}
             {nextIsSuper ? copy.startSuperRound : copy.nextRound}
             <ChevronIcon direction="next" />
           </button>

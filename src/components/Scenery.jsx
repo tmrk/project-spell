@@ -1,7 +1,12 @@
 // The paper-cut kit (design guidelines §6, roadmap F3). Every shape is a closed blob path with
 // no strokes, filled from a token, drawn inline — no raster, no external SVG, no icon font.
-// Everything here is decor: aria-hidden, pointer-events: none, and completely static. The
-// screens feel alive because they are made of cut paper, not because anything drifts.
+// Everything here is decor: aria-hidden and pointer-events: none.
+//
+// The meadow is alive: clouds cross the sky, the sun breathes, and everything planted on the rise
+// sways (owner call, 2026-07-25 — it replaced F3's static decor). All of that lives in `App.scss`
+// as transform/opacity loops keyed off the class names below, because motion is styling here, not
+// state — no timers, no re-renders, and `prefers-reduced-motion` parks every shape at the resting
+// position these compositions place it in.
 //
 // New shapes join this kit; they never get pasted straight into a screen. Compositions live in
 // COMPOSITIONS at the bottom, one per phase, and are held to the §6 density budgets.
