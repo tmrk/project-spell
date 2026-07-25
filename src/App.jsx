@@ -68,6 +68,7 @@ import {
   selectProfile,
 } from './profiles';
 import { buildKeyRows } from './keyboard';
+import { createSpeechQueue, estimateSpeechMs } from './speech';
 import { SESSION_KEY, createSession, isResumable, normaliseSession } from './session';
 import { getStickerDetails } from './stickers/map';
 import {
@@ -99,22 +100,24 @@ const LAST_WORD_ADVANCE_CEILING = 2000;
 // Adaptive practice needs a little history before it can weight anything sensibly;
 // below this the child gets the plain random round (roadmap G6).
 const ADAPTIVE_MIN_ATTEMPTS = 20;
-const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
-// Spell-it-back (roadmap F4, D-020): one compact utterance says all the letters, then its real end
-// submits one utterance for the whole word. This keeps the fast, gapless letter run without letting
-// an engine co-articulate the word over the final letter. Boundary events keep the travelling light
-// with the voice where they exist; the group light is the honest fallback where they do not.
+// Spell-it-back (roadmap F4, D-020, D-021): the letters go to the speech queue as one compact
+// utterance and the word as a second, so the word is spoken from the letters' real end with no
+// cancel in between. Boundary events keep the travelling light with the voice where they exist;
+// the group light is the honest fallback where they do not.
 const SPELL_BACK_SILENT_STEP = 120;
 const SPELL_BACK_SILENT_MAX = 1500;
 const SPELL_BACK_WORD_GAP = 140;
 const SPELL_BACK_LETTER_RATE = 1.18;
 const SPELL_BACK_WORD_RATE = 1.12;
 const SPELL_BACK_SILENT_CEILING_BUFFER = 1600;
-const TRACKED_SPEECH_START_STALL = 1600;
-const TRACKED_SPEECH_HEALTH_INTERVAL = 1000;
-const TRACKED_SPEECH_HARD_MIN = 20000;
-const TRACKED_SPEECH_HARD_MS_PER_CHAR = 650;
+// The beat is time-boxed (owner decision, 2026-07-25). A working voice always ends it on its own
+// real completion, well inside these; they exist so that a slow, stalled or wedged engine can never
+// hold a child on a finished word. Whatever is still speaking when the box closes keeps speaking —
+// the next word's prompt queues behind it rather than cutting across it.
+const SPELL_BACK_BUDGET_SLACK = 900;
+const SPELL_BACK_BUDGET_MIN = 2200;
+const SPELL_BACK_BUDGET_MAX = 4200;
 
 const spellBackSilentStep = (length) =>
   Math.min(SPELL_BACK_SILENT_STEP, 900 / length, SPELL_BACK_SILENT_MAX / length);
@@ -254,8 +257,30 @@ function clearProfileStorage(profileId) {
 
 function useSpeech(enabled, locale, setSpeechDucking) {
   const voiceRef = useRef(null);
-  const activeFinishRef = useRef(null);
   const { code, voiceNamePattern } = getLocale(locale);
+  const codeRef = useRef(code);
+  const enabledRef = useRef(enabled);
+  // One queue for the life of the component: it owns the engine's state machine, which must not be
+  // rebuilt when a setting or a language changes underneath a running utterance.
+  const [queue] = useState(createSpeechQueue);
+
+  // These effects are registered before every caller's, so a live setting is always in place by the
+  // time anything in the round asks to speak in the same commit.
+  useEffect(() => {
+    codeRef.current = code;
+    queue.configure({
+      // A voice is only right for the language it was chosen for; a sticker read in another
+      // language takes the engine's own default for that language instead.
+      getVoice: (item) => (item.lang === code ? voiceRef.current : null),
+      onBusyChange: (isBusy) => setSpeechDucking?.(isBusy),
+    });
+  }, [code, queue, setSpeechDucking]);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+    // Speech is an enhancement a parent can switch off mid-round; silence has to be immediate.
+    if (!enabled) queue.cancel();
+  }, [enabled, queue]);
 
   useEffect(() => {
     voiceRef.current = null;
@@ -298,170 +323,33 @@ function useSpeech(enabled, locale, setSpeechDucking) {
     return () => window.speechSynthesis.removeEventListener?.('voiceschanged', chooseVoice);
   }, [code, voiceNamePattern]);
 
-  const cancel = useCallback(() => {
-    activeFinishRef.current?.(false);
-    window.speechSynthesis?.cancel();
-  }, []);
+  const cancel = useCallback(() => queue.cancel(), [queue]);
+
+  // One entry point for everything spoken. `mode: 'next'` queues behind whatever is already going
+  // rather than cutting it off; `id` lets a later request supersede an equivalent one that never
+  // got its turn. Returns false only when there is nothing that could speak at all, which is the
+  // signal callers use to take their silent path.
+  const speak = useCallback((input, config = {}) => {
+    if (!enabledRef.current) return false;
+    const items = (Array.isArray(input) ? input : [input]).map((item) => ({
+      id: item.id,
+      lang: item.locale ? getLocale(item.locale).code : codeRef.current,
+      onBoundary: item.onBoundary,
+      onEnd: item.onEnd,
+      onStart: item.onStart,
+      pitch: item.pitch,
+      rate: item.rate,
+      text: item.text,
+    }));
+    return queue.speak(items, config);
+  }, [queue]);
 
   const say = useCallback(
-    (text, options = {}) => {
-      if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false;
-
-      const replacedFinish = activeFinishRef.current;
-      replacedFinish?.(false);
-      // `cancel()` is only needed when this utterance replaces one the app still owns. Calling it
-      // after a real `end` and immediately before `speak()` creates an avoidable queue race in some
-      // engines — most visibly, an occasional missing next-word prompt.
-      if (replacedFinish) window.speechSynthesis.cancel();
-      const utterance = new window.SpeechSynthesisUtterance(text);
-      const utteranceCode = options.locale ? getLocale(options.locale).code : code;
-      utterance.lang = utteranceCode;
-      utterance.voice = utteranceCode === code ? voiceRef.current : null;
-      utterance.rate = options.rate ?? 0.82;
-      utterance.pitch = options.pitch ?? 1.04;
-      let finished = false;
-      let fallbackTimer = null;
-      const start = () => setSpeechDucking?.(true);
-      const finish = (notify = true) => {
-        if (finished) return;
-        finished = true;
-        window.clearTimeout(fallbackTimer);
-        if (activeFinishRef.current === finish) activeFinishRef.current = null;
-        setSpeechDucking?.(false);
-        if (notify) options.onEnd?.();
-      };
-      utterance.onstart = start;
-      utterance.onend = () => finish(true);
-      utterance.onerror = () => finish(true);
-      activeFinishRef.current = finish;
-      start();
-      fallbackTimer = window.setTimeout(
-        () => finish(true),
-        options.fallbackMs ?? Math.max(1200, String(text).length * 90),
-      );
-      try {
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        finish(true);
-        return false;
-      }
-      return true;
-    },
-    [code, enabled, setSpeechDucking],
+    (text, options = {}) => speak({ ...options, text }, { mode: options.mode }),
+    [speak],
   );
 
-  // A tracked utterance whose speech progress can drive a visual. `boundary` is optional in the
-  // platform, so this helper forwards progress when the engine reports it and callers degrade
-  // without positions. A completed utterance may opt out of cancellation when it directly submits
-  // the next stage: cancelling at that boundary can clip the tail on some engines.
-  const speakTracked = useCallback(
-    (text, {
-      cancelBeforeSpeak = true,
-      onBoundary,
-      onFinished,
-      onStart,
-      ...options
-    } = {}) => {
-      if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
-        return false;
-      }
-      const replacedFinish = activeFinishRef.current;
-      replacedFinish?.(false);
-      if (cancelBeforeSpeak && replacedFinish) window.speechSynthesis.cancel();
-
-      let finished = false;
-      let hardTimer = null;
-      let healthTimer = null;
-      let startTimer = null;
-      let started = false;
-      // Keep a strong reference until speech settles. Some WebKit implementations have historically
-      // dropped callbacks when the page releases its last reference early.
-      let utterance = new window.SpeechSynthesisUtterance(text);
-      const finish = (notify = true, cancelUtterance = false) => {
-        if (finished) return;
-        finished = true;
-        window.clearTimeout(hardTimer);
-        window.clearTimeout(healthTimer);
-        window.clearTimeout(startTimer);
-        if (activeFinishRef.current === finish) activeFinishRef.current = null;
-        utterance = null;
-        setSpeechDucking?.(false);
-        // Mark speech finished before cancelling: an engine may synchronously report `error` for a
-        // cancelled utterance, and that callback must not re-arm the watchdog.
-        if (cancelUtterance) window.speechSynthesis.cancel();
-        if (notify) onFinished?.();
-      };
-      const checkHealth = () => {
-        if (finished) return;
-        // `speaking` is the platform's explicit signal that an utterance has begun and has not
-        // completed. Boundary silence is normal and says nothing about audio health. Only rescue a
-        // missing `end` after the browser itself reports that speech has stopped.
-        if (window.speechSynthesis.speaking === false) {
-          finish(true);
-          return;
-        }
-        healthTimer = window.setTimeout(checkHealth, TRACKED_SPEECH_HEALTH_INTERVAL);
-      };
-      const trackStartedSpeech = () => {
-        if (finished || started) return;
-        started = true;
-        window.clearTimeout(startTimer);
-        healthTimer = window.setTimeout(checkHealth, TRACKED_SPEECH_HEALTH_INTERVAL);
-        onStart?.();
-      };
-      const checkStart = () => {
-        if (finished || started) return;
-        // `pending` means the browser still owns the queued utterance. A slow OS voice can remain
-        // pending beyond the ordinary start window, so keep waiting instead of cutting it off.
-        // The hard timer remains the bounded escape for a queue that is genuinely wedged.
-        if (window.speechSynthesis.speaking === true) {
-          trackStartedSpeech();
-        } else if (window.speechSynthesis.pending === true) {
-          startTimer = window.setTimeout(checkStart, TRACKED_SPEECH_HEALTH_INTERVAL);
-        } else {
-          finish(true, true);
-        }
-      };
-
-      const utteranceCode = options.locale ? getLocale(options.locale).code : code;
-      utterance.lang = utteranceCode;
-      utterance.voice = utteranceCode === code ? voiceRef.current : null;
-      utterance.rate = options.rate ?? 0.82;
-      utterance.pitch = options.pitch ?? 1.04;
-      utterance.onstart = trackStartedSpeech;
-      utterance.onboundary = (event) => {
-        if (finished) return;
-        // A boundary is itself proof that playback began, even on an engine that omitted `start`.
-        trackStartedSpeech();
-        onBoundary?.(event);
-      };
-      utterance.onend = () => finish(true);
-      utterance.onerror = () => finish(true);
-      activeFinishRef.current = finish;
-      setSpeechDucking?.(true);
-      startTimer = window.setTimeout(checkStart, TRACKED_SPEECH_START_STALL);
-
-      try {
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        finish(false, true);
-        return false;
-      }
-      if (!finished) {
-        hardTimer = window.setTimeout(
-          () => finish(true, true),
-          Math.max(
-            TRACKED_SPEECH_HARD_MIN,
-            String(text).length * TRACKED_SPEECH_HARD_MS_PER_CHAR,
-          ),
-        );
-      }
-      return true;
-    },
-    [code, enabled, setSpeechDucking],
-  );
-
-  return { cancel, say, speakTracked };
+  return { cancel, say, speak };
 }
 
 function useGameAudio(soundEffectsEnabled) {
@@ -801,7 +689,6 @@ export default function App() {
   // ends it. Null whenever no beat is running, which is also how the skip and the teardown know
   // whether there is anything to stop.
   const spellBackRef = useRef(null);
-  const promptTimerRef = useRef(null);
   const superIntroTimerRef = useRef(null);
   const greetingTimerRef = useRef(null);
   const greetingMaxTimerRef = useRef(null);
@@ -813,9 +700,6 @@ export default function App() {
   const lastRoundPraiseIndexRef = useRef(-1);
   const lastEncouragementIndexRef = useRef(-1);
   const lastSuperIntroIndexRef = useRef(-1);
-  const speechBusyUntilRef = useRef(0);
-  const speechTokenRef = useRef(0);
-  const pendingPromptRef = useRef(null);
   const wordsSincePraiseRef = useRef(0);
   const wordPraiseGapRef = useRef(2);
   const sessionStrugglesRef = useRef(new Set());
@@ -863,7 +747,7 @@ export default function App() {
     selectNextMusicTrack,
     setMusicDucked,
   } = useGameAudio(settings.soundEffects);
-  const { cancel: cancelSpeech, say, speakTracked } = useSpeech(
+  const { cancel: cancelSpeech, say, speak } = useSpeech(
     settings.speech,
     settings.locale,
     setMusicDucked,
@@ -919,30 +803,14 @@ export default function App() {
     sessionFilterKeyRef.current = filterKey;
   }, [settings]);
 
+  // Every word gets its instruction, because the queue holds it rather than a timer guessing when
+  // the voice will be free. `next` puts it behind a praise or a spell-back tail that is still
+  // playing; `prompt` supersedes an earlier prompt that never got its turn, so a fast child who has
+  // already moved on hears the word in front of them and not the one behind.
   useEffect(() => {
     if (phase !== 'playing' || !currentWord || settingsOpen || superIntroVisible) return undefined;
-    window.clearTimeout(promptTimerRef.current);
-    pendingPromptRef.current = null;
-    const speakPrompt = () => {
-      // The speech-hold release and its fallback timer can land in the same event-loop turn.
-      // Whichever gets here first owns the prompt; a stale second call must not cancel/restart it.
-      if (pendingPromptRef.current !== speakPrompt) return;
-      window.clearTimeout(promptTimerRef.current);
-      promptTimerRef.current = null;
-      pendingPromptRef.current = null;
-      say(formatMessage(copy.spellPrompt, { word: currentWord }));
-    };
-    pendingPromptRef.current = speakPrompt;
-    const delay = Math.max(0, speechBusyUntilRef.current - performance.now());
-    if (delay > 0) {
-      promptTimerRef.current = window.setTimeout(speakPrompt, delay);
-    } else {
-      speakPrompt();
-    }
-    return () => {
-      window.clearTimeout(promptTimerRef.current);
-      if (pendingPromptRef.current === speakPrompt) pendingPromptRef.current = null;
-    };
+    say(formatMessage(copy.spellPrompt, { word: currentWord }), { id: 'prompt', mode: 'next' });
+    return undefined;
   }, [copy.spellPrompt, currentWord, phase, say, settingsOpen, superIntroVisible, wordIndex]);
 
   // The question is spoken as well as written — the child being asked cannot read it yet.
@@ -985,11 +853,9 @@ export default function App() {
       window.clearTimeout(feedbackColorTimerRef.current);
       window.clearTimeout(advanceTimerRef.current);
       window.clearTimeout(celebrationTimerRef.current);
-      window.clearTimeout(promptTimerRef.current);
       window.clearTimeout(superIntroTimerRef.current);
       window.clearTimeout(greetingTimerRef.current);
       window.clearTimeout(greetingMaxTimerRef.current);
-      pendingPromptRef.current = null;
       cancelSpellBack();
       cancelSpeech();
     },
@@ -1005,11 +871,9 @@ export default function App() {
     window.clearTimeout(feedbackColorTimerRef.current);
     window.clearTimeout(advanceTimerRef.current);
     window.clearTimeout(celebrationTimerRef.current);
-    window.clearTimeout(promptTimerRef.current);
     window.clearTimeout(superIntroTimerRef.current);
     window.clearTimeout(greetingTimerRef.current);
     window.clearTimeout(greetingMaxTimerRef.current);
-    pendingPromptRef.current = null;
     cancelSpellBack();
   }, [cancelSpellBack]);
 
@@ -1142,8 +1006,6 @@ export default function App() {
     transitioningRef.current = nextRoundKind === 'super' || wantsGreeting;
     resetHintLadder();
     setRoundColorSeed(Math.floor(Math.random() * 5));
-    speechTokenRef.current += 1;
-    speechBusyUntilRef.current = 0;
     wordsSincePraiseRef.current = 0;
     wordPraiseGapRef.current = randomWordPraiseGap();
     wordStarsRef.current = [];
@@ -1193,8 +1055,6 @@ export default function App() {
     if (!superIntroVisible) return;
     window.clearTimeout(superIntroTimerRef.current);
     cancelSpeech();
-    speechTokenRef.current += 1;
-    speechBusyUntilRef.current = 0;
     transitioningRef.current = false;
     const now = performance.now();
     roundStartRef.current = now;
@@ -1207,9 +1067,7 @@ export default function App() {
     if (phase !== 'playing' || roundKind !== 'super' || !superIntroVisible) return undefined;
     transitioningRef.current = true;
     playEffect(star3Sfx, 0.42);
-    say(pickVaried(copy.superRoundIntroSpeeches, lastSuperIntroIndexRef), {
-      fallbackMs: 1900,
-    });
+    say(pickVaried(copy.superRoundIntroSpeeches, lastSuperIntroIndexRef));
     superIntroTimerRef.current = window.setTimeout(dismissSuperIntro, 2000);
     return () => window.clearTimeout(superIntroTimerRef.current);
   }, [copy.superRoundIntroSpeeches, dismissSuperIntro, phase, playEffect, roundKind, say, superIntroVisible]);
@@ -1230,6 +1088,13 @@ export default function App() {
     setPhase((current) => (current === 'greeting' ? 'playing' : current));
   }, []);
 
+  // Tapping the hello is a child saying "get on with it": the rest of it stops, rather than the
+  // first word's instruction having to wait behind a greeting nobody is listening to any more.
+  const skipGreeting = useCallback(() => {
+    cancelSpeech();
+    finishGreeting();
+  }, [cancelSpeech, finishGreeting]);
+
   useEffect(() => {
     if (phase !== 'greeting' || !greeting) return undefined;
     const reduced = prefersReducedMotion();
@@ -1241,8 +1106,10 @@ export default function App() {
     const spoke = say(greeting.text, {
       rate: 0.92,
       pitch: 1.12,
-      fallbackMs: 1500,
-      onEnd: () => {
+      // However the hello leaves the queue — finished, failed or given up on — the round may
+      // start. Only a deliberate skip cancels it, and that finishes the greeting itself.
+      onEnd: (reason) => {
+        if (reason === 'cancelled') return;
         voiceDone = true;
         maybeFinish();
       },
@@ -1262,12 +1129,9 @@ export default function App() {
     };
   }, [phase, greeting, say, finishGreeting]);
 
+  // The repeat button is a direct request: it takes the voice over from whatever is speaking.
   const repeatWord = useCallback(() => {
-    speechTokenRef.current += 1;
-    speechBusyUntilRef.current = 0;
-    window.clearTimeout(promptTimerRef.current);
-    pendingPromptRef.current = null;
-    if (currentWord) say(formatMessage(copy.spellPrompt, { word: currentWord }));
+    if (currentWord) say(formatMessage(copy.spellPrompt, { word: currentWord }), { id: 'prompt' });
     focusInput();
   }, [copy.spellPrompt, currentWord, focusInput, say]);
 
@@ -1279,29 +1143,14 @@ export default function App() {
     [focusInput, say, settings.locale],
   );
 
-  // Lets go of the "a voice is talking" hold a beat took out, and flushes the next word's prompt if
-  // it was queued behind it. Token-guarded, so a hold that has already been superseded is a no-op.
-  const releaseSpeechHold = useCallback((token) => {
-    if (speechTokenRef.current !== token) return;
-    speechBusyUntilRef.current = 0;
-    window.clearTimeout(promptTimerRef.current);
-    const pendingPrompt = pendingPromptRef.current;
-    pendingPrompt?.();
-  }, []);
-
+  // Praise queues rather than interrupts: it belongs after the word it is praising, and the next
+  // word's prompt then queues behind it in turn. No timer estimates when the voice will be free.
   const speakWordPraise = useCallback(
     () => {
       const praise = pickVaried(copy.wordFinishedSpeeches, lastWordPraiseIndexRef);
-      if (!praise) return;
-      const token = speechTokenRef.current + 1;
-      speechTokenRef.current = token;
-      speechBusyUntilRef.current = performance.now() + WORD_PRAISE_FALLBACK;
-      const started = say(praise, {
-        onEnd: () => releaseSpeechHold(token),
-      });
-      if (!started) releaseSpeechHold(token);
+      if (praise) say(praise, { id: 'praise', mode: 'next' });
     },
-    [copy.wordFinishedSpeeches, releaseSpeechHold, say],
+    [copy.wordFinishedSpeeches, say],
   );
 
   // Spells a finished word back: every letter re-lit and re-named in turn, then the whole word,
@@ -1353,37 +1202,25 @@ export default function App() {
           return mark;
         };
 
-        const speakWholeWord = (followsLetterPhrase) => {
-          if (finished) return true;
-          visualIndex = letters.length;
-          speechActive = false;
-          setSpellBack({ index: letters.length });
-          const accepted = speakTracked(word, {
-            // The letter utterance has already reported its real end. Do not send a redundant
-            // cancel between the two stages: on affected engines that can erase its audible tail.
-            cancelBeforeSpeak: !followsLetterPhrase,
-            onStart: () => {
-              speechActive = true;
-              setSpellBack({ index: letters.length, speechActive: true });
-            },
-            onFinished: finish,
-            pitch: 1.08,
-            rate: SPELL_BACK_WORD_RATE,
-          });
-          if (!accepted && followsLetterPhrase) finish();
-          return accepted;
-        };
-
         // Reduced motion has no travelling letter phase; it still gets the modestly faster word.
-        if (reducedMotion) {
-          if (speakWholeWord(false)) return;
-        } else {
-          const phrase = getSpellBackLetterSpeech(namedLetters, settings.locale);
-          // Start with no speech light. The letter phrase's real start/end owns the group light,
-          // and real boundaries add the stronger current-letter light. Starting the word only from
-          // the phrase's end guarantees the final letter has actually completed.
-          setSpellBack({ index: letters.length });
-          const accepted = speakTracked(phrase.text, {
+        const phrase = reducedMotion ? null : getSpellBackLetterSpeech(namedLetters, settings.locale);
+        const stages = [];
+        if (phrase) {
+          stages.push({
+            // The group light follows this stage's own real playback; only real boundaries, which
+            // an engine may or may not report, add the stronger travelling letter light.
+            onBoundary: (event) => {
+              if (!Number.isFinite(event.charIndex)) return;
+              showVisual(markAt(phrase.marks, event.charIndex));
+            },
+            // The letters have really stopped, and the word has not really started. Both lights go
+            // out for that gap rather than holding a letter that nothing is saying any more.
+            onEnd: (reason) => {
+              if (reason === 'cancelled' || finished) return;
+              visualIndex = letters.length;
+              speechActive = false;
+              setSpellBack({ index: letters.length });
+            },
             onStart: () => {
               speechActive = true;
               setSpellBack({
@@ -1391,21 +1228,46 @@ export default function App() {
                 speechActive: true,
               });
             },
-            onBoundary: (event) => {
-              if (!Number.isFinite(event.charIndex)) return;
-              showVisual(markAt(phrase.marks, event.charIndex));
-            },
-            onFinished: () => speakWholeWord(true),
             pitch: 1.08,
             rate: SPELL_BACK_LETTER_RATE,
+            text: phrase.text,
           });
-          if (accepted) {
-            // Each tracked stage owns start failure, health checks and its generous final ceiling.
-            // No round timer may guess when either utterance should be over.
-            return;
-          }
         }
-        // The engine refused the first spoken stage outright; fall through to the silent beat.
+        stages.push({
+          // Queued behind the letters rather than chained through a callback, so the word is spoken
+          // from their real end with no cancel between the two — the final letter always completes
+          // first, and no engine gets the chance to co-articulate across the join.
+          onEnd: (reason) => {
+            if (reason !== 'cancelled') finish();
+          },
+          onStart: () => {
+            visualIndex = letters.length;
+            speechActive = true;
+            setSpellBack({ index: letters.length, speechActive: true });
+          },
+          pitch: 1.08,
+          rate: SPELL_BACK_WORD_RATE,
+          text: word,
+        });
+
+        // No light until a stage actually starts speaking: the letters are lit as a group, and the
+        // travelling light only ever claims a letter a real boundary reported.
+        setSpellBack({ index: letters.length });
+        if (speak(stages)) {
+          // The beat is time-boxed. A working voice ends it on the word's real completion, always
+          // sooner than this; the box is what makes a slow or wedged engine impossible to notice,
+          // because the round moves on and any tail simply keeps the next prompt waiting its turn.
+          const budget = stages.reduce(
+            (total, stage) => total + estimateSpeechMs(stage.text, stage.rate),
+            SPELL_BACK_BUDGET_SLACK,
+          );
+          at(
+            Math.min(SPELL_BACK_BUDGET_MAX, Math.max(SPELL_BACK_BUDGET_MIN, budget)),
+            finish,
+          );
+          return;
+        }
+        // The engine refused outright; fall through to the silent beat.
       }
 
       // No voice: the pops carry the whole beat, and here a fast stagger is right because a pop is
@@ -1428,7 +1290,7 @@ export default function App() {
           + SPELL_BACK_SILENT_CEILING_BUFFER,
       );
     },
-    [playEffect, settings.locale, settings.speech, speakTracked],
+    [playEffect, settings.locale, settings.speech, speak],
   );
 
   // A tap or a keypress during the spell-back means "I've heard it" — the beat jumps to its end and
@@ -1645,7 +1507,9 @@ export default function App() {
         setLetterIndex(currentWordLetters.length);
         setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
-        cancelSpeech();
+        // The word is spelled: whatever is still being said about it is stale. The spell-back does
+        // its own taking-over as it submits, so only the plain path needs to ask for silence here.
+        if (!settings.spellBack) cancelSpeech();
         celebrateWord(!settings.spellBack);
         wordsSincePraiseRef.current += 1;
         // Praise is the beat *after* the spelling-back, never over the top of it.
@@ -1799,10 +1663,6 @@ export default function App() {
   };
 
   const openSettings = () => {
-    speechTokenRef.current += 1;
-    speechBusyUntilRef.current = 0;
-    window.clearTimeout(promptTimerRef.current);
-    pendingPromptRef.current = null;
     cancelSpeech();
     pauseMusic();
     setSettingsStats(statsRef.current);
@@ -1858,8 +1718,6 @@ export default function App() {
     setSuperIntroVisible(false);
     setStickerBookOpen(false);
     setResumable(nextResumable);
-    speechTokenRef.current += 1;
-    speechBusyUntilRef.current = 0;
     wordStarsRef.current = [];
     roundSettingsDirtyRef.current = false;
     setPhase('welcome');
@@ -1903,8 +1761,6 @@ export default function App() {
     roundMissesRef.current = 0;
     resetHintLadder();
     transitioningRef.current = false;
-    speechTokenRef.current += 1;
-    speechBusyUntilRef.current = 0;
     wordsSincePraiseRef.current = 0;
     wordPraiseGapRef.current = randomWordPraiseGap();
 
@@ -2296,7 +2152,7 @@ export default function App() {
           <button
             type="button"
             className="greeting-screen__card"
-            onClick={finishGreeting}
+            onClick={skipGreeting}
             aria-label={greeting.text}
           >
             <span className="greeting-screen__sparkles" aria-hidden="true">

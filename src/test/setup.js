@@ -47,17 +47,34 @@ Object.defineProperty(window, 'SpeechSynthesisUtterance', {
   configurable: true,
   value: SpeechSynthesisUtteranceMock,
 });
+// A working engine by default: it reports `start` and `end` for everything it is given, so tests
+// about the game read as "this was said" without also having to drive a state machine. Speech is
+// serialized through one queue (`src/speech.js`), and an engine that never reports back holds that
+// queue by design — which is exactly what a stalled engine does in the wild. Tests that are about
+// the speech lifecycle itself set `autoComplete = false` and deliver the events by hand.
+const speechSynthesisMock = {
+  addEventListener: vi.fn(),
+  autoComplete: true,
+  cancel: vi.fn(() => {
+    speechSynthesisMock.pending = false;
+    speechSynthesisMock.speaking = false;
+  }),
+  getVoices: vi.fn(() => []),
+  pending: false,
+  removeEventListener: vi.fn(),
+  speaking: false,
+  speak: vi.fn((utterance) => {
+    if (!speechSynthesisMock.autoComplete) return;
+    speechSynthesisMock.speaking = true;
+    utterance.onstart?.();
+    speechSynthesisMock.speaking = false;
+    utterance.onend?.();
+  }),
+};
+
 Object.defineProperty(window, 'speechSynthesis', {
   configurable: true,
-  value: {
-    addEventListener: vi.fn(),
-    cancel: vi.fn(),
-    getVoices: vi.fn(() => []),
-    pending: false,
-    removeEventListener: vi.fn(),
-    speaking: false,
-    speak: vi.fn(),
-  },
+  value: speechSynthesisMock,
 });
 
 const matchMediaResult = (query) => ({
@@ -81,6 +98,18 @@ afterEach(() => {
   window.localStorage.clear();
   vi.clearAllMocks();
   window.matchMedia.mockImplementation(matchMediaResult);
+  window.speechSynthesis.autoComplete = true;
+  window.speechSynthesis.cancel.mockImplementation(() => {
+    window.speechSynthesis.pending = false;
+    window.speechSynthesis.speaking = false;
+  });
+  window.speechSynthesis.speak.mockImplementation((utterance) => {
+    if (!window.speechSynthesis.autoComplete) return;
+    window.speechSynthesis.speaking = true;
+    utterance.onstart?.();
+    window.speechSynthesis.speaking = false;
+    utterance.onend?.();
+  });
   window.speechSynthesis.pending = false;
   window.speechSynthesis.speaking = false;
   vi.useRealTimers();
