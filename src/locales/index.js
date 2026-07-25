@@ -75,7 +75,7 @@ export function getLetterSpeechText(letter, localeCode) {
   return code === 'hu-HU' && HUNGARIAN_ACCENTED_VOWELS.has(text) ? `${text}.` : text;
 }
 
-export function getSpellBackSpeech(letters, word, localeCode) {
+export function getSpellBackLetterSpeech(letters, localeCode) {
   const marks = [];
   let text = '';
 
@@ -87,6 +87,13 @@ export function getSpellBackSpeech(letters, word, localeCode) {
     if (!/[.!?]$/u.test(spokenLetter)) text += index === letters.length - 1 ? '.' : ',';
   });
 
+  return { marks, text };
+}
+
+export function getSpellBackSpeech(letters, word, localeCode) {
+  const letterSpeech = getSpellBackLetterSpeech(letters, localeCode);
+  const marks = [...letterSpeech.marks];
+  let text = letterSpeech.text;
   if (text) text += ' ';
   marks.push(text.length);
   text += String(word ?? '');

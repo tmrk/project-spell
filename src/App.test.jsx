@@ -1523,6 +1523,7 @@ describe('Project Spell', () => {
     const spokenTexts = () => window.speechSynthesis.speak.mock.calls.map((call) => call[0].text);
     const spellBackUtterance = () => window.speechSynthesis.speak.mock.calls.at(-1)[0];
     const startSpellBackSpeech = (utterance = spellBackUtterance()) => {
+      window.speechSynthesis.pending = false;
       window.speechSynthesis.speaking = true;
       act(() => utterance.onstart());
     };
@@ -1530,9 +1531,15 @@ describe('Project Spell', () => {
       window.speechSynthesis.speaking = false;
       act(() => utterance.onend());
     };
-    const playSpellBackToEnd = (utterance = spellBackUtterance()) => {
+    const finishLetterPhrase = (utterance = spellBackUtterance()) => {
       startSpellBackSpeech(utterance);
       endSpellBackSpeech(utterance);
+      return spellBackUtterance();
+    };
+    const playSpellBackToEnd = (letterUtterance = spellBackUtterance()) => {
+      const wordUtterance = finishLetterPhrase(letterUtterance);
+      startSpellBackSpeech(wordUtterance);
+      endSpellBackSpeech(wordUtterance);
     };
     const spellingLetter = () => document.querySelector('.letter--spelling')?.textContent;
     const finishFirstWord = () => {
@@ -1543,22 +1550,22 @@ describe('Project Spell', () => {
 
     beforeEach(() => withSpellBack());
 
-    it('speaks one compact phrase and follows its boundary events with the light', () => {
+    it('finishes the fast letter phrase before starting the whole word', () => {
       vi.useFakeTimers();
       render(<App />);
       playIn(PLAY_EASY);
       window.speechSynthesis.speak.mockClear();
       finishFirstWord();
-      const utterance = spellBackUtterance();
+      const letterUtterance = spellBackUtterance();
 
       // The celebration hop stands down: one travelling animation on the letters, not two.
       expect(document.querySelector('.word')).toHaveClass('word--spelling');
       expect(document.querySelector('.word')).not.toHaveClass('word--celebrating');
       expect(document.querySelector('.word').style.getPropertyValue('--spell-pop')).toBe('');
-      // One utterance removes the browser's start-up hand-off between every tiny letter name.
-      expect(spokenTexts()).toEqual(['c, a, t. cat']);
-      expect(utterance.rate).toBe(1.08);
-      const cancelCountAfterPhrase = window.speechSynthesis.cancel.mock.calls.length;
+      // One compact letter utterance removes the browser hand-off between every tiny name.
+      expect(spokenTexts()).toEqual(['c, a, t.']);
+      expect(letterUtterance.rate).toBe(1.18);
+      const cancelCountAfterLetters = window.speechSynthesis.cancel.mock.calls.length;
       expect(
         window.speechSynthesis.cancel.mock.invocationCallOrder.at(-1),
       ).toBeLessThan(window.speechSynthesis.speak.mock.invocationCallOrder[0]);
@@ -1570,54 +1577,80 @@ describe('Project Spell', () => {
       act(() => vi.advanceTimersByTime(1500));
       expect(spellingLetter()).toBeUndefined();
 
-      startSpellBackSpeech(utterance);
+      startSpellBackSpeech(letterUtterance);
       expect(document.querySelector('.word')).toHaveClass('word--speech-active');
-      act(() => utterance.onboundary({ charIndex: 0, name: 'word' }));
+      act(() => letterUtterance.onboundary({ charIndex: 0, name: 'word' }));
       expect(spellingLetter()).toBe('c');
       // A slow voice may spend seconds on one name. The visual does not run ahead and a browser
       // that still says it is speaking is not cancelled by a guessed duration.
       act(() => vi.advanceTimersByTime(5000));
       expect(spellingLetter()).toBe('c');
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
-      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
 
-      act(() => utterance.onboundary({ charIndex: 3, name: 'word' }));
+      act(() => letterUtterance.onboundary({ charIndex: 3, name: 'word' }));
       expect(spellingLetter()).toBe('a');
-      act(() => utterance.onboundary({ charIndex: 6, name: 'word' }));
+      act(() => letterUtterance.onboundary({ charIndex: 6, name: 'word' }));
       expect(spellingLetter()).toBe('t');
-      act(() => utterance.onboundary({ charIndex: 9, name: 'word' }));
-      expect(spellingLetter()).toBeUndefined();
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
-      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
 
-      // Only the phrase's real end hands off; the next prompt cannot talk over the whole word.
-      endSpellBackSpeech(utterance);
+      // The word is not even submitted until the letters report their real end. The direct handoff
+      // deliberately has no cancel call that could shave the audible tail off the final letter.
+      endSpellBackSpeech(letterUtterance);
+      const wordUtterance = spellBackUtterance();
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat']);
+      expect(wordUtterance.rate).toBe(1.12);
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
+      expect(spellingLetter()).toBeUndefined();
+      expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+
+      startSpellBackSpeech(wordUtterance);
+      expect(document.querySelector('.word')).toHaveClass('word--speech-active');
+      act(() => vi.advanceTimersByTime(5000));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
+
+      // Only the whole word's real end hands off to the next prompt.
+      endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       expect(document.querySelector('.word')).not.toHaveClass('word--spelling');
       expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
-      expect(spokenTexts()).toEqual(['c, a, t. cat', 'Spell the word cat']);
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat', 'Spell the word cat']);
     });
 
-    it('lights the whole spoken word and waits for the real end when boundaries are unavailable', () => {
+    it('lights both boundaryless speech stages and waits for each real end', () => {
       vi.useFakeTimers();
       render(<App />);
       playIn(PLAY_EASY);
       window.speechSynthesis.speak.mockClear();
       finishFirstWord();
-      const utterance = spellBackUtterance();
-      const cancelCountAfterPhrase = window.speechSynthesis.cancel.mock.calls.length;
+      const letterUtterance = spellBackUtterance();
+      const cancelCountAfterLetters = window.speechSynthesis.cancel.mock.calls.length;
 
       expect(spellingLetter()).toBeUndefined();
       expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
-      startSpellBackSpeech(utterance);
+      startSpellBackSpeech(letterUtterance);
       expect(document.querySelector('.word')).toHaveClass('word--speech-active');
       expect(document.querySelectorAll('.word--speech-active .letter')).toHaveLength(3);
       act(() => vi.advanceTimersByTime(8000));
       expect(spellingLetter()).toBeUndefined();
       expect(document.querySelector('.word')).toHaveClass('word--speech-active');
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
-      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
-      endSpellBackSpeech(utterance);
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
+
+      endSpellBackSpeech(letterUtterance);
+      const wordUtterance = spellBackUtterance();
+      expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      startSpellBackSpeech(wordUtterance);
+      expect(document.querySelector('.word')).toHaveClass('word--speech-active');
+      act(() => vi.advanceTimersByTime(8000));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterLetters);
+
+      endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
     });
@@ -1628,6 +1661,7 @@ describe('Project Spell', () => {
       playIn(PLAY_EASY);
       const input = screen.getByRole('textbox', { name: 'Type the next letter' });
       finishFirstWord();
+      const skippedLetterUtterance = spellBackUtterance();
 
       expect(document.querySelector('.word')).toHaveClass('word--spelling');
       // The keystroke is spent on the skip: the next word is not on screen yet, so it cannot be a
@@ -1635,9 +1669,15 @@ describe('Project Spell', () => {
       fireEvent.keyDown(input, { key: 'c' });
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'c, current letter' })).toBeInTheDocument();
+      const callsAfterSkip = window.speechSynthesis.speak.mock.calls.length;
+      act(() => skippedLetterUtterance.onend());
+      expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(callsAfterSkip);
 
       finishFirstWord();
+      const wordUtterance = finishLetterPhrase();
+      expect(wordUtterance.text).toBe('cat');
       expect(document.querySelector('.word')).toHaveClass('word--spelling');
+      // The same skip works after the handoff while the whole-word stage owns speech.
       fireEvent.click(document.querySelector('.play-screen'));
       expect(screen.getByLabelText('Word 3 of 3')).toBeInTheDocument();
     });
@@ -1684,6 +1724,7 @@ describe('Project Spell', () => {
       expect(spellingLetter()).toBeUndefined();
       expect(spokenTexts()).toEqual(['cat']);
       const [wordUtterance] = window.speechSynthesis.speak.mock.calls.map(([utterance]) => utterance);
+      expect(wordUtterance.rate).toBe(1.12);
       act(() => vi.advanceTimersByTime(1000));
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       startSpellBackSpeech(wordUtterance);
@@ -1693,23 +1734,52 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });
 
-    it('cancels a speech phrase that never starts and never strands the round', () => {
+    it('cancels either speech stage when it never starts and never strands the round', () => {
       vi.useFakeTimers();
       render(<App />);
       playIn(PLAY_EASY);
       window.speechSynthesis.speak.mockClear();
       finishFirstWord();
 
-      expect(spokenTexts()).toEqual(['c, a, t. cat']);
-      const cancelCountAfterPhrase = window.speechSynthesis.cancel.mock.calls.length;
+      expect(spokenTexts()).toEqual(['c, a, t.']);
+      const cancelCountAfterLetters = window.speechSynthesis.cancel.mock.calls.length;
       act(() => vi.advanceTimersByTime(1599));
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
 
-      // A broken engine may accept the phrase and emit no events. Cancel it before handing off, so
-      // it cannot wake up over the next word.
+      // A broken engine may accept the letter phrase and emit no events. Cancel it, then still try
+      // the whole word so a one-stage engine failure does not silently discard the useful part.
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat']);
+      expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(
+        cancelCountAfterLetters,
+      );
+
+      const cancelCountAfterWord = window.speechSynthesis.cancel.mock.calls.length;
+      act(() => vi.advanceTimersByTime(1599));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(1));
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
-      expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(cancelCountAfterPhrase);
+      expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(cancelCountAfterWord);
+    });
+
+    it('advances safely if the engine rejects the whole-word handoff', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      playIn(PLAY_EASY);
+      window.speechSynthesis.speak.mockClear();
+      finishFirstWord();
+      const letterUtterance = spellBackUtterance();
+      startSpellBackSpeech(letterUtterance);
+      window.speechSynthesis.speak.mockImplementationOnce(() => {
+        throw new Error('whole-word speech rejected');
+      });
+
+      endSpellBackSpeech(letterUtterance);
+
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat', 'Spell the word cat']);
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(document.querySelector('.word')).not.toHaveClass('word--spelling');
     });
 
     it('does not cut audible speech when only the start callback is missing', () => {
@@ -1726,6 +1796,10 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
       endSpellBackSpeech(utterance);
+      const wordUtterance = spellBackUtterance();
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      startSpellBackSpeech(wordUtterance);
+      endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });
 
@@ -1749,6 +1823,9 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
       endSpellBackSpeech(utterance);
+      const wordUtterance = spellBackUtterance();
+      startSpellBackSpeech(wordUtterance);
+      endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });
 
@@ -1765,10 +1842,15 @@ describe('Project Spell', () => {
       act(() => vi.advanceTimersByTime(999));
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(1));
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat']);
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      const wordUtterance = spellBackUtterance();
+      startSpellBackSpeech(wordUtterance);
+      endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });
 
-    it('keeps a very long working phrase intact but still has an emergency ceiling', () => {
+    it('keeps long working speech intact but still has an emergency ceiling for each stage', () => {
       vi.useFakeTimers();
       render(<App />);
       playIn(PLAY_EASY);
@@ -1782,18 +1864,33 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
       expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterPhrase);
       endSpellBackSpeech(utterance);
+      const wordUtterance = spellBackUtterance();
+      startSpellBackSpeech(wordUtterance);
+      endSpellBackSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
 
       finishFirstWord();
-      const stuckUtterance = spellBackUtterance();
+      const stuckLetterUtterance = spellBackUtterance();
       const cancelCountBeforeCeiling = window.speechSynthesis.cancel.mock.calls.length;
-      startSpellBackSpeech(stuckUtterance);
+      startSpellBackSpeech(stuckLetterUtterance);
+      act(() => vi.advanceTimersByTime(19999));
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(1));
+      expect(spokenTexts().at(-1)).toBe('cat');
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(
+        cancelCountBeforeCeiling,
+      );
+
+      const stuckWordUtterance = spellBackUtterance();
+      const cancelCountBeforeWordCeiling = window.speechSynthesis.cancel.mock.calls.length;
+      startSpellBackSpeech(stuckWordUtterance);
       act(() => vi.advanceTimersByTime(19999));
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(1));
       expect(screen.getByLabelText('Word 3 of 3')).toBeInTheDocument();
       expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(
-        cancelCountBeforeCeiling,
+        cancelCountBeforeWordCeiling,
       );
     });
 
@@ -1802,14 +1899,20 @@ describe('Project Spell', () => {
       render(<App />);
       playIn(PLAY_EASY);
       window.speechSynthesis.speak.mockClear();
-      window.speechSynthesis.speak.mockImplementationOnce((utterance) => {
+      const finishImmediately = (utterance) => {
+        window.speechSynthesis.speaking = true;
         utterance.onstart();
+        window.speechSynthesis.speaking = false;
         utterance.onend();
-      });
+      };
+      window.speechSynthesis.speak
+        .mockImplementationOnce(finishImmediately)
+        .mockImplementationOnce(finishImmediately);
 
       finishFirstWord();
 
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(spokenTexts().slice(0, 2)).toEqual(['c, a, t.', 'cat']);
       const cancelCountAfterAdvance = window.speechSynthesis.cancel.mock.calls.length;
       act(() => vi.advanceTimersByTime(5000));
       expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterAdvance);
@@ -1827,12 +1930,17 @@ describe('Project Spell', () => {
 
       window.speechSynthesis.speak.mockClear();
       finishFirstWord();
-      const utterance = spellBackUtterance();
-      expect(spokenTexts()).toEqual(['c, a, t. cat']);
-      startSpellBackSpeech(utterance);
-      expect(spokenTexts()).toEqual(['c, a, t. cat']);
-      // Praise lands after the compact phrase reports its real end, not over the whole word.
-      endSpellBackSpeech(utterance);
+      const letterUtterance = spellBackUtterance();
+      expect(spokenTexts()).toEqual(['c, a, t.']);
+      startSpellBackSpeech(letterUtterance);
+      expect(spokenTexts()).toEqual(['c, a, t.']);
+      endSpellBackSpeech(letterUtterance);
+      const wordUtterance = spellBackUtterance();
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat']);
+      startSpellBackSpeech(wordUtterance);
+      expect(spokenTexts()).toEqual(['c, a, t.', 'cat']);
+      // Praise lands after the whole-word stage reports its real end, never over either stage.
+      endSpellBackSpeech(wordUtterance);
       expect(spokenTexts().at(-1)).toBe('Great!');
     });
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { LOCALES, getLetterSpeechText, getSpellBackSpeech } from './index';
+import {
+  LOCALES,
+  getLetterSpeechText,
+  getSpellBackLetterSpeech,
+  getSpellBackSpeech,
+} from './index';
 
 const REFERENCE_CODE = 'en-GB';
 
@@ -56,6 +61,14 @@ describe('letter speech text', () => {
   });
 
   it('builds one compact phrase with exact boundary offsets', () => {
+    expect(getSpellBackLetterSpeech(['C', 'a', 't'], 'en-GB')).toEqual({
+      marks: [0, 3, 6],
+      text: 'c, a, t.',
+    });
+    expect(getSpellBackLetterSpeech(['É', 'v', 'a'], 'hu-HU')).toEqual({
+      marks: [0, 3, 6],
+      text: 'é. v, a.',
+    });
     expect(getSpellBackSpeech(['C', 'a', 't'], 'cat', 'en-GB')).toEqual({
       marks: [0, 3, 6, 9],
       text: 'c, a, t. cat',

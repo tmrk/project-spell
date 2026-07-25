@@ -76,7 +76,7 @@ import {
   formatMessage,
   getLetterSpeechText,
   getLocale,
-  getSpellBackSpeech,
+  getSpellBackLetterSpeech,
 } from './locales';
 import croc from './assets/croc.svg';
 import bgMusic2 from './sounds/bgmusic2.mp3';
@@ -101,15 +101,15 @@ const LAST_WORD_ADVANCE_CEILING = 2000;
 const ADAPTIVE_MIN_ATTEMPTS = 20;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
-// Spell-it-back (roadmap F4, D-020): one compact utterance says every letter and then the word.
-// Keeping it in one phrase removes the costly engine hand-off that used to happen between every
-// queued letter. Boundary events keep the travelling light with the voice where they exist. Where
-// they do not, the whole word lights as one for the real spoken interval: no timer can know how
-// quickly an installed voice is moving between its letters.
+// Spell-it-back (roadmap F4, D-020): one compact utterance says all the letters, then its real end
+// submits one utterance for the whole word. This keeps the fast, gapless letter run without letting
+// an engine co-articulate the word over the final letter. Boundary events keep the travelling light
+// with the voice where they exist; the group light is the honest fallback where they do not.
 const SPELL_BACK_SILENT_STEP = 120;
 const SPELL_BACK_SILENT_MAX = 1500;
 const SPELL_BACK_WORD_GAP = 140;
-const SPELL_BACK_SPEECH_RATE = 1.08;
+const SPELL_BACK_LETTER_RATE = 1.18;
+const SPELL_BACK_WORD_RATE = 1.12;
 const SPELL_BACK_SILENT_CEILING_BUFFER = 1600;
 const TRACKED_SPEECH_START_STALL = 1600;
 const TRACKED_SPEECH_HEALTH_INTERVAL = 1000;
@@ -346,16 +346,23 @@ function useSpeech(enabled, locale, setSpeechDucking) {
     [code, enabled, setSpeechDucking],
   );
 
-  // One phrase whose speech progress can drive a visual. This removes the audible gaps and repeated
-  // start-up cost of one Web Speech utterance per letter. `boundary` is optional in the platform, so
-  // this helper forwards progress when the engine reports it and callers degrade without positions.
+  // A tracked utterance whose speech progress can drive a visual. `boundary` is optional in the
+  // platform, so this helper forwards progress when the engine reports it and callers degrade
+  // without positions. A completed utterance may opt out of cancellation when it directly submits
+  // the next stage: cancelling at that boundary can clip the tail on some engines.
   const speakTracked = useCallback(
-    (text, { onBoundary, onFinished, onStart, ...options } = {}) => {
+    (text, {
+      cancelBeforeSpeak = true,
+      onBoundary,
+      onFinished,
+      onStart,
+      ...options
+    } = {}) => {
       if (!enabled || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
         return false;
       }
       activeFinishRef.current?.(false);
-      window.speechSynthesis.cancel();
+      if (cancelBeforeSpeak) window.speechSynthesis.cancel();
 
       let finished = false;
       let hardTimer = null;
@@ -1321,12 +1328,6 @@ export default function App() {
       const namedLetters = reducedMotion ? [] : letters;
 
       if (spoken) {
-        // Every letter and the whole word travel through one utterance. Engines impose a start-up
-        // cost at utterance boundaries, so this is materially faster than a queue of tiny entries.
-        // It also means `onend` is the exact hand-off: praise and the next prompt cannot overlap it.
-        const phrase = reducedMotion
-          ? { marks: [0], text: word }
-          : getSpellBackSpeech(namedLetters, word, settings.locale);
         let visualIndex = -1;
         let speechActive = false;
 
@@ -1335,40 +1336,67 @@ export default function App() {
           visualIndex = Math.min(index, letters.length);
           setSpellBack({ index: visualIndex, speechActive });
         };
-        const markAt = (charIndex) => {
+        const markAt = (marks, charIndex) => {
           let mark = 0;
-          phrase.marks.forEach((offset, index) => {
+          marks.forEach((offset, index) => {
             if (offset <= charIndex) mark = index;
           });
           return mark;
         };
 
-        // Start with no speech light. `onStart` lights the completed word for exactly the audible
-        // lifetime of the phrase. Real boundaries add the stronger travelling letter light; an
-        // engine without them still gives the child visible, genuinely synchronized feedback.
-        setSpellBack({ index: letters.length });
-        const accepted = speakTracked(phrase.text, {
-          onStart: () => {
-            speechActive = true;
-            setSpellBack({
-              index: visualIndex < 0 ? letters.length : visualIndex,
-              speechActive: true,
-            });
-          },
-          onBoundary: (event) => {
-            if (reducedMotion || !Number.isFinite(event.charIndex)) return;
-            showVisual(markAt(event.charIndex));
-          },
-          onFinished: finish,
-          pitch: 1.08,
-          rate: reducedMotion ? 0.82 : SPELL_BACK_SPEECH_RATE,
-        });
-        if (accepted) {
-          // `speakTracked` owns start failure, health checks and its very generous final ceiling.
-          // Never arm a second timer here: that was what cut the whole-word tail in v2.17.2.
-          return;
+        const speakWholeWord = (followsLetterPhrase) => {
+          if (finished) return true;
+          visualIndex = letters.length;
+          speechActive = false;
+          setSpellBack({ index: letters.length });
+          const accepted = speakTracked(word, {
+            // The letter utterance has already reported its real end. Do not send a redundant
+            // cancel between the two stages: on affected engines that can erase its audible tail.
+            cancelBeforeSpeak: !followsLetterPhrase,
+            onStart: () => {
+              speechActive = true;
+              setSpellBack({ index: letters.length, speechActive: true });
+            },
+            onFinished: finish,
+            pitch: 1.08,
+            rate: SPELL_BACK_WORD_RATE,
+          });
+          if (!accepted && followsLetterPhrase) finish();
+          return accepted;
+        };
+
+        // Reduced motion has no travelling letter phase; it still gets the modestly faster word.
+        if (reducedMotion) {
+          if (speakWholeWord(false)) return;
+        } else {
+          const phrase = getSpellBackLetterSpeech(namedLetters, settings.locale);
+          // Start with no speech light. The letter phrase's real start/end owns the group light,
+          // and real boundaries add the stronger current-letter light. Starting the word only from
+          // the phrase's end guarantees the final letter has actually completed.
+          setSpellBack({ index: letters.length });
+          const accepted = speakTracked(phrase.text, {
+            onStart: () => {
+              speechActive = true;
+              setSpellBack({
+                index: visualIndex < 0 ? letters.length : visualIndex,
+                speechActive: true,
+              });
+            },
+            onBoundary: (event) => {
+              if (!Number.isFinite(event.charIndex)) return;
+              showVisual(markAt(phrase.marks, event.charIndex));
+            },
+            onFinished: () => speakWholeWord(true),
+            pitch: 1.08,
+            rate: SPELL_BACK_LETTER_RATE,
+          });
+          if (accepted) {
+            // Each tracked stage owns start failure, health checks and its generous final ceiling.
+            // No round timer may guess when either utterance should be over.
+            return;
+          }
         }
-        // The engine refused the phrase outright; fall through to the silent beat rather than skip.
+        // The engine refused the first spoken stage outright; fall through to the silent beat.
       }
 
       // No voice: the pops carry the whole beat, and here a fast stagger is right because a pop is
