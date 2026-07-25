@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   music: true,
   soundEffects: true,
   speech: true,
+  spellBack: true,
   eyes: true,
   acceptUnaccented: false,
   adaptivePractice: true,
@@ -232,6 +233,7 @@ export function normaliseSettings(value = {}) {
     soundEffects:
       typeof value.soundEffects === 'boolean' ? value.soundEffects : DEFAULT_SETTINGS.soundEffects,
     speech: typeof value.speech === 'boolean' ? value.speech : DEFAULT_SETTINGS.speech,
+    spellBack: typeof value.spellBack === 'boolean' ? value.spellBack : DEFAULT_SETTINGS.spellBack,
     eyes: typeof value.eyes === 'boolean' ? value.eyes : DEFAULT_SETTINGS.eyes,
     acceptUnaccented:
       typeof value.acceptUnaccented === 'boolean'

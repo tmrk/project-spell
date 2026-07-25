@@ -176,6 +176,8 @@ const messages = Object.freeze({
   adaptivePracticeHelp: 'A gyermeked számára nehéz szavak hamarabb térnek vissza. Ebből semmit nem vesz észre.',
   sound: 'Hang',
   sayEachWord: 'Szavak felolvasása',
+  spellBack: 'A kész szó visszabetűzése',
+  spellBackHelp: 'Minden betű nevét újra kimondja, majd az egész szót.',
   soundEffects: 'Hanghatások',
   backgroundMusic: 'Háttérzene',
   wordsMatch: '{count} {unit} felel meg',

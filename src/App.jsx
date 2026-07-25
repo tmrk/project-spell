@@ -100,6 +100,36 @@ const LAST_WORD_ADVANCE_CEILING = 2000;
 const ADAPTIVE_MIN_ATTEMPTS = 20;
 const WORD_PRAISE_FALLBACK = 900;
 const CONFETTI_DURATION = 700;
+// Spell-it-back (roadmap F4): a finished word is spelled back to the child — each letter re-lit and
+// re-named in turn, then the whole word — while attention is at its peak. Two paces, because a
+// spoken letter name needs room and a silent pop does not: the silent beat runs at the roadmap's
+// stagger, the spoken one at a step wide enough for a voice to finish the name. Either way the
+// letter phase is capped, so a long word tightens its stagger rather than dragging the round.
+const SPELL_BACK_SILENT_STEP = 120;
+const SPELL_BACK_SPOKEN_STEP = 280;
+const SPELL_BACK_LETTERS_MAX = 1500;
+// A beat between the last letter and the whole word, so the word reads as the summary of the
+// letters rather than one more of them.
+const SPELL_BACK_WORD_GAP = 140;
+// The word is held on screen at least this long. With speech on, the beat also waits for the
+// utterance to report back (`say` always reports, via its own fallback timer), so a slow voice
+// finishes the word before the round moves on; with speech off there is nothing to wait for and
+// the hold is simply today's pause.
+const SPELL_BACK_WORD_HOLD = 420;
+// …but only for so long. Past this the beat stops waiting for the voice, which keeps a stuck or
+// very slow engine from holding the round: short words get the floor, long ones a little more.
+const SPELL_BACK_WORD_VOICE_MIN = 700;
+const SPELL_BACK_MS_PER_CHAR = 110;
+// Same reasoning as `LAST_WORD_ADVANCE_CEILING`: the sequence must never be the only way forward.
+// Whatever happens to speech or timers, the round advances by this much after the beat's own
+// planned length.
+const SPELL_BACK_CEILING_SLACK = 1200;
+
+const spellBackStep = (length, spoken) =>
+  Math.min(
+    spoken ? SPELL_BACK_SPOKEN_STEP : Math.min(SPELL_BACK_SILENT_STEP, 900 / length),
+    SPELL_BACK_LETTERS_MAX / length,
+  );
 // Comfortably longer than the Play slab's 180ms exit in `App.scss`. The headroom matters: at
 // exactly the animation's length, ordinary timer jitter drops the slab while it is still
 // faintly visible and it reads as a pop rather than a fade.
@@ -612,6 +642,9 @@ export default function App() {
   const [hintLevel, setHintLevel] = useState('none');
   const [keyHint, setKeyHint] = useState(null);
   const [celebratingWord, setCelebratingWord] = useState(false);
+  // The live spell-back beat, or null between words: `{ index, step }` where `index` is the letter
+  // being named right now (`letters.length` once the beat has moved on to the whole word).
+  const [spellBack, setSpellBack] = useState(null);
   const [confettiVisible, setConfettiVisible] = useState(false);
   const [heartBurstId, setHeartBurstId] = useState(0);
   const [roundKind, setRoundKind] = useState('normal');
@@ -646,6 +679,10 @@ export default function App() {
   const feedbackColorTimerRef = useRef(null);
   const advanceTimerRef = useRef(null);
   const celebrationTimerRef = useRef(null);
+  // Holds the running spell-back beat: its pending timers and the one idempotent `finish` that
+  // ends it. Null whenever no beat is running, which is also how the skip and the teardown know
+  // whether there is anything to stop.
+  const spellBackRef = useRef(null);
   const promptTimerRef = useRef(null);
   const superIntroTimerRef = useRef(null);
   const greetingTimerRef = useRef(null);
@@ -808,6 +845,17 @@ export default function App() {
   }, [letterIndex, phase, settingsOpen, superIntroVisible, wordIndex]);
 
 
+  // Drops a running spell-back beat without advancing the round — for leaving the round, opening
+  // the panel, or unmounting. Skipping (a child tapping through it) goes the other way and runs
+  // the beat's own `finish`.
+  const cancelSpellBack = useCallback(() => {
+    const active = spellBackRef.current;
+    if (!active) return;
+    spellBackRef.current = null;
+    active.timers.forEach((timer) => window.clearTimeout(timer));
+    setSpellBack(null);
+  }, []);
+
   useEffect(
     () => () => {
       window.clearTimeout(feedbackTimerRef.current);
@@ -819,9 +867,10 @@ export default function App() {
       window.clearTimeout(greetingTimerRef.current);
       window.clearTimeout(greetingMaxTimerRef.current);
       pendingPromptRef.current = null;
+      cancelSpellBack();
       cancelSpeech();
     },
-    [cancelSpeech],
+    [cancelSpeech, cancelSpellBack],
   );
 
   const focusInput = useCallback(() => {
@@ -838,7 +887,8 @@ export default function App() {
     window.clearTimeout(greetingTimerRef.current);
     window.clearTimeout(greetingMaxTimerRef.current);
     pendingPromptRef.current = null;
-  }, []);
+    cancelSpellBack();
+  }, [cancelSpellBack]);
 
   useEffect(() => () => window.clearTimeout(modeRevealTimerRef.current), []);
 
@@ -1106,7 +1156,9 @@ export default function App() {
     [focusInput, say, settings.locale],
   );
 
-  const releaseWordPraise = useCallback((token) => {
+  // Lets go of the "a voice is talking" hold a beat took out, and flushes the next word's prompt if
+  // it was queued behind it. Token-guarded, so a hold that has already been superseded is a no-op.
+  const releaseSpeechHold = useCallback((token) => {
     if (speechTokenRef.current !== token) return;
     speechBusyUntilRef.current = 0;
     window.clearTimeout(promptTimerRef.current);
@@ -1123,12 +1175,113 @@ export default function App() {
       speechTokenRef.current = token;
       speechBusyUntilRef.current = performance.now() + WORD_PRAISE_FALLBACK;
       const started = say(praise, {
-        onEnd: () => releaseWordPraise(token),
+        onEnd: () => releaseSpeechHold(token),
       });
-      if (!started) releaseWordPraise(token);
+      if (!started) releaseSpeechHold(token);
     },
-    [copy.wordFinishedSpeeches, releaseWordPraise, say],
+    [copy.wordFinishedSpeeches, releaseSpeechHold, say],
   );
+
+  // Spells a finished word back: every letter re-lit and re-named in turn, then the whole word,
+  // then `onDone` — which is the round's ordinary hand-off, so nothing downstream needs to know
+  // this happened. The beat owns no state the round needs, so cancelling or skipping it is safe at
+  // any moment.
+  const startSpellBack = useCallback(
+    (letters, word, onDone) => {
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+      // The parent's switch is not enough on its own: with no speech engine the letters would file
+      // past in silence at the spoken pace, so an unavailable voice takes the silent pace instead.
+      const spoken = settings.speech && 'speechSynthesis' in window;
+      const timers = [];
+      let finished = false;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        timers.forEach((timer) => window.clearTimeout(timer));
+        window.clearTimeout(advanceTimerRef.current);
+        if (spellBackRef.current?.finish === finish) spellBackRef.current = null;
+        setSpellBack(null);
+        onDone();
+      };
+      spellBackRef.current = { finish, timers };
+      // The first beat lands in the same frame as the finished word — nothing about this sequence
+      // should wait for a timer tick to become visible.
+      const at = (delay, action) => {
+        if (delay <= 0) action();
+        else timers.push(window.setTimeout(action, delay));
+      };
+
+      const step = spellBackStep(letters.length, spoken);
+      // Reduced motion drops the travelling re-pop entirely (roadmap F4): the letters are already
+      // lit by completion, so the word is simply named over the finished word.
+      const lettersPhase = reducedMotion ? 0 : letters.length * step;
+      if (!reducedMotion) {
+        letters.forEach((letter, index) => {
+          at(index * step, () => {
+            setSpellBack({ index, step });
+            if (spoken) {
+              say(getLetterSpeechText(letter, settings.locale), {
+                pitch: 1.08,
+                // Brisker than tapping a letter to hear it (0.65): there the child asked for a
+                // slow, deliberate name, here five of them have to fit inside one short beat.
+                rate: 1,
+                fallbackMs: step,
+              });
+            } else {
+              // Speechless, the pops carry the whole beat — it has to feel complete without a voice.
+              playEffect(popSfx, 0.5);
+            }
+          });
+        });
+      }
+
+      // The word itself. The beat ends when the hold is up *and* the word has actually been said —
+      // otherwise the praise that follows would cut the word off half-way, which is the one thing
+      // this whole sequence exists to avoid. `say` always reports back (through the voice or through
+      // its own fallback timer), so waiting on it cannot stall the round.
+      const wordGap = lettersPhase ? SPELL_BACK_WORD_GAP : 0;
+      const wordVoiceMax = Math.max(SPELL_BACK_WORD_VOICE_MIN, word.length * SPELL_BACK_MS_PER_CHAR);
+      let heldLongEnough = false;
+      let wordWasSaid = !spoken;
+      const finishWhenBothDone = () => {
+        if (heldLongEnough && wordWasSaid) finish();
+      };
+      at(lettersPhase + wordGap, () => {
+        setSpellBack({ index: letters.length, step });
+        if (!spoken) return;
+        const token = speechTokenRef.current + 1;
+        speechTokenRef.current = token;
+        speechBusyUntilRef.current = performance.now() + wordVoiceMax;
+        const wordSaid = () => {
+          releaseSpeechHold(token);
+          wordWasSaid = true;
+          finishWhenBothDone();
+        };
+        if (!say(word, { fallbackMs: wordVoiceMax, onEnd: wordSaid })) wordSaid();
+      });
+      at(lettersPhase + wordGap + (spoken ? SPELL_BACK_WORD_HOLD : WORD_COMPLETION_PAUSE), () => {
+        heldLongEnough = true;
+        finishWhenBothDone();
+      });
+      // The safety net, on `advanceTimerRef` so every existing cleanup already cancels it.
+      advanceTimerRef.current = window.setTimeout(
+        finish,
+        lettersPhase + wordGap + wordVoiceMax + SPELL_BACK_CEILING_SLACK,
+      );
+    },
+    [playEffect, releaseSpeechHold, say, settings.locale, settings.speech],
+  );
+
+  // A tap or a keypress during the spell-back means "I've heard it" — the beat jumps to its end and
+  // the round carries on from exactly where it would have.
+  const skipSpellBack = useCallback(() => {
+    const active = spellBackRef.current;
+    if (!active) return false;
+    cancelSpeech();
+    active.finish();
+    return true;
+  }, [cancelSpeech]);
 
   const spawnHearts = useCallback(() => {
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -1165,9 +1318,12 @@ export default function App() {
     setFeedback(nextFeedback);
   }, []);
 
-  const celebrateWord = useCallback(() => {
+  // `hop` is false when the spell-back is about to take the letters over: two staggered animations
+  // on the same letters would fight in the cascade, and the spell-back's slower one is the point.
+  // The confetti and hearts fire either way — they are the "that's the word!" moment.
+  const celebrateWord = useCallback((hop = true) => {
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-    setCelebratingWord(true);
+    setCelebratingWord(hop);
     setConfettiVisible(!reducedMotion);
     spawnHearts();
     window.clearTimeout(celebrationTimerRef.current);
@@ -1332,13 +1488,31 @@ export default function App() {
         setFeedbackMessage(copy.wordFinished);
         window.clearTimeout(advanceTimerRef.current);
         cancelSpeech();
-        celebrateWord();
+        celebrateWord(!settings.spellBack);
         wordsSincePraiseRef.current += 1;
-        if (!isLastWord && wordsSincePraiseRef.current >= wordPraiseGapRef.current) {
+        // Praise is the beat *after* the spelling-back, never over the top of it.
+        const praiseIsDue =
+          !isLastWord && wordsSincePraiseRef.current >= wordPraiseGapRef.current;
+        const praiseWord = () => {
+          if (!praiseIsDue) return;
           wordsSincePraiseRef.current = 0;
           wordPraiseGapRef.current = randomWordPraiseGap();
           speakWordPraise();
+        };
+
+        if (settings.spellBack) {
+          // The chime plays now — it is the "correct!" sound — and the spelling-back takes over the
+          // pause that used to follow it, so the round moves on once the word has been said rather
+          // than waiting out a second gap on top.
+          playEffect(doneSfx, 0.7);
+          startSpellBack(currentWordLetters, currentWord, () => {
+            praiseWord();
+            completeWord();
+          });
+          return;
         }
+
+        praiseWord();
 
         if (isLastWord) {
           // Landing the ceremony on the end of the chime is the pleasant path, but it must never
@@ -1389,8 +1563,10 @@ export default function App() {
       settings.acceptUnaccented,
       settings.gameMode,
       settings.locale,
+      settings.spellBack,
       speakEncouragement,
       speakWordPraise,
+      startSpellBack,
       wordIndex,
     ],
   );
@@ -1399,19 +1575,38 @@ export default function App() {
     (event) => {
       const value = event.currentTarget.value;
       event.currentTarget.value = '';
+      if (skipSpellBack()) return;
       handleAttempt(value);
     },
-    [handleAttempt],
+    [handleAttempt, skipSpellBack],
   );
+
+  // The on-screen keys and the tap-anywhere path share the skip, so every way a child can reach the
+  // screen during the spelling-back ends it the same way.
+  const handleKeyboardPress = useCallback(
+    (letter) => {
+      if (skipSpellBack()) return;
+      handleAttempt(letter);
+    },
+    [handleAttempt, skipSpellBack],
+  );
+
+  const handlePlayScreenTap = useCallback(() => {
+    skipSpellBack();
+    focusInput();
+  }, [focusInput, skipSpellBack]);
 
   const handleKeyDown = useCallback(
     (event) => {
       if (!/^\p{L}$/u.test(event.key)) return;
       event.preventDefault();
       event.currentTarget.value = '';
+      // Typing during the spelling-back is a child saying "I know, get on with it". The keystroke
+      // is spent on the skip rather than the next word, which is not even on screen yet.
+      if (skipSpellBack()) return;
       handleAttempt(event.key);
     },
-    [handleAttempt],
+    [handleAttempt, skipSpellBack],
   );
 
   const toggleMusic = () => {
@@ -1965,7 +2160,7 @@ export default function App() {
           className={`play-screen${
             keyboardRows.length ? ` play-screen--keys-${settings.keyboard}` : ''
           }`}
-          onClick={focusInput}
+          onClick={handlePlayScreenTap}
         >
           {activeProfile.name && (
             // Flat letters, no widget chrome — the child's name belongs to the same world as
@@ -2001,10 +2196,13 @@ export default function App() {
           )}
 
           <div
-            className={`word${celebratingWord ? ' word--celebrating' : ''}`}
+            className={`word${celebratingWord ? ' word--celebrating' : ''}${
+              spellBack ? ' word--spelling' : ''
+            }`}
             style={{
               '--letter-count': currentWordLetters.length,
               '--letter-size': `${Math.min(15, 94 / currentWordLetters.length)}vw`,
+              ...(spellBack ? { '--spell-step': `${spellBack.step}ms` } : null),
             }}
             aria-label={formatMessage(copy.letterWord, { count: currentWordLetters.length })}
           >
@@ -2018,6 +2216,7 @@ export default function App() {
                 showEyes={settings.eyes}
                 hidden={settings.gameMode === 'normal'}
                 hint={index === letterIndex ? hintLevel : 'none'}
+                spelling={spellBack?.index === index}
                 labels={letterLabels}
               />
             ))}
@@ -2065,7 +2264,7 @@ export default function App() {
             rows={keyboardRows}
             highlight={keyHint}
             label={copy.keyboardLabel}
-            onPress={handleAttempt}
+            onPress={handleKeyboardPress}
           />
         </main>
       )}

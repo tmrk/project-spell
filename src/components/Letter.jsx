@@ -46,6 +46,7 @@ export default function Letter({
   showEyes = true,
   hidden = false,
   hint = 'none',
+  spelling = false,
   labels = DEFAULT_LABELS,
 }) {
   const [isWobbling, setIsWobbling] = useState(false);
@@ -87,7 +88,9 @@ export default function Letter({
       type="button"
       className={`letter letter--${state} letter--c${colorIndex % 5}${glyphHidden ? ' letter--hidden' : ''}${
         glyphHidden && hint === 'ghost' ? ' letter--hint-ghost' : ''
-      }${hidden ? ' letter--was-hidden' : ''}${isWobbling ? ' letter--wobbling' : ''}`}
+      }${hidden ? ' letter--was-hidden' : ''}${spelling ? ' letter--spelling' : ''}${
+        isWobbling ? ' letter--wobbling' : ''
+      }`}
       onClick={handleClick}
       onAnimationEnd={() => setIsWobbling(false)}
       aria-label={label}

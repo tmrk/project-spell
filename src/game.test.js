@@ -60,11 +60,13 @@ describe('settings', () => {
       ...DEFAULT_SETTINGS,
       music: false,
       speech: false,
+      spellBack: false,
       eyes: false,
       acceptUnaccented: true,
     })).toMatchObject({
       music: false,
       speech: false,
+      spellBack: false,
       eyes: false,
       acceptUnaccented: true,
     });
@@ -77,6 +79,15 @@ describe('settings', () => {
       eyes: true,
       acceptUnaccented: false,
     });
+  });
+
+  // A blob written before roadmap F4 existed: the spell-back arrives switched on, because it is a
+  // learning feature every child should get without a parent having to find the switch.
+  it('spells finished words back for settings saved before the preference existed', () => {
+    expect(DEFAULT_SETTINGS.spellBack).toBe(true);
+    expect(normaliseSettings({ music: false, speech: true }).spellBack).toBe(true);
+    expect(normaliseSettings({ spellBack: 'yes' }).spellBack).toBe(true);
+    expect(normaliseSettings({ spellBack: false }).spellBack).toBe(false);
   });
 
   it('defaults the game mode to easy and accepts only normal as the alternative', () => {

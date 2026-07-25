@@ -560,6 +560,18 @@ export default function SettingsPanel({
           <fieldset className="settings-group settings-group--compact">
             <legend>{copy.groupSound}</legend>
             <SwitchRow checked={settings.speech} label={copy.sayEachWord} onChange={(speech) => applyChange({ speech })} />
+            <label className="toggle-row toggle-row--described">
+              <span className="toggle-copy">
+                <span>{copy.spellBack}</span>
+                <small>{copy.spellBackHelp}</small>
+              </span>
+              <input
+                type="checkbox"
+                aria-label={copy.spellBack}
+                checked={settings.spellBack}
+                onChange={(event) => applyChange({ spellBack: event.target.checked })}
+              />
+            </label>
             <SwitchRow checked={settings.soundEffects} label={copy.soundEffects} onChange={(soundEffects) => applyChange({ soundEffects })} />
             <SwitchRow checked={settings.music} label={copy.backgroundMusic} onChange={(music) => applyChange({ music })} />
             <SwitchRow checked={settings.eyes} label={copy.cartoonEyes} onChange={(eyes) => applyChange({ eyes })} />

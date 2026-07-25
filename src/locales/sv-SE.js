@@ -176,6 +176,8 @@ const messages = Object.freeze({
   adaptivePracticeHelp: 'Ord som ditt barn tycker är svåra kommer tillbaka snabbare. Barnet märker ingenting.',
   sound: 'Ljud',
   sayEachWord: 'Läs upp varje ord',
+  spellBack: 'Bokstavera ordet tillbaka när det är klart',
+  spellBackHelp: 'Varje bokstav sägs igen, sedan hela ordet.',
   soundEffects: 'Ljudeffekter',
   backgroundMusic: 'Bakgrundsmusik',
   wordsMatch: '{count} {unit} matchar',

@@ -15,6 +15,11 @@ const NAMED_PROFILE = JSON.stringify({
   activeId: 'default',
   profiles: [{ id: 'default', name: 'Zoe', createdAt: 0 }],
 });
+// Spelling a finished word back is on by default (roadmap F4) and it deliberately changes the beat
+// between words. Every round-loop test in this file asserts the beat as it was, so they all start
+// from this blob with the setting off — which is exactly the promise it makes to a parent who turns
+// it off. The default-on path has its own describe block at the end of the file.
+const BASE_SETTINGS = Object.freeze({ ...DEFAULT_SETTINGS, spellBack: false });
 // A round takes two taps now: the green Play slab reveals the two mode cards, and the card is
 // what picks the mode and starts. `playIn` is how every test below gets into a round.
 const PLAY_EASY = 'Play with the letters shown';
@@ -53,7 +58,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -113,7 +118,7 @@ describe('Project Spell', () => {
     expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-US');
     firstVisit.unmount();
 
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...DEFAULT_SETTINGS, locale: 'en-GB' }));
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...BASE_SETTINGS, locale: 'en-GB' }));
     render(<App />);
     expect(screen.getByRole('combobox', { name: 'Language' })).toHaveValue('en-GB');
 
@@ -335,7 +340,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 4,
@@ -452,7 +457,7 @@ describe('Project Spell', () => {
 
     window.localStorage.setItem(
       SETTINGS_KEY,
-      JSON.stringify({ ...DEFAULT_SETTINGS, customWords: 'cat', wordSource: 'custom', roundLength: 3, music: false }),
+      JSON.stringify({ ...BASE_SETTINGS, customWords: 'cat', wordSource: 'custom', roundLength: 3, music: false }),
     );
     render(<App />);
     playIn(PLAY_EASY);
@@ -552,7 +557,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         locale: 'hu-HU',
         customWords: 'éva',
         wordSource: 'custom',
@@ -642,7 +647,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         locale: 'sv-SE',
         customWords: 'tårta',
         wordSource: 'custom',
@@ -667,7 +672,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         locale: 'sv-SE',
         acceptUnaccented: true,
         customWords: 'tårta',
@@ -800,7 +805,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat\ndog\nfox\nhen\npig\nsun',
         wordSource: 'custom',
         roundLength: 3,
@@ -850,7 +855,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -923,7 +928,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat\ndog\nfox',
         wordSource: 'custom',
         roundLength: 3,
@@ -1023,7 +1028,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -1085,7 +1090,7 @@ describe('Project Spell', () => {
       window.localStorage.setItem(
         SETTINGS_KEY,
         JSON.stringify({
-          ...DEFAULT_SETTINGS,
+          ...BASE_SETTINGS,
           customWords: 'cat',
           wordSource: 'custom',
           roundLength: 3,
@@ -1143,7 +1148,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -1211,7 +1216,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat\ndog\nfox\nhen\npig\nsun',
         wordSource: 'custom',
         roundLength: 3,
@@ -1304,7 +1309,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -1400,7 +1405,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -1448,7 +1453,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
@@ -1473,12 +1478,203 @@ describe('Project Spell', () => {
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'complete');
   });
 
+  // Roadmap F4. The default-on path: the rest of the file runs with the setting off, so everything
+  // about the beat itself is asserted here.
+  describe('spelling a finished word back', () => {
+    // 'cat' at the spoken pace: three letters 280ms apart, a 140ms beat, then the word.
+    const LETTER_STEP = 280;
+    const WORD_GAP = 140;
+    const withSpellBack = (extra = {}) => {
+      window.localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({
+          ...DEFAULT_SETTINGS,
+          customWords: 'cat',
+          wordSource: 'custom',
+          roundLength: 3,
+          music: false,
+          ...extra,
+        }),
+      );
+    };
+    const spokenTexts = () => window.speechSynthesis.speak.mock.calls.map((call) => call[0].text);
+    const spellingLetter = () => document.querySelector('.letter--spelling')?.textContent;
+    const finishFirstWord = () => {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'cat' },
+      });
+    };
+
+    beforeEach(() => withSpellBack());
+
+    it('names every letter in turn, then the whole word, then moves on', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      playIn(PLAY_EASY);
+      window.speechSynthesis.speak.mockClear();
+      finishFirstWord();
+
+      // The celebration hop stands down: one travelling animation on the letters, not two.
+      expect(document.querySelector('.word')).toHaveClass('word--spelling');
+      expect(document.querySelector('.word')).not.toHaveClass('word--celebrating');
+      expect(document.querySelector('.word').style.getPropertyValue('--spell-step')).toBe('280ms');
+      expect(spellingLetter()).toBe('c');
+      expect(spokenTexts()).toEqual(['c']);
+
+      act(() => vi.advanceTimersByTime(LETTER_STEP));
+      expect(spellingLetter()).toBe('a');
+      act(() => vi.advanceTimersByTime(LETTER_STEP));
+      expect(spellingLetter()).toBe('t');
+      expect(spokenTexts()).toEqual(['c', 'a', 't']);
+
+      // The word arrives after the last letter's step and the beat between, and no single letter is
+      // lit under it any more.
+      act(() => vi.advanceTimersByTime(LETTER_STEP + WORD_GAP));
+      expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat']);
+      expect(spellingLetter()).toBeUndefined();
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+
+      // The round waits for the word to be said (700ms for a short word) before it moves on.
+      act(() => vi.advanceTimersByTime(699));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(document.querySelector('.word')).not.toHaveClass('word--spelling');
+      // Only now does the next word's prompt speak, so nothing talks over the spelling.
+      expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat', 'Spell the word cat']);
+    });
+
+    it('lets a keypress and a tap skip straight to the next word', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      playIn(PLAY_EASY);
+      const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+      finishFirstWord();
+
+      expect(document.querySelector('.word')).toHaveClass('word--spelling');
+      // The keystroke is spent on the skip: the next word is not on screen yet, so it cannot be a
+      // first letter of anything.
+      fireEvent.keyDown(input, { key: 'c' });
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'c, current letter' })).toBeInTheDocument();
+
+      finishFirstWord();
+      expect(document.querySelector('.word')).toHaveClass('word--spelling');
+      fireEvent.click(document.querySelector('.play-screen'));
+      expect(screen.getByLabelText('Word 3 of 3')).toBeInTheDocument();
+    });
+
+    it('keeps the beat when there is no voice, pacing it with pops instead', () => {
+      vi.useFakeTimers();
+      withSpellBack({ speech: false });
+      const playSpy = vi.spyOn(Audio.prototype, 'play');
+      render(<App />);
+      playIn(PLAY_EASY);
+      playSpy.mockClear();
+      finishFirstWord();
+
+      // The silent beat runs at the roadmap's faster stagger, one pop per letter.
+      expect(document.querySelector('.word').style.getPropertyValue('--spell-step')).toBe('120ms');
+      expect(spellingLetter()).toBe('c');
+      act(() => vi.advanceTimersByTime(240));
+      expect(spellingLetter()).toBe('t');
+      expect(playSpy.mock.contexts.filter((audio) => audio.src.endsWith('/pop.mp3'))).toHaveLength(3);
+      expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+
+      // 3 × 120ms of letters, the 140ms beat, then today's pause in place of the spoken word.
+      act(() => vi.advanceTimersByTime(120 + WORD_GAP + 759));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    });
+
+    it('drops the travelling pop for reduced motion and simply says the word', () => {
+      vi.useFakeTimers();
+      window.matchMedia.mockReturnValue({
+        matches: true,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      });
+      render(<App />);
+      playIn(PLAY_EASY);
+      window.speechSynthesis.speak.mockClear();
+      finishFirstWord();
+
+      // No letter sequence at all: the letters are already lit, so the word is named over them.
+      expect(spellingLetter()).toBeUndefined();
+      expect(spokenTexts()).toEqual(['cat']);
+      act(() => vi.advanceTimersByTime(700));
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    });
+
+    it('waits for the spelling before praising, so the word is never cut off', () => {
+      vi.useFakeTimers();
+      // Praise comes every second or third word; seeding random to 0 makes it the second.
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+      render(<App />);
+      playIn(PLAY_EASY);
+      finishFirstWord();
+      act(() => vi.advanceTimersByTime(3 * LETTER_STEP + WORD_GAP + 700));
+
+      window.speechSynthesis.speak.mockClear();
+      finishFirstWord();
+      act(() => vi.advanceTimersByTime(3 * LETTER_STEP + WORD_GAP));
+      expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat']);
+      // Praise lands after the word has been said, not over it.
+      act(() => vi.advanceTimersByTime(700));
+      expect(spokenTexts().at(-1)).toBe('Great!');
+    });
+
+    it('reveals the letters without leaking a glyph early in listening mode', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      playIn(PLAY_LISTEN);
+      const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+
+      // Before the word is finished the glyphs are still hidden.
+      expect(document.querySelectorAll('.letter--hidden')).toHaveLength(3);
+      fireEvent.keyDown(input, { key: 'c' });
+      fireEvent.keyDown(input, { key: 'a' });
+      expect(document.querySelectorAll('.letter--hidden')).toHaveLength(1);
+      fireEvent.keyDown(input, { key: 't' });
+
+      // Completion reveals all three, and the spelling-back names them over the revealed word.
+      expect(document.querySelectorAll('.letter--hidden')).toHaveLength(0);
+      expect(document.querySelector('.word')).toHaveClass('word--spelling');
+      expect(spellingLetter()).toBe('c');
+    });
+
+    it('still reaches the ceremony after the last word of the round', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      playIn(PLAY_EASY);
+      for (let index = 0; index < 3; index += 1) {
+        finishFirstWord();
+        act(() => vi.advanceTimersByTime(3 * LETTER_STEP + WORD_GAP + 700));
+      }
+
+      expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'complete');
+    });
+
+    it('offers the switch to a parent in Sound & look', () => {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+      const toggle = screen.getByRole('checkbox', { name: 'Spell the word back after it is finished' });
+
+      expect(toggle).toBeChecked();
+      fireEvent.click(toggle);
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).spellBack).toBe(false);
+    });
+  });
+
   describe('on-screen letter keyboard', () => {
     const withKeyboard = (keyboard) => {
       window.localStorage.setItem(
         SETTINGS_KEY,
         JSON.stringify({
-          ...DEFAULT_SETTINGS,
+          ...BASE_SETTINGS,
           customWords: 'cat',
           wordSource: 'custom',
           roundLength: 3,
@@ -1857,7 +2053,7 @@ describe('Project Spell', () => {
         ],
       }));
       const oneWordSettings = JSON.stringify({
-        ...DEFAULT_SETTINGS,
+        ...BASE_SETTINGS,
         customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,

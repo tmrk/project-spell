@@ -176,6 +176,8 @@ const messages = Object.freeze({
   adaptivePracticeHelp: 'Words your child finds hard come back sooner. They will not notice.',
   sound: 'Sound',
   sayEachWord: 'Say each word',
+  spellBack: 'Spell the word back after it is finished',
+  spellBackHelp: 'Each letter is named again, then the whole word.',
   soundEffects: 'Sound effects',
   backgroundMusic: 'Background music',
   wordsMatch: '{count} {unit} match',

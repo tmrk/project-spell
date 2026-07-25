@@ -1458,6 +1458,29 @@ input:focus-visible {
 .word--celebrating .letter:nth-child(13) { --hop-delay: 480ms; }
 .word--celebrating .letter:nth-child(14) { --hop-delay: 520ms; }
 
+// Spell-it-back (roadmap F4): the same travelling wave as the celebration hop, but paced for a
+// voice, so the step arrives from JS — only JS knows whether a letter name is being spoken over it.
+// The two never run together: the celebration hop stands down while this one plays.
+.word--spelling .letter {
+  animation: letter-spell-pop 260ms cubic-bezier(0.2, 0.85, 0.32, 1.25)
+    calc(var(--spell-index, 0) * var(--spell-step, 120ms)) both;
+}
+
+.word--spelling .letter:nth-child(1) { --spell-index: 0; }
+.word--spelling .letter:nth-child(2) { --spell-index: 1; }
+.word--spelling .letter:nth-child(3) { --spell-index: 2; }
+.word--spelling .letter:nth-child(4) { --spell-index: 3; }
+.word--spelling .letter:nth-child(5) { --spell-index: 4; }
+.word--spelling .letter:nth-child(6) { --spell-index: 5; }
+.word--spelling .letter:nth-child(7) { --spell-index: 6; }
+.word--spelling .letter:nth-child(8) { --spell-index: 7; }
+.word--spelling .letter:nth-child(9) { --spell-index: 8; }
+.word--spelling .letter:nth-child(10) { --spell-index: 9; }
+.word--spelling .letter:nth-child(11) { --spell-index: 10; }
+.word--spelling .letter:nth-child(12) { --spell-index: 11; }
+.word--spelling .letter:nth-child(13) { --spell-index: 12; }
+.word--spelling .letter:nth-child(14) { --spell-index: 13; }
+
 .confetti {
   position: absolute;
   z-index: 3;
@@ -1595,6 +1618,12 @@ input:focus-visible {
 
 .letter--was-hidden.letter--done .letter__visual {
   animation: letter-reveal 220ms ease-out;
+}
+
+// The letter being named right now — lit like the active letter, so a child's eye follows the voice
+// without having to learn a second visual language for it.
+.letter--spelling {
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .letter--wobbling {
@@ -3122,6 +3151,12 @@ svg.scenery__sparkle--super {
 @keyframes letter-hop {
   0%, 100% { transform: translateY(0) rotate(0); }
   48% { transform: translateY(-0.13em) rotate(-2deg); }
+}
+
+// Rounder and a touch bigger than the hop: this letter is being named, not cheering.
+@keyframes letter-spell-pop {
+  0%, 100% { transform: scale(1) translateY(0); }
+  42% { transform: scale(1.14) translateY(-0.05em); }
 }
 
 @keyframes confetti-burst {
