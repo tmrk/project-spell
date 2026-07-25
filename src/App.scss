@@ -2675,18 +2675,123 @@ input:focus-visible {
   display: block;
 }
 
+// Nothing in the scenery moves. Liveliness comes from the child's actions, so every shape below
+// is placed once and stays there (design guidelines §6; ambient decor animation is forbidden).
 .scenery__cloud path {
   fill: var(--ps-cloud);
 }
 
-.scenery__cloud {
-  top: var(--cloud-top);
-  left: 0;
-  width: var(--cloud-size);
-  opacity: var(--cloud-opacity);
-  transform: translateX(var(--cloud-static-x));
-  animation: cloud-drift var(--cloud-duration) linear var(--cloud-delay) infinite;
-  will-change: transform;
+// Welcome and greeting: a warm corner glow, two clouds and a butterfly over the shared floor.
+.scenery__sun {
+  top: -2vh;
+  left: -3vw;
+  width: clamp(120px, 21vw, 200px);
+}
+
+.scenery__sun-disc {
+  fill: var(--ps-cloud);
+  opacity: 0.85;
+}
+
+.scenery__sun-rays {
+  fill: var(--ps-cloud);
+  opacity: 0.55;
+}
+
+.scenery__cloud--high {
+  top: 6%;
+  right: 3vw;
+  width: clamp(124px, 21vw, 210px);
+  opacity: 0.6;
+}
+
+.scenery__cloud--low {
+  top: 47%;
+  left: 1vw;
+  width: clamp(96px, 15vw, 152px);
+  opacity: 0.36;
+}
+
+.scenery__butterfly--wordmark {
+  top: 17%;
+  right: 15vw;
+  width: clamp(30px, 5.2vw, 46px);
+}
+
+.scenery__butterfly-wings {
+  fill: var(--shape-fill);
+}
+
+.scenery__butterfly-body {
+  fill: var(--shape-shade);
+}
+
+// Play: the calm here is load-bearing. Two pale clouds at the edges, nothing on the ground.
+.scenery__cloud--edge-left {
+  top: 11%;
+  left: -5vw;
+  width: clamp(120px, 18vw, 188px);
+  opacity: 0.3;
+}
+
+.scenery__cloud--edge-right {
+  top: 63%;
+  right: -4vw;
+  width: clamp(108px, 16vw, 168px);
+  opacity: 0.26;
+}
+
+// Complete: a bird on the hill and gold sparkles beside the earned stars.
+// On the left rise, clear of the sticker-book tab in the opposite corner.
+.scenery__bird--hill {
+  bottom: clamp(58px, 10.5vh, 128px);
+  left: 11vw;
+  width: clamp(34px, 5.4vw, 52px);
+}
+
+.scenery__bird-body {
+  fill: var(--shape-fill);
+}
+
+.scenery__bird-wing {
+  fill: var(--shape-shade);
+}
+
+.scenery__bird-eye {
+  fill: var(--ps-ink);
+}
+
+.scenery__sparkle {
+  width: clamp(14px, 2.4vw, 22px);
+}
+
+.scenery__sparkle path {
+  fill: var(--ps-gold);
+}
+
+.scenery__sparkle--left {
+  top: 24%;
+  left: calc(50% - clamp(148px, 26vw, 240px));
+  opacity: 0.95;
+}
+
+.scenery__sparkle--right {
+  top: 20%;
+  left: calc(50% + clamp(138px, 24vw, 224px));
+  opacity: 0.8;
+}
+
+// The third sparkle belongs to the super round only, so the normal ceremony keeps its budget.
+// Both selectors are qualified with `svg` to outrank `.scenery svg { display: block }` above.
+svg.scenery__sparkle--super {
+  top: 31%;
+  left: calc(50% + clamp(168px, 28vw, 262px));
+  display: none;
+  opacity: 0.88;
+}
+
+[data-round="super"] svg.scenery__sparkle--super {
+  display: block;
 }
 
 // Paper-cut floor: two stacked rises in deepening sun tones, so the screen has a ground
@@ -2717,8 +2822,10 @@ input:focus-visible {
   opacity: 0.92;
 }
 
+// Blades sit on the front rise, so they need to be deeper than it — pure sun-deep on the
+// sun-deep/grass mix below is invisible. Same two-token recipe as the hill, weighted to grass.
 .scenery__tuft path {
-  fill: var(--ps-sun-deep);
+  fill: color-mix(in srgb, var(--ps-sun-deep) 58%, var(--ps-grass-shade));
 }
 
 .scenery__tuft {
@@ -2732,18 +2839,50 @@ input:focus-visible {
   opacity: 0.55;
 }
 
+// Left of centre rather than the far right: the whole bottom-right corner belongs to the book tab.
 .scenery__tuft--two {
-  bottom: clamp(30px, 5.5vh, 68px);
-  left: 46vw;
-  width: 96px;
-  opacity: 0.42;
-}
-
-.scenery__tuft--three {
-  right: 5vw;
   bottom: clamp(44px, 8vh, 96px);
+  left: 31vw;
   width: 112px;
   opacity: 0.5;
+}
+
+// A little planting on the front rise. Accent shapes keep wheel colours at full strength but
+// stay small (§6), so the floor reads as a meadow without competing with the letters.
+.scenery__flower-petals {
+  fill: var(--shape-fill);
+}
+
+.scenery__flower-eye {
+  fill: var(--ps-gold);
+}
+
+.scenery__flower--one {
+  bottom: clamp(28px, 5.2vh, 66px);
+  left: 17vw;
+  width: clamp(26px, 4.4vw, 40px);
+}
+
+// Kept off the bottom-right corner: the sticker-book tab lives there and would cover it.
+.scenery__flower--two {
+  left: 58vw;
+  bottom: clamp(40px, 7.2vh, 90px);
+  width: clamp(22px, 3.8vw, 34px);
+}
+
+.scenery__sprout-stem {
+  fill: var(--ps-leaf-shade);
+  opacity: 0.75;
+}
+
+.scenery__sprout-leaves {
+  fill: var(--ps-leaf);
+}
+
+.scenery__sprout--one {
+  bottom: clamp(24px, 4.6vh, 58px);
+  left: 41vw;
+  width: clamp(22px, 3.8vw, 36px);
 }
 
 .sr-only {
@@ -2919,11 +3058,6 @@ input:focus-visible {
   100% { transform: translateY(0) rotate(-5deg) scale(1); }
 }
 
-@keyframes cloud-drift {
-  from { transform: translateX(-115%); }
-  to { transform: translateX(calc(100vw + 15%)); }
-}
-
 @media (max-width: 600px) {
   .app-controls {
     top: max(9px, env(safe-area-inset-top));
@@ -2986,7 +3120,35 @@ input:focus-visible {
     width: 92px;
   }
 
+  // A phone has almost no spare floor: the language select owns the bottom-left and the book tab
+  // the bottom-right. So the band grows taller and the planting climbs above both, which keeps it
+  // on the green rise instead of floating on the sky.
+  .scenery__ground {
+    height: clamp(150px, 25vh, 210px);
+  }
+
+  .scenery__tuft--one {
+    bottom: clamp(74px, 12vh, 96px);
+  }
+
   .scenery__tuft--two {
+    bottom: clamp(80px, 13vh, 104px);
+    left: 34vw;
+  }
+
+  .scenery__flower--one {
+    bottom: clamp(68px, 11vh, 88px);
+  }
+
+  .scenery__flower--two {
+    bottom: clamp(76px, 12.5vh, 98px);
+    left: 62vw;
+  }
+
+  // The middle sprout is the one that would sit under the lockup, so it is the one that goes.
+  // Qualified with `svg` to outrank `.scenery svg { display: block }` — the old unqualified hide
+  // that used to live here never actually applied.
+  svg.scenery__sprout--one {
     display: none;
   }
 
@@ -3279,8 +3441,4 @@ input:focus-visible {
     transition-duration: 0.01ms !important;
   }
 
-  .scenery__cloud {
-    animation: none !important;
-    transform: translateX(var(--cloud-static-x));
-  }
 }

@@ -75,7 +75,8 @@ describe('Project Spell', () => {
     expect(screen.queryByText('Language')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Project Spell' })).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: 'SPELL' })).not.toBeInTheDocument();
-    expect(document.querySelectorAll('.scenery__cloud')).toHaveLength(7);
+    // Two clouds, not a crowded sky: the §6 density budget is guarded in Scenery.test.jsx.
+    expect(document.querySelectorAll('.scenery__cloud')).toHaveLength(2);
     // One green slab is the whole ask. How to play is the next question, not this one.
     expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
     expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
