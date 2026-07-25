@@ -1481,8 +1481,6 @@ describe('Project Spell', () => {
   // Roadmap F4. The default-on path: the rest of the file runs with the setting off, so everything
   // about the beat itself is asserted here.
   describe('spelling a finished word back', () => {
-    // 'cat' at the spoken pace: three letters 280ms apart, a 140ms beat, then the word.
-    const LETTER_STEP = 280;
     const WORD_GAP = 140;
     const withSpellBack = (extra = {}) => {
       window.localStorage.setItem(
@@ -1498,6 +1496,14 @@ describe('Project Spell', () => {
       );
     };
     const spokenTexts = () => window.speechSynthesis.speak.mock.calls.map((call) => call[0].text);
+    const queuedSpellBack = () =>
+      window.speechSynthesis.speak.mock.calls.slice(-4).map(([utterance]) => utterance);
+    const playSequenceToEnd = (utterances = queuedSpellBack()) => {
+      utterances.forEach((utterance) => {
+        act(() => utterance.onstart());
+        act(() => utterance.onend());
+      });
+    };
     const spellingLetter = () => document.querySelector('.letter--spelling')?.textContent;
     const finishFirstWord = () => {
       fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
@@ -1507,40 +1513,60 @@ describe('Project Spell', () => {
 
     beforeEach(() => withSpellBack());
 
-    it('names every letter in turn, then the whole word, then moves on', () => {
+    it('queues every name without clipping and follows the voice starts with the light', () => {
       vi.useFakeTimers();
       render(<App />);
       playIn(PLAY_EASY);
       window.speechSynthesis.speak.mockClear();
       finishFirstWord();
+      const utterances = queuedSpellBack();
 
       // The celebration hop stands down: one travelling animation on the letters, not two.
       expect(document.querySelector('.word')).toHaveClass('word--spelling');
       expect(document.querySelector('.word')).not.toHaveClass('word--celebrating');
-      expect(document.querySelector('.word').style.getPropertyValue('--spell-step')).toBe('280ms');
-      expect(spellingLetter()).toBe('c');
-      expect(spokenTexts()).toEqual(['c']);
-
-      act(() => vi.advanceTimersByTime(LETTER_STEP));
-      expect(spellingLetter()).toBe('a');
-      act(() => vi.advanceTimersByTime(LETTER_STEP));
-      expect(spellingLetter()).toBe('t');
-      expect(spokenTexts()).toEqual(['c', 'a', 't']);
-
-      // The word arrives after the last letter's step and the beat between, and no single letter is
-      // lit under it any more.
-      act(() => vi.advanceTimersByTime(LETTER_STEP + WORD_GAP));
+      expect(document.querySelector('.word').style.getPropertyValue('--spell-pop')).toBe('');
+      // All four utterances are handed to one browser queue immediately. Nothing cancels between
+      // them, so the engine — not a guessed interval — decides when each name has finished.
       expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat']);
+      expect(utterances.slice(0, 3).map(({ rate }) => rate)).toEqual([0.95, 0.95, 0.95]);
+      const cancelCountAfterQueue = window.speechSynthesis.cancel.mock.calls.length;
+      expect(
+        window.speechSynthesis.cancel.mock.invocationCallOrder.at(-1),
+      ).toBeLessThan(window.speechSynthesis.speak.mock.invocationCallOrder[0]);
+
+      // Start-up latency does not move the light early. Even a full second later it is still waiting
+      // for the engine's real event.
+      expect(spellingLetter()).toBeUndefined();
+      act(() => vi.advanceTimersByTime(1000));
+      expect(spellingLetter()).toBeUndefined();
+
+      act(() => utterances[0].onstart());
+      expect(spellingLetter()).toBe('c');
+      act(() => utterances[0].onend());
+      // Ending C does not guess that A has started.
+      expect(spellingLetter()).toBe('c');
+      act(() => utterances[1].onstart());
+      expect(spellingLetter()).toBe('a');
+      act(() => utterances[1].onend());
+      act(() => utterances[2].onstart());
+      expect(spellingLetter()).toBe('t');
+      act(() => utterances[2].onend());
+
+      // The final entry is the whole word, so no single letter stays highlighted beneath it.
+      act(() => utterances[3].onstart());
       expect(spellingLetter()).toBeUndefined();
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
-
-      // The round waits for the word to be said (700ms for a short word) before it moves on.
-      act(() => vi.advanceTimersByTime(699));
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterQueue);
+      // Once speech is audibly running, the start watchdog stands down; a slow working word is not
+      // cut off at the same 1.6s boundary used for a queue that never begins.
+      act(() => vi.advanceTimersByTime(1600));
       expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
-      act(() => vi.advanceTimersByTime(1));
+      expect(window.speechSynthesis.cancel).toHaveBeenCalledTimes(cancelCountAfterQueue);
+
+      // Only the word's real end hands off to the next word; its prompt cannot talk over the queue.
+      act(() => utterances[3].onend());
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       expect(document.querySelector('.word')).not.toHaveClass('word--spelling');
-      // Only now does the next word's prompt speak, so nothing talks over the spelling.
       expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat', 'Spell the word cat']);
     });
 
@@ -1574,7 +1600,7 @@ describe('Project Spell', () => {
       finishFirstWord();
 
       // The silent beat runs at the roadmap's faster stagger, one pop per letter.
-      expect(document.querySelector('.word').style.getPropertyValue('--spell-step')).toBe('120ms');
+      expect(document.querySelector('.word').style.getPropertyValue('--spell-pop')).toBe('120ms');
       expect(spellingLetter()).toBe('c');
       act(() => vi.advanceTimersByTime(240));
       expect(spellingLetter()).toBe('t');
@@ -1605,8 +1631,32 @@ describe('Project Spell', () => {
       // No letter sequence at all: the letters are already lit, so the word is named over them.
       expect(spellingLetter()).toBeUndefined();
       expect(spokenTexts()).toEqual(['cat']);
-      act(() => vi.advanceTimersByTime(700));
+      const [wordUtterance] = window.speechSynthesis.speak.mock.calls.map(([utterance]) => utterance);
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      act(() => wordUtterance.onstart());
+      expect(spellingLetter()).toBeUndefined();
+      act(() => wordUtterance.onend());
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    });
+
+    it('cancels a speech queue that stops reporting and never strands the round', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      playIn(PLAY_EASY);
+      window.speechSynthesis.speak.mockClear();
+      finishFirstWord();
+
+      expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat']);
+      const cancelCountAfterQueue = window.speechSynthesis.cancel.mock.calls.length;
+      act(() => vi.advanceTimersByTime(1599));
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+
+      // A broken engine may accept the queue and then emit no events. The watchdog cancels those
+      // late utterances before handing off, so they cannot wake up over the next word.
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(window.speechSynthesis.cancel.mock.calls.length).toBeGreaterThan(cancelCountAfterQueue);
     });
 
     it('waits for the spelling before praising, so the word is never cut off', () => {
@@ -1616,14 +1666,20 @@ describe('Project Spell', () => {
       render(<App />);
       playIn(PLAY_EASY);
       finishFirstWord();
-      act(() => vi.advanceTimersByTime(3 * LETTER_STEP + WORD_GAP + 700));
+      playSequenceToEnd();
 
       window.speechSynthesis.speak.mockClear();
       finishFirstWord();
-      act(() => vi.advanceTimersByTime(3 * LETTER_STEP + WORD_GAP));
+      const utterances = queuedSpellBack();
       expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat']);
-      // Praise lands after the word has been said, not over it.
-      act(() => vi.advanceTimersByTime(700));
+      utterances.slice(0, 3).forEach((utterance) => {
+        act(() => utterance.onstart());
+        act(() => utterance.onend());
+      });
+      act(() => utterances[3].onstart());
+      expect(spokenTexts()).toEqual(['c', 'a', 't', 'cat']);
+      // Praise lands after the whole word reports its real end, not over it.
+      act(() => utterances[3].onend());
       expect(spokenTexts().at(-1)).toBe('Great!');
     });
 
@@ -1643,6 +1699,8 @@ describe('Project Spell', () => {
       // Completion reveals all three, and the spelling-back names them over the revealed word.
       expect(document.querySelectorAll('.letter--hidden')).toHaveLength(0);
       expect(document.querySelector('.word')).toHaveClass('word--spelling');
+      expect(spellingLetter()).toBeUndefined();
+      act(() => queuedSpellBack()[0].onstart());
       expect(spellingLetter()).toBe('c');
     });
 
@@ -1652,7 +1710,7 @@ describe('Project Spell', () => {
       playIn(PLAY_EASY);
       for (let index = 0; index < 3; index += 1) {
         finishFirstWord();
-        act(() => vi.advanceTimersByTime(3 * LETTER_STEP + WORD_GAP + 700));
+        playSequenceToEnd();
       }
 
       expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'complete');
