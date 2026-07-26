@@ -120,9 +120,13 @@ const SPELL_BACK_SILENT_CEILING_BUFFER = 1600;
 // behind it rather than cutting across it.
 const SPELL_BACK_BUDGET_SLACK = 900;
 const SPELL_BACK_BUDGET_MIN = 2200;
+const PITCH_LADDER_STEP_SEMITONES = 2;
+const PITCH_LADDER_CAP_SEMITONES = 12;
 
 const spellBackSilentStep = (length) =>
   Math.min(SPELL_BACK_SILENT_STEP, 900 / length, SPELL_BACK_SILENT_MAX / length);
+const pitchLadderRate = (letterIndex) =>
+  2 ** (Math.min(letterIndex * PITCH_LADDER_STEP_SEMITONES, PITCH_LADDER_CAP_SEMITONES) / 12);
 // Comfortably longer than the Play slab's 180ms exit in `App.scss`. The headroom matters: at
 // exactly the animation's length, ordinary timer jitter drops the slab while it is still
 // faintly visible and it reads as a pop rather than a fade.
@@ -489,11 +493,12 @@ function useGameAudio(soundEffectsEnabled) {
   }, []);
 
   const playEffect = useCallback(
-    (source, volume = 0.7, onFinished) => {
+    (source, volume = 0.7, { onFinished, rate = 1 } = {}) => {
       if (!soundEffectsEnabled) {
         onFinished?.();
         return;
       }
+      const playbackRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
 
       const playFallback = () => {
         const effect = effectsRef.current.get(source);
@@ -550,6 +555,7 @@ function useGameAudio(soundEffectsEnabled) {
           const bufferSource = context.createBufferSource();
           const gain = context.createGain();
           bufferSource.buffer = buffer;
+          bufferSource.playbackRate.value = playbackRate;
           gain.gain.value = volume;
           bufferSource.connect(gain);
           gain.connect(context.destination);
@@ -1300,7 +1306,9 @@ export default function App() {
       namedLetters.forEach((letter, index) => {
         at(index * step, () => {
           setSpellBack({ index, pop: step });
-          playEffect(popSfx, 0.5);
+          // F5: two semitones per letter, rooted afresh by this word-local index and capped at an
+          // octave. The spell-back's 0.5 gain is already below the ordinary typing pop's 0.7.
+          playEffect(popSfx, 0.5, { rate: pitchLadderRate(index) });
         });
       });
       at(lettersPhase, () => setSpellBack({ index: letters.length, pop: step }));
@@ -1570,11 +1578,13 @@ export default function App() {
             handedOff = true;
             completeWord();
           }, LAST_WORD_ADVANCE_CEILING);
-          playEffect(doneSfx, 0.7, () => {
-            if (handedOff) return;
-            handedOff = true;
-            window.clearTimeout(advanceTimerRef.current);
-            advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
+          playEffect(doneSfx, 0.7, {
+            onFinished: () => {
+              if (handedOff) return;
+              handedOff = true;
+              window.clearTimeout(advanceTimerRef.current);
+              advanceTimerRef.current = window.setTimeout(completeWord, WORD_COMPLETION_PAUSE);
+            },
           });
         } else {
           playEffect(doneSfx, 0.7);

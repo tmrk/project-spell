@@ -424,6 +424,32 @@ describe('Project Spell', () => {
     ]);
   });
 
+  it('commits a keydown in the same turn and keeps the typing input focused', () => {
+    vi.useFakeTimers();
+    render(<App />);
+    playIn(PLAY_EASY);
+    const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+    input.focus();
+    expect(input).toHaveFocus();
+
+    fireEvent.keyDown(input, { key: 'c' });
+    // No promise, timer or animation frame sits between the key event and the letter state swap.
+    expect(screen.getByRole('button', { name: 'c, completed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'a, current letter' })).toBeInTheDocument();
+    expect(input).toHaveFocus();
+
+    fireEvent.keyDown(input, { key: 'x' });
+    expect(screen.getByRole('button', { name: 'a, current letter' })).toBeInTheDocument();
+    expect(input).toHaveFocus();
+
+    fireEvent.keyDown(input, { key: 'a' });
+    fireEvent.keyDown(input, { key: 't' });
+    act(() => vi.advanceTimersByTime(760));
+
+    expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+    expect(input).toHaveFocus();
+  });
+
   it('opens the parent settings without adding controls to the play flow', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
@@ -765,6 +791,10 @@ describe('Project Spell', () => {
     const contexts = [];
 
     class BufferSourceMock extends EventTarget {
+      constructor() {
+        super();
+        this.playbackRate = { value: 1 };
+      }
       connect() {}
       disconnect() {}
       start() {
@@ -1813,6 +1843,114 @@ describe('Project Spell', () => {
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });
 
+    it('climbs two semitones per silent pop, caps at an octave, and resets each word', async () => {
+      const word = 'elephant';
+      const step = 900 / word.length;
+      withSpellBack({ customWords: word, speech: false });
+      const startedEffects = [];
+      const contexts = [];
+
+      class BufferSourceMock extends EventTarget {
+        constructor() {
+          super();
+          this.playbackRate = { value: 1 };
+        }
+        connect(node) {
+          if (node?.gain) this.gainNode = node;
+        }
+        disconnect() {}
+        start() {
+          startedEffects.push({
+            gain: this.gainNode?.gain.value,
+            rate: this.playbackRate.value,
+            source: this.buffer.source,
+          });
+        }
+        stop() {}
+      }
+
+      class AudioContextMock {
+        constructor() {
+          this.state = 'running';
+          this.destination = {};
+          this.decodeAudioData = vi.fn(async (buffer) => buffer);
+          contexts.push(this);
+        }
+        close() {
+          this.state = 'closed';
+          return Promise.resolve();
+        }
+        createBufferSource() {
+          return new BufferSourceMock();
+        }
+        createGain() {
+          return { connect() {}, disconnect() {}, gain: { value: 1 } };
+        }
+      }
+
+      const audioContextDescriptor = Object.getOwnPropertyDescriptor(window, 'AudioContext');
+      Object.defineProperty(window, 'AudioContext', {
+        configurable: true,
+        value: AudioContextMock,
+      });
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (source) => ({
+        arrayBuffer: async () => ({ source: String(source) }),
+        ok: true,
+      }));
+      const view = render(<App />);
+
+      try {
+        await waitFor(() => expect(contexts[0].decodeAudioData).toHaveBeenCalledTimes(7));
+        vi.useFakeTimers();
+        playIn(PLAY_EASY);
+        const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+
+        // A miss stays flat. Completing the word starts the unchanged ding and the first ladder
+        // pop in this same event turn; the remaining pops follow on the silent spell-back timers.
+        fireEvent.keyDown(input, { key: 'x' });
+        fireEvent.input(input, { target: { value: word } });
+        expect(startedEffects.filter(({ source }) => source.endsWith('/bad.mp3')))
+          .toEqual([{ gain: 0.55, rate: 1, source: expect.stringMatching(/\/bad\.mp3$/u) }]);
+        expect(startedEffects.filter(({ source }) => source.endsWith('/done.mp3')))
+          .toEqual([{ gain: 0.7, rate: 1, source: expect.stringMatching(/\/done\.mp3$/u) }]);
+        expect(startedEffects.filter(({ source }) => source.endsWith('/pop.mp3'))).toHaveLength(1);
+
+        act(() => vi.advanceTimersByTime((word.length - 1) * step));
+        const firstLadder = startedEffects
+          .filter(({ source }) => source.endsWith('/pop.mp3'));
+        expect(firstLadder).toHaveLength(word.length);
+        firstLadder.forEach(({ gain, rate }, index) => {
+          expect(gain).toBe(0.5);
+          expect(rate).toBeCloseTo(2 ** (Math.min(index * 2, 12) / 12), 8);
+        });
+
+        // Finish the beat, then prove the next copy of the word starts back at the root note.
+        act(() => vi.advanceTimersByTime(
+          word.length * step + WORD_GAP + 760 - ((word.length - 1) * step),
+        ));
+        expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+        startedEffects.length = 0;
+
+        fireEvent.input(input, { target: { value: word } });
+        act(() => vi.advanceTimersByTime((word.length - 1) * step));
+        const secondLadder = startedEffects
+          .filter(({ source }) => source.endsWith('/pop.mp3'));
+        expect(secondLadder).toHaveLength(word.length);
+        secondLadder.forEach(({ gain, rate }, index) => {
+          expect(gain).toBe(0.5);
+          expect(rate).toBeCloseTo(2 ** (Math.min(index * 2, 12) / 12), 8);
+        });
+      } finally {
+        view.unmount();
+        fetchSpy.mockRestore();
+        if (audioContextDescriptor) {
+          Object.defineProperty(window, 'AudioContext', audioContextDescriptor);
+        } else {
+          delete window.AudioContext;
+        }
+      }
+    });
+
     it('drops the travelling light for reduced motion and simply says the word', () => {
       vi.useFakeTimers();
       window.matchMedia.mockReturnValue({
@@ -1983,6 +2121,23 @@ describe('Project Spell', () => {
 
       expect(screen.getByRole('button', { name: 't, completed' })).toBeInTheDocument();
       expect(document.querySelectorAll('.star-trail__socket--filled')).toHaveLength(1);
+    });
+
+    it('returns focus to the typing input after an on-screen key takes it', async () => {
+      withKeyboard('simple');
+      render(<App />);
+      playIn(PLAY_EASY);
+      const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+      await waitFor(() => expect(input).toHaveFocus());
+
+      const key = within(screen.getByRole('group', { name: 'Letter keys' }))
+        .getByRole('button', { name: 'c' });
+      key.focus();
+      expect(key).toHaveFocus();
+      fireEvent.click(key);
+
+      expect(screen.getByRole('button', { name: 'c, completed' })).toBeInTheDocument();
+      await waitFor(() => expect(input).toHaveFocus());
     });
 
     it('offers the whole alphabet in full mode and only a few keys in simple mode', () => {
