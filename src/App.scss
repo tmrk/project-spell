@@ -836,56 +836,25 @@ input:focus-visible {
   gap: var(--ps-space-1);
 }
 
-// How much of the play screen's foot is reserved for a keyboard, so the word stays clear of it.
-// These set the two halves of `.play-screen`'s `padding-bottom` rather than the padding itself:
-// that rule is a shorthand declared further down this file at the same specificity, so a
-// `padding-bottom` here would lose to it on source order and never apply at all — which is exactly
-// what these two reserves quietly did until 2026-07-26. Custom properties cascade independently of
-// where the property that reads them is declared, so the order cannot bite again.
-//
-// The floor is the reserve on a screen with no bottom inset; the reserve is what is added on top of
-// one. The full alphabet wraps to more rows than the simple tier, so it asks for more room.
-.play-screen--keys-simple {
-  --keys-floor: 150px;
-  --keys-reserve: 140px;
-}
-
-.play-screen--keys-full {
-  --keys-floor: 268px;
-  --keys-reserve: 258px;
-}
-
-// The same idea for the keyboard the game does not draw. A touch device's own keyboard takes
-// roughly the bottom 40% of a portrait screen, and iOS Safari never resizes the layout viewport to
-// make room — so a word centred in the viewport ends up half covered the moment a child taps to
-// type. The word therefore sits north of centre from the start: reserving the room permanently
-// costs nothing when the keyboard is shut, and means the screen never has to move when it opens.
-// (Without this the word sits slightly *below* centre, because the trail's 90px of top padding
-// outweighs the 44px at the foot.)
-//
-// Portrait only, and only where the keyboard is the device's: a landscape phone is barely taller
-// than the word once its keyboard is up, so lifting the word there would only drive it into the
-// star trail. The game's own keys are handled by the two rules above, on every screen.
-@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
-  .play-screen--keys-system {
-    --keys-floor: 196px;
-    --keys-reserve: 184px;
-  }
-}
-
 // Optional on-screen letter keys (G8.3). Sits at the foot of the play screen so the word keeps
 // the centre of the stage; the system keyboard still works at the same time. The full keyboard is
 // laid out like a real physical keyboard — staggered rows in the language's own arrangement — so
 // every key is sized from the widest staggered row (`--max-units`, set per render) and the board
 // fits the screen without scrolling. `--kb-pitch` is one key plus one gap, the unit each row's
 // stagger offset is measured in.
+//
+// Height comes from the shared token; width is whatever the row can afford, capped at the height so
+// a key is square at best and taller-than-wide when it has to squeeze — the proportions of the
+// keyboard a child already knows (D-023). `--keys-key-h` is the play screen's per-mode height; the
+// token behind it is the fallback so the board still sizes itself when rendered on its own.
 .letter-keyboard {
-  --kb-gap: clamp(3px, 0.9vw, 7px);
-  --kb-width: min(96vw, 760px);
-  --kb-key: min(3.3rem, calc((var(--kb-width) - (var(--max-units) - 1) * var(--kb-gap)) / var(--max-units)));
+  --kb-gap: var(--ps-size-key-gap);
+  --kb-width: var(--ps-size-key-board);
+  --kb-key-h: var(--keys-key-h, var(--ps-size-key-height));
+  --kb-key: min(var(--kb-key-h), calc((var(--kb-width) - (var(--max-units) - 1) * var(--kb-gap)) / var(--max-units)));
   --kb-pitch: calc(var(--kb-key) + var(--kb-gap));
   position: absolute;
-  bottom: max(16px, env(safe-area-inset-bottom));
+  bottom: var(--keys-bottom, max(16px, env(safe-area-inset-bottom)));
   left: 50%;
   display: flex;
   flex-direction: column;
@@ -903,20 +872,23 @@ input:focus-visible {
   margin-left: calc(var(--row-offset, 0) * var(--kb-pitch));
 }
 
+// Capitals, like the word above them and like every keyboard a child has met (owner request,
+// 2026-07-26). The glyph is sized from the *narrower* of the two dimensions so a tall, narrow phone
+// key keeps its letter comfortably inside its width.
 .letter-key {
   display: grid;
   width: var(--kb-key);
-  height: var(--kb-key);
+  height: var(--kb-key-h);
   padding: 0;
   border: 0;
   border-radius: clamp(9px, 1.5vw, 14px);
   color: var(--ps-ink);
-  font-size: calc(var(--kb-key) * var(--ps-size-key-ratio));
+  font-size: calc(min(var(--kb-key), var(--kb-key-h)) * var(--ps-size-key-ratio));
   font-weight: 900;
   background: var(--ps-paper);
   box-shadow: 0 var(--ps-lift-1) 0 var(--ps-ink-ghost);
   cursor: pointer;
-  text-transform: lowercase;
+  text-transform: uppercase;
   place-items: center;
   transition: transform 90ms ease, box-shadow 90ms ease;
 }
@@ -1285,20 +1257,73 @@ input:focus-visible {
   margin-right: 0;
 }
 
+// How much of the play screen's foot belongs to the keyboard and the hint line, so the word stays
+// clear of both. The band is *computed* from the board's own geometry rather than guessed at per
+// mode (D-023): `--keys-rows` is the rendered row count, set inline by `App.jsx`, so a simple board
+// that had to grow to a third row is reserved for as accurately as the alphabet's three.
+//
+// These are custom properties read by padding *longhands*, never a `padding` shorthand, and never
+// `padding-bottom` on a modifier: `.play-screen` and `.play-screen--keys-*` are both one class, so
+// at equal specificity source order would decide, and that is exactly how the previous reserves
+// silently did nothing for weeks (D-022, trap two).
 .play-screen {
+  --keys-rows: 0;
+  --keys-key-h: var(--ps-size-key-height);
+  --keys-bottom: max(var(--ps-space-4), env(safe-area-inset-bottom));
+  --keys-band: calc(
+    var(--keys-rows) * var(--keys-key-h) +
+    max(var(--keys-rows) - 1, 0) * var(--ps-size-key-gap)
+  );
+  // Everything the foot owns, measured from the bottom edge of the screen.
+  --keys-room: calc(var(--keys-band) + var(--keys-bottom));
+  // The hint line's own slot, immediately above the board. Praise and encouragement were landing
+  // underneath the keys until 2026-07-26 because the line was placed against the viewport instead.
+  // The slot and the line's offset come from the same two values, so the line is always inside the
+  // room reserved for it — no breakpoint has to re-guess the relationship.
+  --hint-gap: var(--ps-space-3);
+  --hint-line: 28px;
+  --hint-slot: calc(var(--hint-gap) + var(--hint-line));
+  --word-head: max(90px, calc(env(safe-area-inset-top) + 82px));
+  --word-foot: calc(var(--keys-room) + var(--hint-slot));
+  // The tallest letter that still fits between the trail and the foot. The word is sized from the
+  // viewport's *width* (`--letter-size`, set per word in `App.jsx`), which says nothing about how
+  // short a landscape phone is: with a keyboard up, a 15vw letter wanted more height than the whole
+  // screen had, so it pushed the board off the bottom edge. The word gives way instead — being
+  // smaller is recoverable, being half covered is not.
+  --letter-fit: calc((100dvh - var(--word-head) - var(--word-foot)) / 1.45);
   position: relative;
   display: grid;
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  padding-top: max(90px, calc(env(safe-area-inset-top) + 82px));
-  // Longhands, not the shorthand: the foot is the one edge a `--keys-*` modifier moves, and a
-  // shorthand here would flatten whatever it set. The two fallbacks are the no-keyboard screen.
+  padding-top: var(--word-head);
+  // Longhands, not the shorthand: the foot is the one edge the keyboard moves, and a shorthand here
+  // would flatten it.
   padding-right: max(18px, env(safe-area-inset-right));
-  padding-bottom: max(var(--keys-floor, 44px), calc(env(safe-area-inset-bottom) + var(--keys-reserve, 0px)));
+  padding-bottom: var(--word-foot);
   padding-left: max(18px, env(safe-area-inset-left));
   cursor: default;
   place-items: center;
+}
+
+// The simple tier's keys are the bigger ones — see the scale token.
+.play-screen--keys-simple {
+  --keys-key-h: calc(var(--ps-size-key-height) * var(--ps-size-key-simple-scale));
+}
+
+// The same reserve for the keyboard the game does *not* draw. A touch device's own keyboard takes
+// roughly the bottom 40% of a portrait screen, and iOS Safari never resizes the layout viewport to
+// make room — so a word centred in the viewport ends up half covered the moment a child taps to
+// type. The word therefore sits north of centre from the start: reserving the room permanently
+// costs nothing when the keyboard is shut, and means the screen never has to move when it opens.
+//
+// A flat band, because the device's keyboard has no geometry we can read. Portrait only, and only
+// where the keyboard is the device's: a landscape phone is barely taller than the word once its
+// keyboard is up, so lifting the word there would only drive it into the star trail.
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .play-screen--keys-system {
+    --keys-band: 180px;
+  }
 }
 
 .round-progress {
@@ -1602,7 +1627,13 @@ input:focus-visible {
   border-radius: 0.16em;
   color: var(--ps-ink-ghost);
   background: transparent;
-  font-size: clamp(var(--ps-size-letter-min), var(--letter-size), var(--ps-size-letter-max));
+  // Two caps: the token's absolute ceiling, and the height the play screen has left over
+  // (`--letter-fit`). The fallback is for a letter rendered outside the play screen.
+  font-size: clamp(
+    var(--ps-size-letter-min),
+    var(--letter-size),
+    min(var(--ps-size-letter-max), var(--letter-fit, 100dvh))
+  );
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -1735,10 +1766,13 @@ input:focus-visible {
   opacity: 0.48;
 }
 
+// Praise and encouragement. Anchored to the top of whatever the foot is holding rather than to the
+// viewport, so an on-screen keyboard can never cover it — the `8vh` floor is what keeps the line off
+// the bottom edge on a screen that reserves nothing.
 .game-hint {
   text-transform: uppercase;
   position: absolute;
-  bottom: max(8vh, calc(env(safe-area-inset-bottom) + 28px));
+  bottom: max(8vh, calc(var(--keys-room, 0px) + var(--hint-gap, 0px)));
   left: 50%;
   min-height: 1.5em;
   margin: 0;
@@ -2510,6 +2544,84 @@ input:focus-visible {
 .mode-option__copy > span {
   @extend %ps-type-caption;
   color: var(--ps-ink-soft);
+}
+
+// The keyboard choice as three pictures rather than a dropdown (owner request, 2026-07-26). Each
+// card is a miniature play screen: the word, and beneath it either nothing, a full board, or the
+// tidy 5×2 one. Same card language as the word presets above, so the group still reads as one row.
+.keyboard-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ps-space-2);
+}
+
+.keyboard-choice__option {
+  display: grid;
+  padding: var(--ps-space-2);
+  border: 2px solid var(--ps-ink-ghost);
+  border-radius: var(--ps-radius-tile);
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+  gap: var(--ps-space-2);
+  justify-items: center;
+}
+
+.keyboard-choice__option:hover {
+  border-color: color-mix(in srgb, var(--ps-grass) 45%, var(--ps-ink-ghost));
+  background: #fff;
+}
+
+.keyboard-choice__option:has(input:checked) {
+  border-color: var(--ps-grass);
+  background: #fff;
+}
+
+// The radio itself is off-screen, so the card wears its focus ring.
+.keyboard-choice__option:has(input:focus-visible) {
+  outline: 3px solid var(--ps-grass);
+  outline-offset: 2px;
+}
+
+.keyboard-choice__stage {
+  display: block;
+  width: 100%;
+  border-radius: var(--ps-radius-tile);
+  background: var(--ps-sun);
+}
+
+.keyboard-choice__tile { fill: var(--ps-coral); }
+.keyboard-choice__tile--c1 { fill: var(--ps-sky); }
+.keyboard-choice__tile--c2 { fill: var(--ps-leaf); }
+
+.keyboard-choice__key {
+  fill: var(--ps-paper);
+}
+
+.keyboard-choice__title {
+  @extend %ps-type-caption;
+  display: flex;
+  align-items: baseline;
+  color: var(--ps-ink);
+  font-weight: 700;
+  text-align: center;
+  gap: var(--ps-space-1);
+  text-wrap: balance;
+}
+
+// A tick, so the chosen card is marked by a shape and not by its border colour alone.
+.keyboard-choice__tick {
+  display: none;
+  color: var(--ps-grass);
+  font-weight: 900;
+}
+
+.keyboard-choice__option:has(input:checked) .keyboard-choice__tick {
+  display: inline;
+}
+
+.keyboard-choice__tick::before {
+  content: "✓";
 }
 
 .mode-note {
@@ -3680,10 +3792,6 @@ svg.scenery__sparkle--super {
 
   .app-controls {
     top: max(10px, env(safe-area-inset-top));
-  }
-
-  .game-hint {
-    bottom: max(18px, env(safe-area-inset-bottom));
   }
 
   .book-tab {

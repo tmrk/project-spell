@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CloseIcon } from './Icons';
+import KeyboardChoice from './KeyboardChoice';
 import NameTag from './NameTag';
 import { MAX_PROFILES, getActiveProfile } from '../profiles';
 import { DEFAULT_SETTINGS, PALETTES, PRESETS, getEligibleWords, normaliseSettings } from '../game';
@@ -421,18 +422,21 @@ export default function SettingsPanel({
               <small className="mode-note">{copy.modeNormalNeedsSpeech}</small>
             )}
 
-            <label className="stacked-field">
+            <div className="stacked-field">
               <span>{copy.onScreenKeyboard}</span>
-              <select
+              <KeyboardChoice
                 value={settings.keyboard}
-                onChange={(event) => applyChange({ keyboard: event.target.value })}
-              >
-                <option value="system">{copy.keyboardSystem}</option>
-                <option value="full">{copy.keyboardFull}</option>
-                <option value="simple">{copy.keyboardSimple}</option>
-              </select>
+                locale={settings.locale}
+                labels={{
+                  heading: copy.onScreenKeyboard,
+                  system: copy.keyboardSystem,
+                  full: copy.keyboardFull,
+                  simple: copy.keyboardSimple,
+                }}
+                onChange={(keyboard) => applyChange({ keyboard })}
+              />
               <small>{copy.keyboardHelp}</small>
-            </label>
+            </div>
             <label className="toggle-row toggle-row--described">
               <span className="toggle-copy">
                 <span>{copy.acceptUnaccented}</span>

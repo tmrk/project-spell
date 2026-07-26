@@ -88,6 +88,22 @@
   --ps-size-letter-max: 11.5rem;
   --ps-size-key-ratio: 0.46;
 
+  // On-screen keyboard geometry. Both the board and the room the play screen reserves at its foot
+  // are built from these three, which is what keeps the two from drifting apart (D-023).
+  //
+  // Key *height* deliberately knows nothing about how many keys a row holds — exactly like a real
+  // phone keyboard, height follows the screen while width follows the row. That is what lets the
+  // play screen work out the height of the band without knowing the language's layout. The `12vh`
+  // term is the guard for a short landscape screen, where a board sized off width alone would eat
+  // half the height. Key *width* is capped at the height by the board itself, so a key is square
+  // at its most generous and taller-than-wide when the row has to squeeze — never the reverse.
+  --ps-size-key-height: clamp(48px, min(7.6vw, 12vh), 4.8rem);
+  --ps-size-key-gap: clamp(4px, 0.9vw, 8px);
+  --ps-size-key-board: min(96vw, 1000px);
+  // The simple tier trades reach for size: ten keys in two rows can afford to be bigger than a
+  // full alphabet's thirty-odd, and its audience is the youngest fingers in the house.
+  --ps-size-key-simple-scale: 1.3;
+
   // Ceremony objects. These are pictures, not type: the three earned-star beats and the
   // die-cut reward keep their fluid sizes without inventing values inside the screen recipe.
   --ps-size-ceremony-star: clamp(58px, 8vw, 78px);

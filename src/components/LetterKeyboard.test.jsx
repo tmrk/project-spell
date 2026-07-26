@@ -33,6 +33,16 @@ describe('LetterKeyboard rendering', () => {
     expect(onPress).toHaveBeenCalledWith('t');
   });
 
+  // Keys are drawn as capitals in CSS only; the letter behind them, and the name a screen reader
+  // reads, both stay lower case so nothing downstream has to fold the case back.
+  it('keeps the letter and its accessible name lower case behind the capitals', () => {
+    render(<LetterKeyboard rows={buildKeyRows('simple', 'cat', 'en-GB')} label="Keys" onPress={() => {}} />);
+
+    const key = screen.getByRole('button', { name: 'c' });
+    expect(key.textContent).toBe('c');
+    expect(key).toHaveAttribute('aria-label', 'c');
+  });
+
   it('renders nothing when there are no rows', () => {
     const { container } = render(<LetterKeyboard rows={[]} label="Keys" onPress={() => {}} />);
     expect(container).toBeEmptyDOMElement();

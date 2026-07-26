@@ -12,6 +12,11 @@
  *
  * `highlight` is the miss-two hint: the expected key is pointed out rather than the answer being
  * given away, which sits between "try again" and the full reveal on miss three.
+ *
+ * Keys are drawn as capitals (owner request, 2026-07-26) to match both the spelled word and every
+ * real keyboard a child has seen, but the case is purely visual — the letter behind the key stays
+ * lower case, and `aria-label` pins the accessible name to it so a browser applying
+ * `text-transform` to the accessible-name computation cannot change what a screen reader says.
  */
 export default function LetterKeyboard({ rows, highlight = null, label, onPress }) {
   if (!rows?.length) return null;
@@ -39,6 +44,7 @@ export default function LetterKeyboard({ rows, highlight = null, label, onPress 
               type="button"
               key={key}
               className={`letter-key${highlight === key ? ' letter-key--hint' : ''}`}
+              aria-label={key}
               // Keep focus on the hidden input so a physical keyboard still works between taps.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPress(key)}

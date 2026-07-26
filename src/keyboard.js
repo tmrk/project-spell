@@ -16,7 +16,11 @@ const ALPHABETS = Object.freeze({
   'hu-HU': 'aábcdeéfghiíjklmnoóöőpqrstuúüűvwxyz',
 });
 
-export const SIMPLE_KEY_COUNT = 9;
+// Ten keys in two rows of five (owner request, 2026-07-26). Nine left a row of five over a row of
+// four, which reads as a mistake rather than as a choice; a 5×2 block is orderly at a glance and
+// still small enough that a child can scan every key.
+export const SIMPLE_KEY_COUNT = 10;
+export const SIMPLE_ROW_LENGTH = 5;
 
 // Physical keyboard layouts (owner request 2026-07-24). The full on-screen keyboard mirrors the
 // real keyboard a child is growing into — staggered rows and language-specific arrangement — so
@@ -107,6 +111,27 @@ export function buildSimpleKeys(word, locale, { size = SIMPLE_KEY_COUNT, random 
   return shuffle([...needed, ...decoys], draw);
 }
 
+/**
+ * The shape of each mode's board as `{ count, offset }` rows, with no letters in it.
+ *
+ * This is what the settings picker draws its three miniatures from (`KeyboardChoice`). It answers
+ * "what will this look like?" rather than "which keys does this word need?", so `full` reads the
+ * language's real layout — a Hungarian parent sees the twelve-wide board their child will get — and
+ * `simple` is always the tidy 5×2 block rather than one particular word's ten letters.
+ */
+export function buildPreviewRows(mode, locale) {
+  if (mode === 'full') {
+    return getKeyboardLayout(locale).map((row) => ({ count: [...row.keys].length, offset: row.offset }));
+  }
+  if (mode === 'simple') {
+    return [
+      { count: SIMPLE_ROW_LENGTH, offset: 0 },
+      { count: SIMPLE_ROW_LENGTH, offset: 0 },
+    ];
+  }
+  return [];
+}
+
 export function buildKeys(mode, word, locale, options = {}) {
   if (mode === 'full') return getAlphabet(locale);
   if (mode === 'simple') return buildSimpleKeys(word, locale, options);
@@ -118,7 +143,9 @@ export function buildKeys(mode, word, locale, options = {}) {
  *
  * `full` follows the language's physical layout so the board looks like the real thing. `simple`
  * has no real board to mirror — its letters are hand-picked per word — so it keeps its short
- * shuffled set, balanced into one or two tidy centred rows with no stagger.
+ * shuffled set, balanced into two tidy centred rows of `SIMPLE_ROW_LENGTH` with no stagger. A word
+ * that needs more keys than the target still gets them all (see `buildSimpleKeys`), so the rows
+ * split evenly rather than being capped at five.
  */
 export function buildKeyRows(mode, word, locale, options = {}) {
   if (mode === 'full') {
@@ -127,7 +154,7 @@ export function buildKeyRows(mode, word, locale, options = {}) {
   if (mode === 'simple') {
     const keys = buildSimpleKeys(word, locale, options);
     if (!keys.length) return [];
-    const perRow = keys.length > 6 ? Math.ceil(keys.length / 2) : keys.length;
+    const perRow = keys.length > SIMPLE_ROW_LENGTH ? Math.ceil(keys.length / 2) : keys.length;
     const rows = [];
     for (let index = 0; index < keys.length; index += perRow) {
       rows.push({ keys: keys.slice(index, index + perRow), offset: 0 });

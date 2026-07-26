@@ -1941,7 +1941,7 @@ describe('Project Spell', () => {
       render(<App />);
       playIn(PLAY_EASY);
       const keys = within(screen.getByRole('group', { name: 'Letter keys' })).getAllByRole('button');
-      expect(keys).toHaveLength(9);
+      expect(keys).toHaveLength(10);
       // The word's own letters must always be reachable.
       const labels = keys.map((key) => key.textContent);
       expect(labels).toEqual(expect.arrayContaining(['c', 'a', 't']));

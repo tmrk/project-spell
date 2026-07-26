@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   KEYBOARD_MODES,
   SIMPLE_KEY_COUNT,
+  SIMPLE_ROW_LENGTH,
   buildKeyRows,
   buildKeys,
+  buildPreviewRows,
   buildSimpleKeys,
   getAlphabet,
   getKeyboardLayout,
@@ -120,16 +122,47 @@ describe('physical keyboard layout', () => {
     expect(getKeyboardLayout('xx-XX')).toEqual(getKeyboardLayout('en-GB'));
   });
 
-  it('groups the simple tier into tidy rows without a stagger', () => {
+  it('groups the simple tier into two tidy rows of five without a stagger', () => {
     const rows = buildKeyRows('simple', 'cat', 'en-GB', { random: seededRandom(1) });
     expect(rows.every((row) => row.offset === 0)).toBe(true);
+    expect(rows.map((row) => row.keys.length)).toEqual([SIMPLE_ROW_LENGTH, SIMPLE_ROW_LENGTH]);
     const flat = rows.flatMap((row) => row.keys);
     expect(flat).toHaveLength(SIMPLE_KEY_COUNT);
     [...'cat'].forEach((letter) => expect(flat).toContain(letter));
   });
 
+  it('splits evenly rather than dropping keys when a word needs more than ten', () => {
+    // 'megkérdőjelezhetetlenség' has more unique letters than the target keyboard holds.
+    const rows = buildKeyRows('simple', 'megkérdőjelezhetetlenség', 'hu-HU');
+    const flat = rows.flatMap((row) => row.keys);
+
+    expect(flat.length).toBeGreaterThan(SIMPLE_KEY_COUNT);
+    [...'megkérdőjelezhetetlenség'].forEach((letter) => expect(flat).toContain(letter));
+    // Two rows that differ by at most one key, so the block still reads as a block.
+    expect(rows).toHaveLength(2);
+    expect(rows[0].keys.length - rows[1].keys.length).toBeLessThanOrEqual(1);
+  });
+
   it('gives system mode no rows at all', () => {
     expect(buildKeyRows('system', 'cat', 'en-GB')).toEqual([]);
+  });
+});
+
+describe('preview rows for the settings picker', () => {
+  it('mirrors the real board of each mode', () => {
+    // QWERTY, staggered exactly as the play screen draws it.
+    expect(buildPreviewRows('full', 'en-GB')).toEqual([
+      { count: 10, offset: 0 },
+      { count: 9, offset: 0.25 },
+      { count: 7, offset: 0.75 },
+    ]);
+    // A Hungarian parent is shown the twelve-wide board their child will actually get.
+    expect(buildPreviewRows('full', 'hu-HU')[0].count).toBe(12);
+    expect(buildPreviewRows('simple', 'en-GB')).toEqual([
+      { count: SIMPLE_ROW_LENGTH, offset: 0 },
+      { count: SIMPLE_ROW_LENGTH, offset: 0 },
+    ]);
+    expect(buildPreviewRows('system', 'en-GB')).toEqual([]);
   });
 });
 

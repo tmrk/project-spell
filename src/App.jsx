@@ -2181,6 +2181,9 @@ export default function App() {
           className={`play-screen ${
             drawsOwnKeyboard ? `play-screen--keys-${settings.keyboard}` : 'play-screen--keys-system'
           }`}
+          // The stylesheet reserves the foot from the board's real row count rather than a guess per
+          // mode, so a simple board that grew to a third row is reserved for correctly (D-023).
+          style={{ '--keys-rows': keyboardRows.length }}
           onClick={handlePlayScreenTap}
         >
           {activeProfile.name && (
