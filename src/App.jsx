@@ -111,13 +111,15 @@ const SPELL_BACK_WORD_GAP = 140;
 const SPELL_BACK_LETTER_RATE = 1.18;
 const SPELL_BACK_WORD_RATE = 1.12;
 const SPELL_BACK_SILENT_CEILING_BUFFER = 1600;
-// The beat is time-boxed (owner decision, 2026-07-25). A working voice always ends it on its own
-// real completion, well inside these; they exist so that a slow, stalled or wedged engine can never
-// hold a child on a finished word. Whatever is still speaking when the box closes keeps speaking —
-// the next word's prompt queues behind it rather than cutting across it.
+// The beat is time-boxed (owner decision, 2026-07-25), but the box is patience for *silence*, not a
+// cap on how long a word may take to say. It is re-armed by every sign the voice is still working —
+// a stage starting, a word boundary — so a long word is never cut short, while an engine that
+// reports `start` and then goes quiet forever still hands the round back. As a flat 4.2s ceiling on
+// the whole beat it cut the re-spelling short on every word of six letters or more (D-024).
+// Whatever is still speaking when the box does close keeps speaking — the next word's prompt queues
+// behind it rather than cutting across it.
 const SPELL_BACK_BUDGET_SLACK = 900;
 const SPELL_BACK_BUDGET_MIN = 2200;
-const SPELL_BACK_BUDGET_MAX = 4200;
 
 const spellBackSilentStep = (length) =>
   Math.min(SPELL_BACK_SILENT_STEP, 900 / length, SPELL_BACK_SILENT_MAX / length);
@@ -1196,6 +1198,23 @@ export default function App() {
         let visualIndex = -1;
         let speechActive = false;
 
+        // Patience for one stage going silent, restarted by every sign of life. A working voice
+        // reports boundaries all the way through the letters and then a real `end`, so this never
+        // fires for it however long the word is; an engine that has stopped reporting is what it is
+        // for. `timers` carries it, so leaving the round cancels it with everything else.
+        let boxTimer = null;
+        const armBox = (stage) => {
+          window.clearTimeout(boxTimer);
+          boxTimer = window.setTimeout(
+            finish,
+            Math.max(
+              SPELL_BACK_BUDGET_MIN,
+              estimateSpeechMs(stage.text, stage.rate) + SPELL_BACK_BUDGET_SLACK,
+            ),
+          );
+          timers.push(boxTimer);
+        };
+
         const showVisual = (index) => {
           if (finished || index <= visualIndex) return;
           visualIndex = Math.min(index, letters.length);
@@ -1217,6 +1236,8 @@ export default function App() {
             // The group light follows this stage's own real playback; only real boundaries, which
             // an engine may or may not report, add the stronger travelling letter light.
             onBoundary: (event) => {
+              // A boundary is the voice reporting progress: the beat is not stalled, so wait again.
+              armBox(stages[0]);
               if (!Number.isFinite(event.charIndex)) return;
               showVisual(markAt(phrase.marks, event.charIndex));
             },
@@ -1229,6 +1250,7 @@ export default function App() {
               setSpellBack({ index: letters.length });
             },
             onStart: () => {
+              armBox(stages[0]);
               speechActive = true;
               setSpellBack({
                 index: visualIndex < 0 ? letters.length : visualIndex,
@@ -1248,6 +1270,7 @@ export default function App() {
             if (reason !== 'cancelled') finish();
           },
           onStart: () => {
+            armBox(stages[stages.length - 1]);
             visualIndex = letters.length;
             speechActive = true;
             setSpellBack({ index: letters.length, speechActive: true });
@@ -1261,17 +1284,9 @@ export default function App() {
         // travelling light only ever claims a letter a real boundary reported.
         setSpellBack({ index: letters.length });
         if (speak(stages)) {
-          // The beat is time-boxed. A working voice ends it on the word's real completion, always
-          // sooner than this; the box is what makes a slow or wedged engine impossible to notice,
-          // because the round moves on and any tail simply keeps the next prompt waiting its turn.
-          const budget = stages.reduce(
-            (total, stage) => total + estimateSpeechMs(stage.text, stage.rate),
-            SPELL_BACK_BUDGET_SLACK,
-          );
-          at(
-            Math.min(SPELL_BACK_BUDGET_MAX, Math.max(SPELL_BACK_BUDGET_MIN, budget)),
-            finish,
-          );
+          // A working voice ends the beat on the word's real completion, always sooner than this;
+          // an engine that never even starts is what this first arming catches.
+          armBox(stages[0]);
           return;
         }
         // The engine refused outright; fall through to the silent beat.

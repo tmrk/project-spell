@@ -37,6 +37,13 @@ export const DEFAULT_PITCH = 1.04;
 const CHARS_PER_SECOND = 12;
 const PAUSE_MS = 180;
 const LEAD_IN_MS = 350;
+// A lone letter is *named*, not read. "c, a, t." is three spoken letter names, and a real voice
+// spends roughly a third of a second on each — nothing like the eight characters of running text a
+// flat characters-per-second rate charges for. Counting only the characters underestimated the
+// spell-back's letter phrase by around a factor of three, which is what let the beat's time box
+// close in the middle of the word (D-024). Added on top of the character cost rather than replacing
+// it, so no other estimate in the app can come out smaller than it did before.
+const NAMED_LETTER_MS = 300;
 
 // How long to leave an engine alone after a cancel before handing it the next utterance. The flags
 // are not enough on their own: `cancel()` clears `speaking` and `pending` immediately while the
@@ -64,8 +71,15 @@ export function estimateSpeechMs(text, rate = DEFAULT_RATE) {
   if (!value) return 0;
   const safeRate = Math.min(2, Math.max(0.5, Number(rate) || 1));
   const pauses = (value.match(/[,;:.!?]/gu) ?? []).length;
+  const namedLetters = value
+    .split(/\s+/u)
+    .filter((token) => token.replace(/[,;:.!?]/gu, '').length === 1)
+    .length;
   return Math.round(
-    (value.length / (CHARS_PER_SECOND * safeRate)) * 1000 + pauses * PAUSE_MS + LEAD_IN_MS,
+    (value.length / (CHARS_PER_SECOND * safeRate)) * 1000
+      + (namedLetters * NAMED_LETTER_MS) / safeRate
+      + pauses * PAUSE_MS
+      + LEAD_IN_MS,
   );
 }
 

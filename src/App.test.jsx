@@ -1567,8 +1567,10 @@ describe('Project Spell', () => {
       window.speechSynthesis.speak.mockClear();
       window.speechSynthesis.cancel.mockClear();
     };
-    // The two spoken stages of 'cat', plus the slack the beat's time box adds to them.
-    const SPELL_BACK_BUDGET = 2928;
+    // How long the beat waits on *one* silent stage before giving up on it: the estimate for
+    // 'c, a, t.' at the letter rate, plus the box's slack. It is patience for silence and is
+    // re-armed by every boundary, so it is not a ceiling on the beat — see D-024.
+    const SPELL_BACK_BUDGET = 3118;
     // What the queue leaves an interrupted engine alone for before handing it the next utterance.
     const SETTLE = 100;
 
@@ -1655,6 +1657,60 @@ describe('Project Spell', () => {
       endSpeech(wordUtterance);
       expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
       expect(document.querySelector('.word')).not.toHaveClass('word--speech-active');
+    });
+
+    // The 2026-07-26 regression: the box was a flat ceiling on the whole beat, sized from an
+    // estimate that charged a spoken letter name one character of running text. Every word of six
+    // letters or more therefore ran out of box part-way through the letters, and the child never
+    // heard their word said back. The box is now patience for silence, pushed out by every boundary.
+    it('waits for a long word to be spelled all the way out', () => {
+      vi.useFakeTimers();
+      withSpellBack({ customWords: 'elephant' });
+      render(<App />);
+      enterRound();
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'elephant' },
+      });
+
+      const letters = lastUtterance();
+      expect(letters.text).toBe('e, l, e, p, h, a, n, t.');
+      startSpeech(letters);
+
+      // A real voice reports a boundary per letter. Eight of them, a comfortable half-second apart,
+      // outlast any flat ceiling this beat could have been given.
+      for (let index = 0; index < 8; index += 1) {
+        act(() => vi.advanceTimersByTime(500));
+        act(() => letters.onboundary({ charIndex: index * 3, name: 'word' }));
+        expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      }
+
+      // Only now do the letters really end — and the word still gets its turn, from their real end.
+      const spoken = sayFully(letters);
+      expect(spoken.text).toBe('elephant');
+      expect(screen.getByLabelText('Word 1 of 3')).toBeInTheDocument();
+      startSpeech(spoken);
+      endSpeech(spoken);
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
+      expect(window.speechSynthesis.cancel).not.toHaveBeenCalled();
+    });
+
+    it('gives up on a stage that goes silent, without waiting out the whole beat', () => {
+      vi.useFakeTimers();
+      withSpellBack({ customWords: 'elephant' });
+      render(<App />);
+      enterRound();
+      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+        target: { value: 'elephant' },
+      });
+      const letters = lastUtterance();
+      startSpeech(letters);
+
+      // One boundary, then the engine goes quiet for good. Patience is measured from that last sign
+      // of life, so the child waits one stage's worth and no more.
+      act(() => vi.advanceTimersByTime(400));
+      act(() => letters.onboundary({ charIndex: 0, name: 'word' }));
+      act(() => vi.advanceTimersByTime(60000));
+      expect(screen.getByLabelText('Word 2 of 3')).toBeInTheDocument();
     });
 
     it('never leaves a child on a finished word, however slow the engine is', () => {

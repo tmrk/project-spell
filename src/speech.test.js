@@ -50,6 +50,17 @@ describe('speech duration estimates', () => {
     expect(estimateSpeechMs('cat', 1.5)).toBeLessThan(estimateSpeechMs('cat', 0.8));
   });
 
+  // The arithmetic behind the 2026-07-26 spell-back regression (D-024): a lone letter is *named*,
+  // and a real voice spends about a third of a second doing it — nowhere near the single character
+  // of running text it used to be charged as. A spelled-out word is therefore far slower than the
+  // same letters run together, and the gap grows with the word.
+  it('charges a spoken letter name far more than one character of running text', () => {
+    expect(estimateSpeechMs('c, a, t.', 1.18)).toBeGreaterThan(1700);
+    expect(estimateSpeechMs('e, l, e, p, h, a, n, t.', 1.18)).toBeGreaterThan(4300);
+    // Ordinary running speech is unchanged: no word in it is a lone letter.
+    expect(estimateSpeechMs('Spell the word elephant', 0.82)).toBe(2687);
+  });
+
   it('keeps the emergency ceiling generous but always bounded', () => {
     // The old ceiling was a flat 20s, which is how a wedged engine could freeze a finished word.
     expect(speechCeilingMs('cat', 1.12)).toBeLessThan(4000);
