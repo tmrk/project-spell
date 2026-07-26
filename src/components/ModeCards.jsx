@@ -1,5 +1,10 @@
+import { useEffect, useState } from 'react';
 import TileEyes from './TileEyes';
 import { CLOUD_PATH } from './Scenery';
+
+// A little past the deal-in animation in `App.scss`. Removing the animation class on a timer makes
+// the entrance non-load-bearing: even a backgrounded browser lands the cards visible and usable.
+const DEAL_MS = 520;
 
 // The letters lean alternately on one baseline, exactly like the wordmark: cut out and
 // pinned up by hand rather than set as type.
@@ -39,34 +44,36 @@ function SkyCloud() {
 }
 
 /**
- * Choosing how to play is starting the game. On a first play these are the whole action; for a
- * returning child `compact` renders the same two pictures beneath the one-tap Play slab, so
- * switching mode remains obvious without making the child re-answer the question every time.
- * Each card is a little window onto the screen the child is about to see: the game's own
- * sun-coloured sky with either coloured letters looking back at them, or blank cards and a sound
- * waiting to be heard. A pre-reader recognises the picture of what will happen; they cannot
- * decode an icon that stands for a setting, which is why the old toggle failed.
+ * Choosing how to play is the second half of starting: Play answers "do you want to?", and these
+ * answer "which way?". Each card is a little window onto the screen the child is about to see:
+ * the game's own sun-coloured sky with either coloured letters looking back at them, or blank
+ * cards and a sound waiting to be heard. A pre-reader recognises the picture of what will happen;
+ * they cannot decode an icon that stands for a setting, which is why the old toggle failed.
  *
  * Both stages share one grid — a sky row over a tile row of identical geometry — so the two
  * previews line up across the pair and only their contents differ.
  *
- * `currentMode` only marks the remembered choice in the compact pair. Both buttons still begin a
- * round immediately; this is never a settings form or a second confirmation step.
+ * `revealed` marks the pair as having just replaced the Play slab and runs the optional deal-in.
  */
 export default function ModeCards({
-  compact = false,
-  currentMode = null,
   labels,
   onPlay,
   showEyes = true,
+  revealed = false,
 }) {
+  const [dealing, setDealing] = useState(revealed);
+
+  useEffect(() => {
+    if (!dealing) return undefined;
+    const timer = window.setTimeout(() => setDealing(false), DEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [dealing]);
+
   return (
-    <div className={`mode-cards${compact ? ' mode-cards--compact' : ''}`}>
+    <div className={`mode-cards${dealing ? ' mode-cards--revealed' : ''}`}>
       <button
         type="button"
-        className={`mode-card mode-card--easy${
-          compact && currentMode === 'easy' ? ' mode-card--current' : ''
-        }`}
+        className="mode-card mode-card--easy"
         aria-label={labels.easyAria}
         onClick={() => onPlay('easy')}
       >
@@ -96,9 +103,7 @@ export default function ModeCards({
 
       <button
         type="button"
-        className={`mode-card mode-card--normal${
-          compact && currentMode === 'normal' ? ' mode-card--current' : ''
-        }`}
+        className="mode-card mode-card--normal"
         aria-label={labels.normalAria}
         onClick={() => onPlay('normal')}
       >

@@ -500,11 +500,6 @@ input:focus-visible {
   justify-content: center;
 }
 
-.mode-cards--compact {
-  width: min(100%, 300px);
-  gap: var(--ps-space-3);
-}
-
 .mode-card {
   display: grid;
   flex: 1 1 0;
@@ -525,15 +520,6 @@ input:focus-visible {
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
-.mode-cards--compact .mode-card {
-  max-width: 144px;
-  padding: var(--ps-space-2);
-  border-width: 2px;
-  border-radius: var(--ps-radius-tile);
-  box-shadow: 0 var(--ps-lift-2) 0 var(--card-base);
-  gap: var(--ps-space-2);
-}
-
 .mode-card--easy {
   --card-tilt: -1.5deg;
   --card-accent: var(--ps-grass);
@@ -546,8 +532,19 @@ input:focus-visible {
   --card-base: var(--ps-sky-shade);
 }
 
-.mode-card--current {
-  border-color: var(--card-accent);
+// Dealt out from where the Play slab stood: each card slides to its own side, rises, and settles
+// into its tilt. The animation class is removed on a timer, so it is decoration rather than state.
+.mode-cards--revealed .mode-card {
+  animation: mode-card-deal 460ms cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+.mode-cards--revealed .mode-card--easy {
+  --deal-shift: 18px;
+}
+
+.mode-cards--revealed .mode-card--normal {
+  --deal-shift: -18px;
+  animation-name: mode-card-deal-late;
 }
 
 .mode-card:hover,
@@ -555,11 +552,6 @@ input:focus-visible {
   border-color: var(--card-accent);
   transform: rotate(var(--card-tilt, 0deg)) translateY(-3px);
   box-shadow: 0 13px 0 var(--card-base);
-}
-
-.mode-cards--compact .mode-card:hover,
-.mode-cards--compact .mode-card:focus-visible {
-  box-shadow: 0 var(--ps-lift-3) 0 var(--card-base);
 }
 
 // The global focus ring is grass green, which reads as a third colour around the listening card.
@@ -598,10 +590,6 @@ input:focus-visible {
   grid-template-rows: 0.82em auto;
   justify-items: center;
   align-items: center;
-}
-
-.mode-cards--compact .mode-card__stage {
-  font-size: var(--ps-size-mode-stage-compact);
 }
 
 .mode-card__row {
@@ -1156,8 +1144,8 @@ input:focus-visible {
   cursor: not-allowed;
 }
 
-// Holds whichever welcome start state is showing. The reserved height tracks the full-size mode
-// cards — the tallest first-play state — off the same clamp their stage is sized from.
+// Holds whichever staged welcome action is showing. The reserved height tracks the full-size mode
+// cards — the tallest state — so the croc and wordmark do not jump when Play hands over.
 //
 // `minmax(0, 1fr)` is load-bearing, not tidiness. Every step inside is sized against the viewport
 // (`min(520px, 88vw)`, `min(440px, 88vw)`), which is wider than this stack's own
@@ -1174,12 +1162,12 @@ input:focus-visible {
   place-items: center;
 }
 
+// Every step shares one cell, so the spent slab can fade directly over the cards that replace it.
 .welcome-action > * {
   grid-area: 1 / 1;
 }
 
-// Once a child has completed a round, this green slab starts their remembered mode immediately.
-// The compact mode pictures below it remain direct starts for switching mode.
+// One green slab is the whole first ask. Choosing how to play is deliberately the next screen.
 .welcome-play-button {
   width: min(520px, 88vw);
   min-height: clamp(124px, 18vw, 170px);
@@ -1195,20 +1183,18 @@ input:focus-visible {
   animation: play-button-wiggle 5.8s ease-in-out infinite;
 }
 
-.welcome-play-button:active {
+// `:active` outranks the leaving class, so exclude it or a held touch cancels the exit fade.
+.welcome-play-button:active:not(.welcome-play-button--leaving) {
   animation: none;
   transform: translateY(8px);
   box-shadow: 0 var(--ps-lift-2) 0 var(--ps-grass-shade);
 }
 
-.welcome-returning {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  width: 100%;
-  // The slab's 14px object shadow does not participate in grid layout. A space-5 track gap
-  // leaves a quiet 10px strip of sun between that shadow and the compact cards.
-  gap: var(--ps-space-5);
-  justify-items: center;
+// The slab sinks towards the point from which the two cards rise. It is also removed from pointer
+// and keyboard reach, so the visual overlap never creates two simultaneous choices.
+.welcome-play-button--leaving {
+  pointer-events: none;
+  animation: play-button-handoff 180ms ease-in both;
 }
 
 .primary-button--small {
@@ -3320,6 +3306,35 @@ svg.scenery__sparkle--super {
   98% { transform: rotate(0deg); }
 }
 
+@keyframes play-button-handoff {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(14px) scale(0.88); }
+}
+
+// Starts square-on and lands on each card's own tilt. The flat opening stretch waits for the slab
+// to clear; the second card waits a little longer so the pair feels dealt out rather than dumped.
+@keyframes mode-card-deal {
+  0%, 26% {
+    opacity: 0;
+    transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
+  }
+}
+
+@keyframes mode-card-deal-late {
+  0%, 43% {
+    opacity: 0;
+    transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
+  }
+}
+
 @keyframes trail-croc-walk {
   0%, 100% { transform: translateX(-50%) rotate(-2deg); }
   50% { transform: translateX(-50%) translateY(-4px) rotate(2deg); }
@@ -3751,13 +3766,10 @@ svg.scenery__sparkle--super {
 }
 
 // The shared-device prompt is the tallest welcome state. On a short portrait phone, use the
-// clamp's existing compact endpoints so the full question, action and fixed bottom controls fit
-// in one view instead of introducing a 20–30px ceremonial scroll.
+// clamp's compact endpoints so the player question, Play and fixed bottom controls fit together.
 @media (orientation: portrait) and (max-width: 600px) and (max-height: 700px) {
   .welcome-screen {
     padding-top: 20px;
-    // The returning stack gained one space step between its slab and cards; trade the same
-    // amount from empty floor reserve so the shared-device state still fits without scrolling.
     padding-bottom: 84px;
   }
 }
@@ -3778,12 +3790,7 @@ svg.scenery__sparkle--super {
     margin-bottom: var(--ps-space-2);
   }
 
-  .welcome-returning {
-    // The short-screen slab uses a 10px shadow, so space-4 keeps 6px of visible sun.
-    gap: var(--ps-space-4);
-  }
-
-  .welcome-returning .welcome-play-button {
+  .welcome-play-button {
     min-height: clamp(96px, 16vh, 124px);
     box-shadow: 0 10px 0 var(--ps-grass-shade);
     --ps-size-play-slab: var(--ps-size-play-slab-short);

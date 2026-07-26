@@ -20,10 +20,12 @@ const NAMED_PROFILE = JSON.stringify({
 // from this blob with the setting off — which is exactly the promise it makes to a parent who turns
 // it off. The default-on path has its own describe block at the end of the file.
 const BASE_SETTINGS = Object.freeze({ ...DEFAULT_SETTINGS, spellBack: false });
-// First play starts directly from a mode card. Returning children get a one-tap slab, but the
-// shared helper deliberately uses a card so round-loop tests remain explicit about their mode.
+// A round takes two deliberate taps: the green Play slab, then the picture that chooses the mode.
 const PLAY_EASY = 'Play with the letters shown';
 const PLAY_LISTEN = 'Play by listening to the word';
+const PLAY_SLAB = { 'en-GB': 'Play', 'en-US': 'Play', 'hu-HU': 'Játék', 'sv-SE': 'Spela' };
+const revealModes = (locale = 'en-GB') =>
+  fireEvent.click(screen.getByRole('button', { name: PLAY_SLAB[locale] }));
 const installVisualViewport = ({ height, width }) => {
   const originalViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
   const originalHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
@@ -62,7 +64,8 @@ const installVisualViewport = ({ height, width }) => {
     },
   };
 };
-const playIn = (mode) => {
+const playIn = (mode, locale = 'en-GB') => {
+  revealModes(locale);
   fireEvent.click(screen.getByRole('button', { name: mode }));
   // Starting a session from the welcome screen now plays a short spoken hello before the first
   // word. These tests are about the round, so when a greeting appears skip it (tap-to-skip) and
@@ -101,7 +104,7 @@ describe('Project Spell', () => {
     );
   });
 
-  it('keeps first play minimal with the mode pictures as the direct actions', () => {
+  it('keeps the welcome screen minimal with Play first and modes second', () => {
     render(<App />);
 
     const languageSelect = screen.getByRole('combobox', { name: 'Language' });
@@ -116,11 +119,16 @@ describe('Project Spell', () => {
     expect(screen.queryByRole('img', { name: 'SPELL' })).not.toBeInTheDocument();
     // Two clouds, not a crowded sky: the §6 density budget is guarded in Scenery.test.jsx.
     expect(document.querySelectorAll('.scenery__cloud')).toHaveLength(2);
-    // With no completed round there is no toll-gate slab: choosing a picture starts play.
+    // One green slab is the whole first ask. Mode is the next decision, not a competing action.
+    expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
+    expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PLAY_LISTEN })).not.toBeInTheDocument();
+
+    revealModes();
+
     expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: PLAY_EASY })).toHaveClass('mode-card');
     expect(screen.getByRole('button', { name: PLAY_LISTEN })).toHaveClass('mode-card');
-    expect(document.querySelector('.mode-cards')).not.toHaveClass('mode-cards--compact');
   });
 
   it('shows the lifetime star jar on welcome only after stars have been earned', () => {
@@ -218,6 +226,7 @@ describe('Project Spell', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     render(<App />);
+    revealModes();
     fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
 
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'greeting');
@@ -238,6 +247,7 @@ describe('Project Spell', () => {
     window.localStorage.setItem(STATS_KEY, JSON.stringify({ totals: { attempts: 12 } }));
     vi.spyOn(Math, 'random').mockReturnValue(0);
     render(<App />);
+    revealModes();
     fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
 
     expect(document.querySelector('.greeting-screen')).toBeInTheDocument();
@@ -246,6 +256,7 @@ describe('Project Spell', () => {
 
   it('skips straight to the word when the greeting is tapped', () => {
     render(<App />);
+    revealModes();
     fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
 
     fireEvent.click(document.querySelector('.greeting-screen__card'));
@@ -262,12 +273,12 @@ describe('Project Spell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
 
     expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'welcome');
-    expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
   });
 
   it('resumes the exact word and letter after a child goes Home mid-round', () => {
-    // A completed round would normally unlock the one-tap slab; the resumable snapshot must
-    // still replace that whole action stack.
+    // A resumable snapshot still replaces the whole staged start.
     window.localStorage.setItem(STATS_KEY, JSON.stringify({
       version: 1,
       totals: { attempts: 9, roundsCompleted: 1 },
@@ -302,7 +313,8 @@ describe('Project Spell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Start a new game' }));
 
-    expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep going' })).not.toBeInTheDocument();
   });
 
@@ -312,7 +324,8 @@ describe('Project Spell', () => {
     // No letters typed: pressing Home leaves nothing worth resuming.
     fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
 
-    expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep going' })).not.toBeInTheDocument();
   });
 
@@ -2306,6 +2319,7 @@ describe('Project Spell', () => {
 
     it('shows each card as a miniature of the screen it leads to', () => {
       render(<App />);
+      revealModes();
 
       const seeing = screen.getByRole('button', { name: PLAY_EASY });
       const listening = screen.getByRole('button', { name: PLAY_LISTEN });
@@ -2319,6 +2333,7 @@ describe('Project Spell', () => {
 
     it('gives both previews the same tile geometry so the pair reads as one choice', () => {
       render(<App />);
+      revealModes();
 
       const rows = [PLAY_EASY, PLAY_LISTEN].map((name) =>
         screen.getByRole('button', { name }).querySelector('.mode-card__row'));
@@ -2330,6 +2345,7 @@ describe('Project Spell', () => {
     it('drops the letter faces when a parent has turned eyes off', () => {
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ eyes: false }));
       render(<App />);
+      revealModes();
 
       const seeing = screen.getByRole('button', { name: PLAY_EASY });
       expect(seeing.querySelectorAll('.eyes')).toHaveLength(0);
@@ -2337,7 +2353,7 @@ describe('Project Spell', () => {
         .toEqual(['a', 'b', 'c']);
     });
 
-    it('starts a returning child in their remembered mode with one tap', () => {
+    it('keeps a returning child on Play until they ask to see the modes', () => {
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({
         ...BASE_SETTINGS,
         customWords: 'cat',
@@ -2352,23 +2368,30 @@ describe('Project Spell', () => {
       }));
       render(<App />);
 
-      expect(document.querySelector('.mode-cards')).toHaveClass('mode-cards--compact');
-      expect(screen.getByRole('button', { name: PLAY_LISTEN })).toHaveClass('mode-card--current');
-      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      expect(screen.getByRole('button', { name: 'Play' })).toHaveClass('welcome-play-button');
+      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_LISTEN })).not.toBeInTheDocument();
+
+      revealModes();
+
+      expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: PLAY_LISTEN })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: PLAY_LISTEN }));
       fireEvent.click(document.querySelector('.greeting-screen__card'));
 
       expect(screen.getByRole('button', { name: 'hidden letter, current letter' })).toBeInTheDocument();
       expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).gameMode).toBe('normal');
     });
 
-    it('lets a returning child switch mode from a small picture and stores it', () => {
+    it('lets a returning child switch mode on the second step and stores it', () => {
       window.localStorage.setItem(STATS_KEY, JSON.stringify({
         version: 1,
         totals: { attempts: 9, roundsCompleted: 1 },
       }));
       render(<App />);
 
-      expect(screen.getByRole('button', { name: PLAY_EASY })).toHaveClass('mode-card--current');
+      revealModes();
       fireEvent.click(screen.getByRole('button', { name: PLAY_LISTEN }));
       fireEvent.click(document.querySelector('.greeting-screen__card'));
 
@@ -2384,10 +2407,56 @@ describe('Project Spell', () => {
       }));
       render(<App />);
 
-      expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
-      expect(document.querySelector('.mode-cards')).not.toHaveClass('mode-cards--compact');
-      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
       expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY))).not.toHaveProperty('gameMode');
+
+      revealModes();
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    });
+
+    it('makes the cards live immediately while the spent slab is unreachable', () => {
+      render(<App />);
+      revealModes();
+
+      const slab = document.querySelector('.welcome-play-button');
+      expect(slab).toHaveClass('welcome-play-button--leaving');
+      expect(slab).toHaveAttribute('aria-hidden', 'true');
+      expect(slab).toHaveAttribute('tabindex', '-1');
+      expect(document.querySelector('.mode-cards')).toHaveClass('mode-cards--revealed');
+
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+      fireEvent.click(document.querySelector('.greeting-screen__card'));
+      expect(screen.getByRole('textbox', { name: 'Type the next letter' })).toBeInTheDocument();
+    });
+
+    it('lands the cards visibly even if their deal-in animation never completes', () => {
+      vi.useFakeTimers();
+      render(<App />);
+      revealModes();
+
+      const cards = document.querySelector('.mode-cards');
+      expect(cards).toHaveClass('mode-cards--revealed');
+
+      act(() => vi.advanceTimersByTime(600));
+      expect(cards).not.toHaveClass('mode-cards--revealed');
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+    });
+
+    it('skips the hand-off animation for reduced motion', () => {
+      window.matchMedia.mockImplementation((query) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }));
+      render(<App />);
+      revealModes();
+
+      expect(document.querySelector('.welcome-play-button')).not.toBeInTheDocument();
+      expect(document.querySelector('.mode-cards')).not.toHaveClass('mode-cards--revealed');
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
     });
 
     it('is absent during play so the child screen keeps one action', () => {
@@ -2431,17 +2500,30 @@ describe('Project Spell', () => {
       const prompt = heading.closest('.welcome-player-prompt');
       expect(prompt).toContainElement(screen.getByRole('button', { name: 'Play as Zoe' }));
       expect(prompt).toContainElement(screen.getByRole('button', { name: 'Play as Bo' }));
+      expect(prompt).toContainElement(screen.getByRole('button', { name: 'Add a name' }));
       expect(prompt.nextElementSibling).toHaveClass('welcome-action');
       expect(screen.getByRole('button', { name: 'Play as Zoe' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
+      expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_LISTEN })).not.toBeInTheDocument();
       expect(window.speechSynthesis.speak.mock.calls.some(
         ([utterance]) => utterance.text === 'Who is playing?',
       )).toBe(true);
+
+      revealModes();
+
+      expect(screen.queryByRole('heading', { name: 'Who is playing?' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Play as Zoe' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Play as Bo' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Add a name' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: PLAY_LISTEN })).toBeInTheDocument();
     });
 
-    it('asks who is playing only until a round has started in that page session', () => {
+    it('asks who is playing only on the first step of the first session start', () => {
       window.localStorage.setItem(PROFILES_KEY, JSON.stringify({
         version: 1,
         activeId: 'default',
@@ -2453,13 +2535,16 @@ describe('Project Spell', () => {
       render(<App />);
 
       expect(screen.getByRole('heading', { name: 'Who is playing?' })).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
+      revealModes();
       expect(screen.queryByRole('heading', { name: 'Who is playing?' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: PLAY_EASY }));
       fireEvent.click(document.querySelector('.greeting-screen__card'));
       fireEvent.click(screen.getByRole('button', { name: 'Back to the start screen' }));
 
       expect(screen.queryByRole('heading', { name: 'Who is playing?' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Play as Zoe' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
       expect(window.speechSynthesis.speak.mock.calls.filter(
         ([utterance]) => utterance.text === 'Who is playing?',
       )).toHaveLength(1);
@@ -2469,8 +2554,12 @@ describe('Project Spell', () => {
       asNewDevice();
       render(<App />);
 
-      // The game is the first thing offered, not a form: the pictures are direct starts.
-      expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
+      // The app asks one thing at a time: Play, then how to play, then the child's name.
+      expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('First name')).not.toBeInTheDocument();
+
+      revealModes();
       expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
       expect(screen.queryByLabelText('First name')).not.toBeInTheDocument();
 
@@ -2656,9 +2745,9 @@ describe('Project Spell', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Play as Zoe' }));
 
       expect(screen.queryByRole('textbox', { name: 'Type the next letter' })).not.toBeInTheDocument();
-      // Zoe has no completed round, so switching back shows the direct first-play choices.
-      expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: PLAY_EASY })).toBeInTheDocument();
+      // A profile switch returns to the first staged choice, whatever that child's history.
+      expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: PLAY_EASY })).not.toBeInTheDocument();
     });
 
     it('refuses a name with no letters in it', () => {

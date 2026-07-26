@@ -122,6 +122,10 @@ const SPELL_BACK_BUDGET_SLACK = 900;
 const SPELL_BACK_BUDGET_MIN = 2200;
 const PITCH_LADDER_STEP_SEMITONES = 2;
 const PITCH_LADDER_CAP_SEMITONES = 12;
+// Comfortably longer than the Play slab's 180ms exit in `App.scss`. The headroom matters: at
+// exactly the animation's length, ordinary timer jitter drops the slab while it is still
+// faintly visible and it reads as a pop rather than a fade.
+const MODE_REVEAL_MS = 260;
 // Browser chrome can make the visual viewport differ from the layout viewport by a few pixels.
 // A software keyboard is a much larger, height-only change; keeping a floor avoids treating a
 // toolbar animation as keyboard geometry while the always-focused typing field is active.
@@ -232,9 +236,8 @@ function loadSettings(profileId) {
   }
 }
 
-// F6's one-tap start is offered only when the child has made a real choice before. Normalising a
-// missing settings record produces the safe default mode, but that is not a remembered choice;
-// inspect the raw per-profile record once instead of treating a default as history.
+// Normalising a missing settings record produces the safe default mode, but that is not a choice;
+// inspect the raw per-profile record so ordinary persistence does not turn a fallback into history.
 function hasStoredGameMode(profileId) {
   try {
     const stored = window.localStorage.getItem(profileStorageKey(SETTINGS_KEY, profileId));
@@ -666,9 +669,12 @@ export default function App() {
   const [nameDialog, setNameDialog] = useState(null);
   const [welcomeName, setWelcomeName] = useState('');
   const [namingMode, setNamingMode] = useState(null);
-  // A default supplied by the normaliser is not a last-used mode. This flag records whether the
-  // active child had a real mode in their own settings record when they arrived, or chose one in
-  // this session. Combined with a completed round it unlocks F6's one-tap Play slab.
+  // The welcome screen asks one thing at a time: first Play, then which mode. During `revealing`
+  // both are mounted only for the short visual hand-off; the spent slab is unreachable.
+  const [welcomeStep, setWelcomeStep] = useState('play');
+  // A default supplied by the normaliser is not a real choice. Keep it out of storage until the
+  // active child has chosen a mode, so merely opening an old or empty profile cannot manufacture
+  // mode history.
   const [hasRememberedMode, setHasRememberedMode] = useState(
     () => hasStoredGameMode(activeProfileId),
   );
@@ -707,9 +713,6 @@ export default function App() {
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
   const [visibleProgress, setVisibleProgress] = useState(() => loadProgress(activeProfileId));
-  const [hasCompletedRound, setHasCompletedRound] = useState(
-    () => loadStats(activeProfileId).totals.roundsCompleted >= 1,
-  );
   // The mid-round snapshot a returning child can pick up from the welcome screen. Null unless a
   // resumable round is stored for the active child in the current language.
   const [resumable, setResumable] = useState(() => resumableFor(activeProfileId, settings.locale));
@@ -742,6 +745,7 @@ export default function App() {
   const greetingTimerRef = useRef(null);
   const greetingMaxTimerRef = useRef(null);
   const lastGreetingIndexRef = useRef(-1);
+  const modeRevealTimerRef = useRef(null);
   const whoIsPlayingSpokenRef = useRef(false);
   const transitioningRef = useRef(false);
   const lastCorrectIndexRef = useRef(-1);
@@ -991,6 +995,7 @@ export default function App() {
       window.clearTimeout(superIntroTimerRef.current);
       window.clearTimeout(greetingTimerRef.current);
       window.clearTimeout(greetingMaxTimerRef.current);
+      window.clearTimeout(modeRevealTimerRef.current);
       cancelSpellBack();
       cancelSpeech();
     },
@@ -1136,6 +1141,7 @@ export default function App() {
     const returning = statsRef.current.totals.attempts > 0;
 
     clearRoundTimers();
+    window.clearTimeout(modeRevealTimerRef.current);
     // A fresh round replaces anything resumable; the effect above starts saving the new one as
     // soon as the child makes progress.
     clearSession();
@@ -1629,7 +1635,6 @@ export default function App() {
             durationMs: completionTime - roundStartRef.current,
             mode: settings.gameMode,
           });
-          setHasCompletedRound(true);
           const roundStars = starsForRound(wordStarsRef.current);
           const wasSuper = roundKind === 'super';
           const stickerId = wasSuper
@@ -1836,7 +1841,6 @@ export default function App() {
       // Nothing stored means nothing to erase.
     }
     statsRef.current = createEmptyStats();
-    setHasCompletedRound(false);
     progressRef.current = createEmptyProgress();
     sessionStrugglesRef.current.clear();
     setVisibleProgress(progressRef.current);
@@ -1852,6 +1856,8 @@ export default function App() {
   // (usually null) rather than the stored one.
   const resetToWelcome = (nextResumable = resumableFor(activeProfileId, settingsRef.current.locale)) => {
     clearRoundTimers();
+    window.clearTimeout(modeRevealTimerRef.current);
+    setWelcomeStep('play');
     setNamingMode(null);
     setGreeting(null);
     cancelSpeech();
@@ -1886,6 +1892,7 @@ export default function App() {
       return;
     }
     clearRoundTimers();
+    window.clearTimeout(modeRevealTimerRef.current);
     cancelSpeech();
 
     if (session.gameMode !== settingsRef.current.gameMode) {
@@ -1966,7 +1973,6 @@ export default function App() {
       settingsRef.current = nextSettings;
       setSettings(nextSettings);
       setHasRememberedMode(hasStoredGameMode(nextId));
-      setHasCompletedRound(nextStats.totals.roundsCompleted >= 1);
       setVisibleProgress(progressRef.current);
       setStickerBookProgress(progressRef.current);
       setSettingsStats(statsRef.current);
@@ -1979,6 +1985,19 @@ export default function App() {
   };
 
   const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
+
+  // Play hands the action slot to the two mode pictures. They are live immediately; the timer
+  // only removes the now-unreachable slab after its short exit, so animation can never block play.
+  const revealModeCards = () => {
+    if (welcomeStep !== 'play') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true) {
+      setWelcomeStep('modes');
+      return;
+    }
+    setWelcomeStep('revealing');
+    window.clearTimeout(modeRevealTimerRef.current);
+    modeRevealTimerRef.current = window.setTimeout(() => setWelcomeStep('modes'), MODE_REVEAL_MS);
+  };
 
   const playInMode = (gameMode, greetName) => {
     const next = normaliseSettings({ ...settingsRef.current, gameMode });
@@ -2073,33 +2092,35 @@ export default function App() {
   };
   // The unnamed default slot is never offered as a chip — there is nothing to tap on.
   const namedProfiles = profiles.profiles.filter((profile) => profile.name);
-  const canStartRememberedMode = hasRememberedMode && hasCompletedRound;
-  const welcomeProfilePicker = namedProfiles.length > 0 && !namingMode ? (
-    <div className="profile-picker">
-      {namedProfiles.map((profile) => (
-        <button
-          type="button"
-          key={profile.id}
-          className={`profile-chip${profile.id === activeProfileId ? ' profile-chip--active' : ''}`}
-          aria-pressed={profile.id === activeProfileId}
-          aria-label={formatMessage(copy.switchProfile, { name: profile.name })}
-          onClick={() => switchToProfile(selectProfile(profiles, profile.id))}
-        >
-          <NameTag name={profile.name} showEyes={settings.eyes} size="chip" />
-        </button>
-      ))}
-      {profiles.profiles.length < MAX_PROFILES && (
-        <button
-          type="button"
-          className="profile-chip profile-chip--add"
-          aria-label={copy.addProfile}
-          onClick={() => openNameDialog('add')}
-        >
-          <span aria-hidden="true">+</span>
-        </button>
-      )}
-    </div>
-  ) : null;
+  // Player selection belongs only to the first welcome step. Once Play is pressed, the mode
+  // pictures are the whole question rather than sharing the page with profile controls.
+  const welcomeProfilePicker =
+    namedProfiles.length > 0 && !namingMode && welcomeStep === 'play' ? (
+      <div className="profile-picker">
+        {namedProfiles.map((profile) => (
+          <button
+            type="button"
+            key={profile.id}
+            className={`profile-chip${profile.id === activeProfileId ? ' profile-chip--active' : ''}`}
+            aria-pressed={profile.id === activeProfileId}
+            aria-label={formatMessage(copy.switchProfile, { name: profile.name })}
+            onClick={() => switchToProfile(selectProfile(profiles, profile.id))}
+          >
+            <NameTag name={profile.name} showEyes={settings.eyes} size="chip" />
+          </button>
+        ))}
+        {profiles.profiles.length < MAX_PROFILES && (
+          <button
+            type="button"
+            className="profile-chip profile-chip--add"
+            aria-label={copy.addProfile}
+            onClick={() => openNameDialog('add')}
+          >
+            <span aria-hidden="true">+</span>
+          </button>
+        )}
+      </div>
+    ) : null;
   const roundsRemaining = SUPER_ROUND_EVERY - roundReward.journeyPosition;
   // After this round the child is one step further along the arc; when they have filled every
   // step, the next round is the golden super round — the button says so.
@@ -2193,7 +2214,7 @@ export default function App() {
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
           <Wordmark name={copy.projectName} showEyes={settings.eyes} />
-          {shouldShowWhoIsPlaying && (
+          {shouldShowWhoIsPlaying && welcomeStep === 'play' && (
             <section
               className="welcome-player-prompt"
               aria-labelledby="who-is-playing-heading"
@@ -2204,89 +2225,85 @@ export default function App() {
               {welcomeProfilePicker}
             </section>
           )}
-          {/* One reserved slot for the first-play cards, returning Play stack, resume offer, or
-              name question. Resume remains the only branch allowed to displace every start
-              action (D-015). */}
+          {/* One reserved slot for Play, the cards it becomes, a resume offer, or the name
+              question. Resume remains the only branch allowed to displace the staged start
+              actions (D-015). */}
           <div className="welcome-action">
-          {namingMode ? (
-            // Asked only once a child has chosen how to play, so the first thing they meet is
-            // the game, not a form.
-            <div className="welcome-naming">
-              <p className="welcome-naming__question">{copy.nameEntryTitle}</p>
-              <NameField
-                value={welcomeName}
-                onChange={setWelcomeName}
-                onSubmit={submitWelcomeName}
-                label={copy.nameLabel}
-                showEyes={settings.eyes}
-                maxLength={MAX_NAME_LENGTH}
-                autoFocus
-              />
-              <button
-                type="button"
-                className="primary-button welcome-naming__confirm"
-                onClick={submitWelcomeName}
-                disabled={!normaliseProfileName(welcomeName)}
-              >
-                {copy.nameReady}
-              </button>
-            </div>
-          ) : canResume ? (
-            // A returning child picks up exactly where they left off. Starting over is still one
-            // quiet tap away, but continuing is the obvious thing to do.
-            <div className="welcome-resume">
-              <button
-                type="button"
-                className="primary-button welcome-resume__button"
-                onClick={resumeRound}
-              >
-                {copy.resumeRound}
-              </button>
-              <button
-                type="button"
-                className="text-button welcome-resume__fresh"
-                onClick={() => setResumable(null)}
-              >
-                {copy.startFresh}
-              </button>
-            </div>
-          ) : canStartRememberedMode ? (
-            <div className="welcome-returning">
-              <button
-                type="button"
-                className="primary-button welcome-play-button"
-                onClick={() => startRoundInMode(settings.gameMode)}
-              >
-                {copy.play}
-              </button>
-              <ModeCards
-                compact
-                currentMode={settings.gameMode}
-                labels={{
-                  easy: copy.modeCardEasy,
-                  easyAria: copy.playEasyAria,
-                  normal: copy.modeCardNormal,
-                  normalAria: copy.playNormalAria,
-                }}
-                onPlay={startRoundInMode}
-                showEyes={settings.eyes}
-              />
-            </div>
-          ) : (
-            <ModeCards
-              labels={{
-                easy: copy.modeCardEasy,
-                easyAria: copy.playEasyAria,
-                normal: copy.modeCardNormal,
-                normalAria: copy.playNormalAria,
-              }}
-              onPlay={startRoundInMode}
-              showEyes={settings.eyes}
-            />
-          )}
+            {namingMode ? (
+              // Asked only once a child has chosen how to play, so the first thing they meet is
+              // the game, not a form.
+              <div className="welcome-naming">
+                <p className="welcome-naming__question">{copy.nameEntryTitle}</p>
+                <NameField
+                  value={welcomeName}
+                  onChange={setWelcomeName}
+                  onSubmit={submitWelcomeName}
+                  label={copy.nameLabel}
+                  showEyes={settings.eyes}
+                  maxLength={MAX_NAME_LENGTH}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="primary-button welcome-naming__confirm"
+                  onClick={submitWelcomeName}
+                  disabled={!normaliseProfileName(welcomeName)}
+                >
+                  {copy.nameReady}
+                </button>
+              </div>
+            ) : canResume ? (
+              // A returning child picks up exactly where they left off. Starting over is still one
+              // quiet tap away, but continuing is the obvious thing to do.
+              <div className="welcome-resume">
+                <button
+                  type="button"
+                  className="primary-button welcome-resume__button"
+                  onClick={resumeRound}
+                >
+                  {copy.resumeRound}
+                </button>
+                <button
+                  type="button"
+                  className="text-button welcome-resume__fresh"
+                  onClick={() => setResumable(null)}
+                >
+                  {copy.startFresh}
+                </button>
+              </div>
+            ) : (
+              <>
+                {welcomeStep !== 'play' && (
+                  <ModeCards
+                    revealed={welcomeStep === 'revealing'}
+                    labels={{
+                      easy: copy.modeCardEasy,
+                      easyAria: copy.playEasyAria,
+                      normal: copy.modeCardNormal,
+                      normalAria: copy.playNormalAria,
+                    }}
+                    onPlay={startRoundInMode}
+                    showEyes={settings.eyes}
+                  />
+                )}
+                {welcomeStep !== 'modes' && (
+                  <button
+                    type="button"
+                    className={`primary-button welcome-play-button${
+                      welcomeStep === 'revealing' ? ' welcome-play-button--leaving' : ''
+                    }`}
+                    onClick={revealModeCards}
+                    aria-hidden={welcomeStep === 'revealing' ? 'true' : undefined}
+                    tabIndex={welcomeStep === 'revealing' ? -1 : undefined}
+                  >
+                    {copy.play}
+                  </button>
+                )}
+              </>
+            )}
           </div>
-          {/* On a shared-device cold start the same chips move above the action; in every other
-              welcome state they keep their established place below it. */}
+          {/* On a shared-device cold start the chips sit under their spoken heading. Otherwise
+              they keep their established place below Play, and disappear with that first step. */}
           {!shouldShowWhoIsPlaying && welcomeProfilePicker}
           <div className="welcome-language">
             <select
