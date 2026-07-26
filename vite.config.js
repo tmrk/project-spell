@@ -50,6 +50,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // An update should become the controller immediately. The virtual registration then
+        // reloads every open app window onto the newly precached, content-hashed assets.
+        skipWaiting: true,
+        clientsClaim: true,
         cleanupOutdatedCaches: true,
         // woff2 is not optional decoration: the letter faces are positioned against this font's
         // metrics, so an offline launch without it would render the wrong glyphs *and* slide

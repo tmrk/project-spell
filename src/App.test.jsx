@@ -24,6 +24,44 @@ const BASE_SETTINGS = Object.freeze({ ...DEFAULT_SETTINGS, spellBack: false });
 // shared helper deliberately uses a card so round-loop tests remain explicit about their mode.
 const PLAY_EASY = 'Play with the letters shown';
 const PLAY_LISTEN = 'Play by listening to the word';
+const installVisualViewport = ({ height, width }) => {
+  const originalViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+  const originalHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  const originalWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const viewport = new EventTarget();
+  Object.assign(viewport, {
+    height,
+    offsetTop: 0,
+    scale: 1,
+    width,
+  });
+
+  Object.defineProperty(window, 'visualViewport', {
+    configurable: true,
+    value: viewport,
+  });
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    value: height,
+  });
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: width,
+  });
+
+  return {
+    resize(next) {
+      Object.assign(viewport, next);
+      viewport.dispatchEvent(new Event('resize'));
+    },
+    restore() {
+      if (originalViewport) Object.defineProperty(window, 'visualViewport', originalViewport);
+      else delete window.visualViewport;
+      Object.defineProperty(window, 'innerHeight', originalHeight);
+      Object.defineProperty(window, 'innerWidth', originalWidth);
+    },
+  };
+};
 const playIn = (mode) => {
   fireEvent.click(screen.getByRole('button', { name: mode }));
   // Starting a session from the welcome screen now plays a short spoken hello before the first
@@ -2086,6 +2124,57 @@ describe('Project Spell', () => {
       const input = screen.getByRole('textbox', { name: 'Type the next letter' });
       expect(input).not.toHaveAttribute('readonly');
       expect(input).toHaveAttribute('inputmode', 'text');
+    });
+
+    it('reserves the live system-keyboard inset in landscape and releases it when the viewport returns', () => {
+      const visualViewport = installVisualViewport({ height: 768, width: 1024 });
+      const view = render(<App />);
+
+      try {
+        playIn(PLAY_EASY);
+        const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+        const playScreen = document.querySelector('.play-screen');
+        act(() => input.focus());
+
+        // A pinch zoom reduces both axes and is not a keyboard; do not move the game around it.
+        act(() => visualViewport.resize({ height: 360, width: 800 }));
+        expect(playScreen.style.getPropertyValue('--system-keyboard-inset')).toBe('');
+
+        // Android and iPad browsers commonly leave the 768px layout viewport intact while the
+        // keyboard reduces the actually visible strip to 360px. The covered 408px becomes part of
+        // the same foot stack as a game-drawn keyboard, so the word is laid out above it.
+        act(() => visualViewport.resize({ height: 360, width: 1024 }));
+        expect(playScreen.style.getPropertyValue('--system-keyboard-inset')).toBe('408px');
+        expect(playScreen.style.getPropertyValue('--system-keyboard-word-head'))
+          .toBe('var(--system-keyboard-open-word-head)');
+
+        act(() => visualViewport.resize({ height: 768 }));
+        expect(playScreen.style.getPropertyValue('--system-keyboard-inset')).toBe('');
+        expect(playScreen.style.getPropertyValue('--system-keyboard-word-head')).toBe('');
+      } finally {
+        view.unmount();
+        visualViewport.restore();
+      }
+    });
+
+    it('does not apply VisualViewport keyboard room to the game-drawn keys', () => {
+      withKeyboard('full');
+      const visualViewport = installVisualViewport({ height: 768, width: 1024 });
+      const view = render(<App />);
+
+      try {
+        playIn(PLAY_EASY);
+        const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+        const playScreen = document.querySelector('.play-screen');
+        act(() => input.focus());
+        act(() => visualViewport.resize({ height: 360 }));
+
+        expect(playScreen.style.getPropertyValue('--system-keyboard-inset')).toBe('');
+        expect(playScreen.style.getPropertyValue('--system-keyboard-word-head')).toBe('');
+      } finally {
+        view.unmount();
+        visualViewport.restore();
+      }
     });
 
     it('never lets the device keyboard open while it is drawing its own keys', () => {

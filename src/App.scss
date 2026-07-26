@@ -1298,9 +1298,15 @@ input:focus-visible {
   --keys-rows: 0;
   --keys-key-h: var(--ps-size-key-height);
   --keys-bottom: max(var(--ps-space-4), env(safe-area-inset-bottom));
+  --system-keyboard-inset: 0px;
+  --system-keyboard-open-word-head: 160px;
+  --system-keyboard-word-head: 0px;
   --keys-band: calc(
-    var(--keys-rows) * var(--keys-key-h) +
-    max(var(--keys-rows) - 1, 0) * var(--ps-size-key-gap)
+    max(
+      var(--keys-rows) * var(--keys-key-h) +
+      max(var(--keys-rows) - 1, 0) * var(--ps-size-key-gap),
+      var(--system-keyboard-inset)
+    )
   );
   // Everything the foot owns, measured from the bottom edge of the screen.
   --keys-room: calc(var(--keys-band) + var(--keys-bottom));
@@ -1311,7 +1317,11 @@ input:focus-visible {
   --hint-gap: var(--ps-space-3);
   --hint-line: 28px;
   --hint-slot: calc(var(--hint-gap) + var(--hint-line));
-  --word-head: max(90px, calc(env(safe-area-inset-top) + 82px));
+  --word-head: max(
+    90px,
+    calc(env(safe-area-inset-top) + 82px),
+    var(--system-keyboard-word-head)
+  );
   --word-foot: calc(var(--keys-room) + var(--hint-slot));
   // The tallest letter that still fits between the trail and the foot. The word is sized from the
   // viewport's *width* (`--letter-size`, set per word in `App.jsx`), which says nothing about how
@@ -1339,18 +1349,14 @@ input:focus-visible {
   --keys-key-h: calc(var(--ps-size-key-height) * var(--ps-size-key-simple-scale));
 }
 
-// The same reserve for the keyboard the game does *not* draw. A touch device's own keyboard takes
-// roughly the bottom 40% of a portrait screen, and iOS Safari never resizes the layout viewport to
-// make room — so a word centred in the viewport ends up half covered the moment a child taps to
-// type. The word therefore sits north of centre from the start: reserving the room permanently
-// costs nothing when the keyboard is shut, and means the screen never has to move when it opens.
-//
-// A flat band, because the device's keyboard has no geometry we can read. Portrait only, and only
-// where the keyboard is the device's: a landscape phone is barely taller than the word once its
-// keyboard is up, so lifting the word there would only drive it into the star trail.
+// A portrait touch screen keeps the stable north-of-centre composition from D-022 even before its
+// device keyboard opens. Once one does open, App.jsx reads the VisualViewport and
+// `--system-keyboard-inset` replaces this floor with the real covered band. Landscape deliberately
+// has no permanent guess: tablets retain useful space above their keyboards, while phones may not,
+// so only the measured live inset should move and fit the word there.
 @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
   .play-screen--keys-system {
-    --keys-band: 180px;
+    --keys-band: max(180px, var(--system-keyboard-inset));
   }
 }
 
@@ -1819,7 +1825,10 @@ input:focus-visible {
 // nothing that has to be revealed, and the screen never moves.
 .typing-input {
   position: fixed;
-  top: 40%;
+  // The 40% resting point prevents iOS from panning the page in portrait. If a landscape keyboard
+  // leaves less than that much room, keep the field one generous space step above its measured
+  // top instead — focusing something under the keyboard is what causes the whole viewport to pan.
+  top: min(40%, calc(100dvh - var(--system-keyboard-inset, 0px) - var(--ps-space-6)));
   left: 50%;
   width: 1px;
   height: 1px;
@@ -3785,6 +3794,12 @@ svg.scenery__sparkle--super {
   .welcome-screen,
   .complete-screen {
     padding-top: var(--ps-space-5);
+  }
+
+  .play-screen {
+    // This breakpoint moves the road from 70px to 18px. Its keyboard-open word boundary follows
+    // it, preserving a small clear gap without making a very short stage grow past the viewport.
+    --system-keyboard-open-word-head: 96px;
   }
 
   .welcome-croc {

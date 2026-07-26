@@ -122,6 +122,10 @@ const SPELL_BACK_BUDGET_SLACK = 900;
 const SPELL_BACK_BUDGET_MIN = 2200;
 const PITCH_LADDER_STEP_SEMITONES = 2;
 const PITCH_LADDER_CAP_SEMITONES = 12;
+// Browser chrome can make the visual viewport differ from the layout viewport by a few pixels.
+// A software keyboard is a much larger, height-only change; keeping a floor avoids treating a
+// toolbar animation as keyboard geometry while the always-focused typing field is active.
+const SYSTEM_KEYBOARD_INSET_MIN = 80;
 
 const spellBackSilentStep = (length) =>
   Math.min(SPELL_BACK_SILENT_STEP, 900 / length, SPELL_BACK_SILENT_MAX / length);
@@ -185,6 +189,22 @@ function joinAnnouncements(messages) {
 
 function prefersReducedMotion() {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+function measureSystemKeyboardInset(input, viewport = window.visualViewport) {
+  if (!input || !viewport || document.activeElement !== input) return 0;
+
+  const layoutWidth = window.innerWidth;
+  const widthTolerance = Math.max(2, layoutWidth * 0.02);
+  // Pinch zoom also shrinks VisualViewport, in both axes. A software keyboard leaves the width
+  // alone, so do not mistake an accessibility zoom for room that the play screen should reserve.
+  if (Math.abs(layoutWidth - viewport.width) > widthTolerance) return 0;
+
+  // `offsetTop + height` is the bottom edge the child can actually see in layout coordinates.
+  // On browsers that resize the layout viewport as well this naturally resolves to zero and dvh
+  // does the work; on overlaying iOS/Android keyboards it is the exact covered band.
+  const inset = window.innerHeight - viewport.height - Math.max(0, viewport.offsetTop);
+  return inset >= SYSTEM_KEYBOARD_INSET_MIN ? Math.ceil(inset) : 0;
 }
 
 function loadProfiles() {
@@ -695,6 +715,7 @@ export default function App() {
   const [resumable, setResumable] = useState(() => resumableFor(activeProfileId, settings.locale));
 
   const inputRef = useRef(null);
+  const playScreenRef = useRef(null);
   const settingsRef = useRef(settings);
   const missCountRef = useRef(0);
   // Stats live in refs so per-key bookkeeping never causes re-renders during play.
@@ -891,6 +912,63 @@ export default function App() {
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     return () => window.cancelAnimationFrame(frame);
   }, [letterIndex, phase, settingsOpen, superIntroVisible, wordIndex]);
+
+  // `dvh` follows the layout viewport, but mobile software keyboards commonly shrink only the
+  // VisualViewport (or overlay it outright). Feed that live bottom occlusion into the same
+  // keyboard → hint → word stack that owns the game-drawn board. This is dynamic in landscape,
+  // where a tablet still has useful room but a fixed guess cannot describe keyboard sizes.
+  useEffect(() => {
+    const input = inputRef.current;
+    const playScreen = playScreenRef.current;
+    const viewport = window.visualViewport;
+    if (
+      phase !== 'playing' ||
+      drawsOwnKeyboard ||
+      !input ||
+      !playScreen ||
+      !viewport?.addEventListener
+    ) {
+      return undefined;
+    }
+
+    const updateInset = () => {
+      const inset = measureSystemKeyboardInset(input, viewport);
+      if (inset > 0) {
+        playScreen.style.setProperty('--system-keyboard-inset', `${inset}px`);
+        // The ordinary 90px head works while the word is vertically centred. A large keyboard
+        // moves that centre upwards towards the absolutely-positioned road, so give the live
+        // keyboard state a boundary just below the road. CSS supplies the normal vs short-
+        // landscape value because that is where the road's own responsive position is defined.
+        playScreen.style.setProperty(
+          '--system-keyboard-word-head',
+          'var(--system-keyboard-open-word-head)',
+        );
+      } else {
+        playScreen.style.removeProperty('--system-keyboard-inset');
+        playScreen.style.removeProperty('--system-keyboard-word-head');
+      }
+    };
+    const clearInset = () => {
+      playScreen.style.removeProperty('--system-keyboard-inset');
+      playScreen.style.removeProperty('--system-keyboard-word-head');
+    };
+
+    viewport.addEventListener('resize', updateInset);
+    viewport.addEventListener('scroll', updateInset);
+    window.addEventListener('resize', updateInset);
+    input.addEventListener('focus', updateInset);
+    input.addEventListener('blur', clearInset);
+    updateInset();
+
+    return () => {
+      viewport.removeEventListener('resize', updateInset);
+      viewport.removeEventListener('scroll', updateInset);
+      window.removeEventListener('resize', updateInset);
+      input.removeEventListener('focus', updateInset);
+      input.removeEventListener('blur', clearInset);
+      clearInset();
+    };
+  }, [drawsOwnKeyboard, phase]);
 
 
   // Drops a running spell-back beat without advancing the round — for leaving the round, opening
@@ -2252,6 +2330,7 @@ export default function App() {
 
       {phase === 'playing' && (
         <main
+          ref={playScreenRef}
           className={`play-screen ${
             drawsOwnKeyboard ? `play-screen--keys-${settings.keyboard}` : 'play-screen--keys-system'
           }`}
