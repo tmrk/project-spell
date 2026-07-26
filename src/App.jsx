@@ -727,6 +727,13 @@ export default function App() {
     () => buildKeyRows(settings.keyboard, currentWord, settings.locale),
     [currentWord, settings.keyboard, settings.locale],
   );
+  // The game is drawing its own keys, so the device's keyboard has no job left — and on a phone it
+  // would cover the very word the child is spelling. A read-only field is the one thing every
+  // mobile browser agrees not to open a keyboard for, and it still delivers `keydown`, so a
+  // physical or Bluetooth keyboard keeps working exactly as before. The fallback matters too: a
+  // simple board with no keys to show (a word with no alphabet letters in it) leaves the field
+  // writable rather than stranding the child with no way to type at all.
+  const drawsOwnKeyboard = keyboardRows.length > 0;
   // A fresh arrangement of the five-colour wheel per word: no longer always coral-first. The
   // round seed plus the word's position vary it between rounds and between repeats within one
   // round, while `letterColors` keeps adjacent letters different. Stable for the whole word.
@@ -2171,8 +2178,8 @@ export default function App() {
 
       {phase === 'playing' && (
         <main
-          className={`play-screen${
-            keyboardRows.length ? ` play-screen--keys-${settings.keyboard}` : ''
+          className={`play-screen ${
+            drawsOwnKeyboard ? `play-screen--keys-${settings.keyboard}` : 'play-screen--keys-system'
           }`}
           onClick={handlePlayScreenTap}
         >
@@ -2263,7 +2270,10 @@ export default function App() {
             ref={inputRef}
             className="typing-input"
             type="text"
-            inputMode="text"
+            // `readOnly` is what actually keeps the software keyboard shut on iOS; `inputMode`
+            // is the same instruction for the browsers that honour it instead.
+            readOnly={drawsOwnKeyboard}
+            inputMode={drawsOwnKeyboard ? 'none' : 'text'}
             aria-label={copy.typeNextLetter}
             defaultValue=""
             onInput={handleInput}

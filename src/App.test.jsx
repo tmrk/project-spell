@@ -1891,6 +1891,28 @@ describe('Project Spell', () => {
       playIn(PLAY_EASY);
 
       expect(screen.queryByRole('group', { name: 'Letter keys' })).not.toBeInTheDocument();
+      // Marks the stage so the stylesheet can keep the word above where a phone's own keyboard
+      // will open, and leaves the field writable so that keyboard can be typed on.
+      expect(document.querySelector('.play-screen')).toHaveClass('play-screen--keys-system');
+      const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+      expect(input).not.toHaveAttribute('readonly');
+      expect(input).toHaveAttribute('inputmode', 'text');
+    });
+
+    it('never lets the device keyboard open while it is drawing its own keys', () => {
+      ['simple', 'full'].forEach((mode) => {
+        withKeyboard(mode);
+        const view = render(<App />);
+        playIn(PLAY_EASY);
+
+        // Read-only is what actually keeps iOS Safari's keyboard shut; the field is still focusable
+        // and still hears a physical keypress.
+        const input = screen.getByRole('textbox', { name: 'Type the next letter' });
+        expect(input).toHaveAttribute('readonly');
+        expect(input).toHaveAttribute('inputmode', 'none');
+        expect(document.querySelector('.play-screen')).not.toHaveClass('play-screen--keys-system');
+        view.unmount();
+      });
     });
 
     it('spells a word by tapping keys, exactly like typing does', () => {

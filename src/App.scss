@@ -457,6 +457,9 @@ input:focus-visible {
 
 .welcome-naming {
   display: grid;
+  // See `.welcome-action`: an `auto` track here is sized from the question's unwrapped line, which
+  // would push the block wider than its own `min(440px, 88vw)` and slide the field off-centre.
+  grid-template-columns: minmax(0, 1fr);
   width: min(440px, 88vw);
   gap: clamp(12px, 2.4vh, 20px);
   justify-items: center;
@@ -833,14 +836,41 @@ input:focus-visible {
   gap: var(--ps-space-1);
 }
 
-// Keep the word clear of the keys. The full alphabet wraps to more rows than the simple tier,
-// so it reserves more room.
+// How much of the play screen's foot is reserved for a keyboard, so the word stays clear of it.
+// These set the two halves of `.play-screen`'s `padding-bottom` rather than the padding itself:
+// that rule is a shorthand declared further down this file at the same specificity, so a
+// `padding-bottom` here would lose to it on source order and never apply at all — which is exactly
+// what these two reserves quietly did until 2026-07-26. Custom properties cascade independently of
+// where the property that reads them is declared, so the order cannot bite again.
+//
+// The floor is the reserve on a screen with no bottom inset; the reserve is what is added on top of
+// one. The full alphabet wraps to more rows than the simple tier, so it asks for more room.
 .play-screen--keys-simple {
-  padding-bottom: max(150px, calc(env(safe-area-inset-bottom) + 140px));
+  --keys-floor: 150px;
+  --keys-reserve: 140px;
 }
 
 .play-screen--keys-full {
-  padding-bottom: max(268px, calc(env(safe-area-inset-bottom) + 258px));
+  --keys-floor: 268px;
+  --keys-reserve: 258px;
+}
+
+// The same idea for the keyboard the game does not draw. A touch device's own keyboard takes
+// roughly the bottom 40% of a portrait screen, and iOS Safari never resizes the layout viewport to
+// make room — so a word centred in the viewport ends up half covered the moment a child taps to
+// type. The word therefore sits north of centre from the start: reserving the room permanently
+// costs nothing when the keyboard is shut, and means the screen never has to move when it opens.
+// (Without this the word sits slightly *below* centre, because the trail's 90px of top padding
+// outweighs the 44px at the foot.)
+//
+// Portrait only, and only where the keyboard is the device's: a landscape phone is barely taller
+// than the word once its keyboard is up, so lifting the word there would only drive it into the
+// star trail. The game's own keys are handled by the two rules above, on every screen.
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .play-screen--keys-system {
+    --keys-floor: 196px;
+    --keys-reserve: 184px;
+  }
 }
 
 // Optional on-screen letter keys (G8.3). Sits at the foot of the play screen so the word keeps
@@ -1127,8 +1157,17 @@ input:focus-visible {
 // Holds whichever of the three welcome steps is showing. The reserved height tracks the mode
 // cards — the tallest of them — off the same clamp their stage is sized from, so the slab and
 // the cards occupy one fixed block and nothing above shifts when they swap.
+//
+// `minmax(0, 1fr)` is load-bearing, not tidiness. Every step inside is sized against the viewport
+// (`min(520px, 88vw)`, `min(440px, 88vw)`), which is wider than this stack's own
+// `min(90vw, 560px)` minus its horizontal padding. A default implicit `auto` track is sized from
+// its widest item, so the track grew past the stack, overflowed to the *right only*, and centred
+// the Play slab inside the track rather than the screen — the slab read as visibly off-centre on a
+// phone. A `1fr` track is exactly this box wide, so overflow spills evenly and centred stays
+// centred; the `minmax(0, …)` floor stops a long word or a wide card pushing it open again.
 .welcome-action {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   min-height: calc(var(--ps-size-mode-stage) * 4.1);
   place-items: center;
@@ -1184,6 +1223,9 @@ input:focus-visible {
 // quiet text link below it, so there is still only one dominant call to action.
 .welcome-resume {
   display: grid;
+  // Same reason as `.welcome-action`: the resume slab is sized off the viewport, so an `auto`
+  // track would stretch past this box and centre its contents off to the right.
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   width: 100%;
   gap: clamp(10px, 2.4vw, 18px);
@@ -1249,7 +1291,12 @@ input:focus-visible {
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: max(90px, calc(env(safe-area-inset-top) + 82px)) max(18px, env(safe-area-inset-right)) max(44px, env(safe-area-inset-bottom));
+  padding-top: max(90px, calc(env(safe-area-inset-top) + 82px));
+  // Longhands, not the shorthand: the foot is the one edge a `--keys-*` modifier moves, and a
+  // shorthand here would flatten whatever it set. The two fallbacks are the no-keyboard screen.
+  padding-right: max(18px, env(safe-area-inset-right));
+  padding-bottom: max(var(--keys-floor, 44px), calc(env(safe-area-inset-bottom) + var(--keys-reserve, 0px)));
+  padding-left: max(18px, env(safe-area-inset-left));
   cursor: default;
   place-items: center;
 }
@@ -1702,10 +1749,16 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+// The invisible field the round is actually typed into. Its *position* matters even though nothing
+// is drawn: iOS Safari brings the focused element into view when its keyboard opens, and it does so
+// by sliding the whole page — the layout viewport never shrinks, so `position: fixed` chrome travels
+// with it. Parked at the bottom edge, the field was always under the keyboard, so every focus
+// dragged the play screen upwards. Sitting it where the word sits means the keyboard opens over
+// nothing that has to be revealed, and the screen never moves.
 .typing-input {
   position: fixed;
-  right: 1px;
-  bottom: max(1px, env(safe-area-inset-bottom));
+  top: 40%;
+  left: 50%;
   width: 1px;
   height: 1px;
   padding: 0;
