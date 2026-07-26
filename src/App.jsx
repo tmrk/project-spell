@@ -127,10 +127,6 @@ const spellBackSilentStep = (length) =>
   Math.min(SPELL_BACK_SILENT_STEP, 900 / length, SPELL_BACK_SILENT_MAX / length);
 const pitchLadderRate = (letterIndex) =>
   2 ** (Math.min(letterIndex * PITCH_LADDER_STEP_SEMITONES, PITCH_LADDER_CAP_SEMITONES) / 12);
-// Comfortably longer than the Play slab's 180ms exit in `App.scss`. The headroom matters: at
-// exactly the animation's length, ordinary timer jitter drops the slab while it is still
-// faintly visible and it reads as a pop rather than a fade.
-const MODE_REVEAL_MS = 260;
 // The welcome greeting is a quick, warm hello before the first word — spoken and animated. It
 // must stay short so it never gets between a child and playing: the word appears once the wave
 // animation has settled and the greeting has been said, whichever is slower, capped hard by
@@ -213,6 +209,20 @@ function loadSettings(profileId) {
       : normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
   } catch {
     return normaliseSettings({ ...DEFAULT_SETTINGS, locale: detectedLocale });
+  }
+}
+
+// F6's one-tap start is offered only when the child has made a real choice before. Normalising a
+// missing settings record produces the safe default mode, but that is not a remembered choice;
+// inspect the raw per-profile record once instead of treating a default as history.
+function hasStoredGameMode(profileId) {
+  try {
+    const stored = window.localStorage.getItem(profileStorageKey(SETTINGS_KEY, profileId));
+    if (!stored) return false;
+    const value = JSON.parse(stored);
+    return value?.gameMode === 'easy' || value?.gameMode === 'normal';
+  } catch {
+    return false;
   }
 }
 
@@ -636,10 +646,17 @@ export default function App() {
   const [nameDialog, setNameDialog] = useState(null);
   const [welcomeName, setWelcomeName] = useState('');
   const [namingMode, setNamingMode] = useState(null);
-  // The welcome screen opens on one green Play slab; the mode cards are what it turns into.
-  // 'revealing' is the overlap where both are mounted — the cards are already live underneath
-  // while the slab fades off the top of them.
-  const [welcomeStep, setWelcomeStep] = useState('play');
+  // A default supplied by the normaliser is not a last-used mode. This flag records whether the
+  // active child had a real mode in their own settings record when they arrived, or chose one in
+  // this session. Combined with a completed round it unlocks F6's one-tap Play slab.
+  const [hasRememberedMode, setHasRememberedMode] = useState(
+    () => hasStoredGameMode(activeProfileId),
+  );
+  // This is deliberately initialised once. Adding a sibling later does not interrupt the current
+  // welcome flow; only a cold load that already belongs to a shared device asks who is playing.
+  const [whoIsPlayingVisible, setWhoIsPlayingVisible] = useState(
+    () => profiles.profiles.filter((profile) => profile.name).length >= 2,
+  );
   const [phase, setPhase] = useState('welcome');
   // A short spoken + animated hello, shown between the welcome screen and the first word each
   // time a play session begins (new child, returning child, or a switch). Null the rest of the
@@ -670,6 +687,9 @@ export default function App() {
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
   const [visibleProgress, setVisibleProgress] = useState(() => loadProgress(activeProfileId));
+  const [hasCompletedRound, setHasCompletedRound] = useState(
+    () => loadStats(activeProfileId).totals.roundsCompleted >= 1,
+  );
   // The mid-round snapshot a returning child can pick up from the welcome screen. Null unless a
   // resumable round is stored for the active child in the current language.
   const [resumable, setResumable] = useState(() => resumableFor(activeProfileId, settings.locale));
@@ -701,7 +721,7 @@ export default function App() {
   const greetingTimerRef = useRef(null);
   const greetingMaxTimerRef = useRef(null);
   const lastGreetingIndexRef = useRef(-1);
-  const modeRevealTimerRef = useRef(null);
+  const whoIsPlayingSpokenRef = useRef(false);
   const transitioningRef = useRef(false);
   const lastCorrectIndexRef = useRef(-1);
   const lastWordPraiseIndexRef = useRef(-1);
@@ -718,6 +738,9 @@ export default function App() {
   const currentWordLetters = useMemo(() => [...currentWord], [currentWord]);
   const locale = getLocale(settings.locale);
   const copy = locale.messages;
+  const shouldShowWhoIsPlaying =
+    whoIsPlayingVisible &&
+    profiles.profiles.filter((profile) => profile.name).length >= 2;
   const earnedRoundStars = phase === 'complete' ? roundReward.stars : 0;
   const filledWords = Math.min(
     roundWords.length,
@@ -777,17 +800,21 @@ export default function App() {
   }, [profiles]);
 
   // Profile switches update the id and the settings in one batch, so this effect never writes
-  // one child's settings under another child's key.
+  // one child's settings under another child's key. Before a child has actually chosen a mode,
+  // keep that default out of the record: otherwise merely opening the app would turn a
+  // normaliser fallback into "last used" history on the next reload.
   useEffect(() => {
     try {
+      const storedSettings = { ...settings };
+      if (!hasRememberedMode) delete storedSettings.gameMode;
       window.localStorage.setItem(
         profileStorageKey(SETTINGS_KEY, activeProfileId),
-        JSON.stringify(settings),
+        JSON.stringify(storedSettings),
       );
     } catch {
       // The game still works when browser storage is unavailable.
     }
-  }, [activeProfileId, settings]);
+  }, [activeProfileId, hasRememberedMode, settings]);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -833,6 +860,21 @@ export default function App() {
     if (!namingMode) return;
     say(copy.nameEntryTitle);
   }, [copy.nameEntryTitle, namingMode, say]);
+
+  // A shared device asks its one extra question out loud as well as on screen. The ref makes this
+  // a cold-start announcement, not something profile switches, locale changes or panel renders
+  // can repeat. `say` is the same serialized, optional speech path as the greeting (D-021).
+  useEffect(() => {
+    if (
+      phase !== 'welcome' ||
+      !shouldShowWhoIsPlaying ||
+      whoIsPlayingSpokenRef.current
+    ) {
+      return;
+    }
+    whoIsPlayingSpokenRef.current = true;
+    say(copy.whoIsPlayingHeading, { id: 'who-is-playing' });
+  }, [copy.whoIsPlayingHeading, phase, say, shouldShowWhoIsPlaying]);
 
   useEffect(() => {
     if (phase !== 'complete') return undefined;
@@ -891,8 +933,6 @@ export default function App() {
     window.clearTimeout(greetingMaxTimerRef.current);
     cancelSpellBack();
   }, [cancelSpellBack]);
-
-  useEffect(() => () => window.clearTimeout(modeRevealTimerRef.current), []);
 
   const resetHintLadder = useCallback(() => {
     missCountRef.current = 0;
@@ -1003,6 +1043,10 @@ export default function App() {
       setSettingsOpen(true);
       return;
     }
+
+    // Once any round begins, this page-load's shared-device question is answered for the rest of
+    // the session. Returning Home must not ask it again.
+    setWhoIsPlayingVisible(false);
 
     // A hello is shown only when a play session begins from the welcome screen (a fresh child, a
     // returning one, or a switch). "Play again" and the automatic super round continue the same
@@ -1507,6 +1551,7 @@ export default function App() {
             durationMs: completionTime - roundStartRef.current,
             mode: settings.gameMode,
           });
+          setHasCompletedRound(true);
           const roundStars = starsForRound(wordStarsRef.current);
           const wasSuper = roundKind === 'super';
           const stickerId = wasSuper
@@ -1713,6 +1758,7 @@ export default function App() {
       // Nothing stored means nothing to erase.
     }
     statsRef.current = createEmptyStats();
+    setHasCompletedRound(false);
     progressRef.current = createEmptyProgress();
     sessionStrugglesRef.current.clear();
     setVisibleProgress(progressRef.current);
@@ -1728,10 +1774,6 @@ export default function App() {
   // (usually null) rather than the stored one.
   const resetToWelcome = (nextResumable = resumableFor(activeProfileId, settingsRef.current.locale)) => {
     clearRoundTimers();
-    window.clearTimeout(modeRevealTimerRef.current);
-    // Coming back to the welcome screen means starting from the Play slab again, whatever the
-    // child left mid-flight.
-    setWelcomeStep('play');
     setNamingMode(null);
     setGreeting(null);
     cancelSpeech();
@@ -1766,7 +1808,6 @@ export default function App() {
       return;
     }
     clearRoundTimers();
-    window.clearTimeout(modeRevealTimerRef.current);
     cancelSpeech();
 
     if (session.gameMode !== settingsRef.current.gameMode) {
@@ -1774,6 +1815,9 @@ export default function App() {
       settingsRef.current = nextSettings;
       setSettings(nextSettings);
     }
+    // A valid resumable session is itself evidence that this child chose a mode before, even if
+    // an old or partially written settings record no longer contains it.
+    setHasRememberedMode(true);
 
     // Restore the scoring context so the closing star ceremony and the journey still add up.
     wordStarsRef.current = [...session.wordStars];
@@ -1796,7 +1840,6 @@ export default function App() {
     wordsSincePraiseRef.current = 0;
     wordPraiseGapRef.current = randomWordPraiseGap();
 
-    setWelcomeStep('play');
     setNamingMode(null);
     setGreeting(null);
     setRoundColorSeed(session.colorSeed);
@@ -1814,6 +1857,7 @@ export default function App() {
     setStickerBookOpen(false);
     setSettingsOpen(false);
     setResumable(null);
+    setWhoIsPlayingVisible(false);
     setPhase('playing');
 
     primeEffects();
@@ -1836,12 +1880,15 @@ export default function App() {
     let nextResumable = resumableFor(nextId, settingsRef.current.locale);
     if (nextId !== activeProfileId) {
       const nextSettings = loadSettings(nextId);
-      statsRef.current = loadStats(nextId);
+      const nextStats = loadStats(nextId);
+      statsRef.current = nextStats;
       progressRef.current = loadProgress(nextId);
       sessionStrugglesRef.current.clear();
       sessionFilterKeyRef.current = null;
       settingsRef.current = nextSettings;
       setSettings(nextSettings);
+      setHasRememberedMode(hasStoredGameMode(nextId));
+      setHasCompletedRound(nextStats.totals.roundsCompleted >= 1);
       setVisibleProgress(progressRef.current);
       setStickerBookProgress(progressRef.current);
       setSettingsStats(statsRef.current);
@@ -1855,28 +1902,11 @@ export default function App() {
 
   const openNameDialog = (mode, profileId = null) => setNameDialog({ mode, profileId });
 
-  // Play does not start a round any more — it hands the screen over to the two mode cards. The
-  // cards mount straight away and are usable immediately; the timer only drops the spent slab
-  // once it has faded, so a fast tapper is never waiting on an animation.
-  const revealModeCards = () => {
-    // Only the first press from the Play slab may start the hand-off. The slab is `pointer-events:
-    // none` and out of the tab order once it is leaving, but a key press can still reach a focused
-    // button that CSS has hidden; re-entering here would restart the unmount timer and make the
-    // slab flicker back over the cards. Guarding on the step keeps the transition one-way.
-    if (welcomeStep !== 'play') return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true) {
-      setWelcomeStep('modes');
-      return;
-    }
-    setWelcomeStep('revealing');
-    window.clearTimeout(modeRevealTimerRef.current);
-    modeRevealTimerRef.current = window.setTimeout(() => setWelcomeStep('modes'), MODE_REVEAL_MS);
-  };
-
   const playInMode = (gameMode, greetName) => {
     const next = normaliseSettings({ ...settingsRef.current, gameMode });
     settingsRef.current = next;
     setSettings(next);
+    setHasRememberedMode(true);
     // Every start from the welcome screen greets the child by name; the name comes with the tap
     // so a just-typed one does not have to wait a render for the active profile to catch up.
     startRound({ settings: next, greet: Boolean(greetName), name: greetName });
@@ -1933,6 +1963,9 @@ export default function App() {
     }
     settingsRef.current = next;
     setSettings(next);
+    if (partial.gameMode === 'easy' || partial.gameMode === 'normal') {
+      setHasRememberedMode(true);
+    }
   };
 
   const closeSettings = () => {
@@ -1962,6 +1995,33 @@ export default function App() {
   };
   // The unnamed default slot is never offered as a chip — there is nothing to tap on.
   const namedProfiles = profiles.profiles.filter((profile) => profile.name);
+  const canStartRememberedMode = hasRememberedMode && hasCompletedRound;
+  const welcomeProfilePicker = namedProfiles.length > 0 && !namingMode ? (
+    <div className="profile-picker">
+      {namedProfiles.map((profile) => (
+        <button
+          type="button"
+          key={profile.id}
+          className={`profile-chip${profile.id === activeProfileId ? ' profile-chip--active' : ''}`}
+          aria-pressed={profile.id === activeProfileId}
+          aria-label={formatMessage(copy.switchProfile, { name: profile.name })}
+          onClick={() => switchToProfile(selectProfile(profiles, profile.id))}
+        >
+          <NameTag name={profile.name} showEyes={settings.eyes} size="chip" />
+        </button>
+      ))}
+      {profiles.profiles.length < MAX_PROFILES && (
+        <button
+          type="button"
+          className="profile-chip profile-chip--add"
+          aria-label={copy.addProfile}
+          onClick={() => openNameDialog('add')}
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      )}
+    </div>
+  ) : null;
   const roundsRemaining = SUPER_ROUND_EVERY - roundReward.journeyPosition;
   // After this round the child is one step further along the arc; when they have filled every
   // step, the next round is the golden super round — the button says so.
@@ -2055,9 +2115,20 @@ export default function App() {
         <main className="welcome-screen">
           <img className="welcome-croc" src={croc} alt="" />
           <Wordmark name={copy.projectName} showEyes={settings.eyes} />
-          {/* One reserved slot for all three welcome steps: the Play slab, the cards it turns
-              into, and the name question. Without it the croc and the wordmark jump upwards the
-              moment the taller cards mount. */}
+          {shouldShowWhoIsPlaying && (
+            <section
+              className="welcome-player-prompt"
+              aria-labelledby="who-is-playing-heading"
+            >
+              <h2 id="who-is-playing-heading" className="welcome-player-prompt__heading">
+                {copy.whoIsPlayingHeading}
+              </h2>
+              {welcomeProfilePicker}
+            </section>
+          )}
+          {/* One reserved slot for the first-play cards, returning Play stack, resume offer, or
+              name question. Resume remains the only branch allowed to displace every start
+              action (D-015). */}
           <div className="welcome-action">
           {namingMode ? (
             // Asked only once a child has chosen how to play, so the first thing they meet is
@@ -2101,66 +2172,44 @@ export default function App() {
                 {copy.startFresh}
               </button>
             </div>
+          ) : canStartRememberedMode ? (
+            <div className="welcome-returning">
+              <button
+                type="button"
+                className="primary-button welcome-play-button"
+                onClick={() => startRoundInMode(settings.gameMode)}
+              >
+                {copy.play}
+              </button>
+              <ModeCards
+                compact
+                currentMode={settings.gameMode}
+                labels={{
+                  easy: copy.modeCardEasy,
+                  easyAria: copy.playEasyAria,
+                  normal: copy.modeCardNormal,
+                  normalAria: copy.playNormalAria,
+                }}
+                onPlay={startRoundInMode}
+                showEyes={settings.eyes}
+              />
+            </div>
           ) : (
-            <>
-              {welcomeStep !== 'play' && (
-                <ModeCards
-                  revealed
-                  labels={{
-                    easy: copy.modeCardEasy,
-                    easyAria: copy.playEasyAria,
-                    normal: copy.modeCardNormal,
-                    normalAria: copy.playNormalAria,
-                  }}
-                  onPlay={startRoundInMode}
-                  showEyes={settings.eyes}
-                />
-              )}
-              {welcomeStep !== 'modes' && (
-                // During the overlap the slab is scenery: out of the accessibility tree and out
-                // of the tab order, so the cards beneath it are the only thing anyone can reach.
-                <button
-                  type="button"
-                  className={`primary-button welcome-play-button${
-                    welcomeStep === 'revealing' ? ' welcome-play-button--leaving' : ''
-                  }`}
-                  onClick={revealModeCards}
-                  aria-hidden={welcomeStep === 'revealing' ? 'true' : undefined}
-                  tabIndex={welcomeStep === 'revealing' ? -1 : undefined}
-                >
-                  {copy.play}
-                </button>
-              )}
-            </>
+            <ModeCards
+              labels={{
+                easy: copy.modeCardEasy,
+                easyAria: copy.playEasyAria,
+                normal: copy.modeCardNormal,
+                normalAria: copy.playNormalAria,
+              }}
+              onPlay={startRoundInMode}
+              showEyes={settings.eyes}
+            />
           )}
           </div>
-          {/* While a child is naming themselves there is nothing to pick between. */}
-          {namedProfiles.length > 0 && !namingMode && (
-          <div className="profile-picker">
-            {namedProfiles.map((profile) => (
-              <button
-                type="button"
-                key={profile.id}
-                className={`profile-chip${profile.id === activeProfileId ? ' profile-chip--active' : ''}`}
-                aria-pressed={profile.id === activeProfileId}
-                aria-label={formatMessage(copy.switchProfile, { name: profile.name })}
-                onClick={() => switchToProfile(selectProfile(profiles, profile.id))}
-              >
-                <NameTag name={profile.name} showEyes={settings.eyes} size="chip" />
-              </button>
-            ))}
-            {profiles.profiles.length < MAX_PROFILES && (
-              <button
-                type="button"
-                className="profile-chip profile-chip--add"
-                aria-label={copy.addProfile}
-                onClick={() => openNameDialog('add')}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            )}
-          </div>
-          )}
+          {/* On a shared-device cold start the same chips move above the action; in every other
+              welcome state they keep their established place below it. */}
+          {!shouldShowWhoIsPlaying && welcomeProfilePicker}
           <div className="welcome-language">
             <select
               aria-label={copy.language}

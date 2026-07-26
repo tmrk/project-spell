@@ -93,6 +93,7 @@ const messages = Object.freeze({
   startSuperRound: 'Szuper kör',
   resumeRound: 'Folytatás',
   startFresh: 'Új játék',
+  whoIsPlayingHeading: 'Ki játszik?',
   letterCompleted: 'kész',
   letterCurrent: 'aktuális betű',
   letterNext: 'következő',

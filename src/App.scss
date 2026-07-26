@@ -500,6 +500,11 @@ input:focus-visible {
   justify-content: center;
 }
 
+.mode-cards--compact {
+  width: min(100%, 300px);
+  gap: var(--ps-space-3);
+}
+
 .mode-card {
   display: grid;
   flex: 1 1 0;
@@ -520,6 +525,15 @@ input:focus-visible {
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
+.mode-cards--compact .mode-card {
+  max-width: 144px;
+  padding: var(--ps-space-2);
+  border-width: 2px;
+  border-radius: var(--ps-radius-tile);
+  box-shadow: 0 var(--ps-lift-2) 0 var(--card-base);
+  gap: var(--ps-space-2);
+}
+
 .mode-card--easy {
   --card-tilt: -1.5deg;
   --card-accent: var(--ps-grass);
@@ -532,23 +546,8 @@ input:focus-visible {
   --card-base: var(--ps-sky-shade);
 }
 
-// Dealt out from where the Play slab stood: each card slides out to its own side, rises, and
-// settles into its tilt a beat after the other.
-//
-// The stagger is held inside the keyframes rather than set with `animation-delay`, and no fill
-// mode is used, so the card's own styles are what shows whenever the animation is not actually
-// running. Delay plus `backwards` would pin a card at opacity 0 until something resumed it.
-.mode-cards--revealed .mode-card {
-  animation: mode-card-deal 460ms cubic-bezier(0.22, 1.4, 0.36, 1);
-}
-
-.mode-cards--revealed .mode-card--easy {
-  --deal-shift: 18px;
-}
-
-.mode-cards--revealed .mode-card--normal {
-  --deal-shift: -18px;
-  animation-name: mode-card-deal-late;
+.mode-card--current {
+  border-color: var(--card-accent);
 }
 
 .mode-card:hover,
@@ -556,6 +555,11 @@ input:focus-visible {
   border-color: var(--card-accent);
   transform: rotate(var(--card-tilt, 0deg)) translateY(-3px);
   box-shadow: 0 13px 0 var(--card-base);
+}
+
+.mode-cards--compact .mode-card:hover,
+.mode-cards--compact .mode-card:focus-visible {
+  box-shadow: 0 var(--ps-lift-3) 0 var(--card-base);
 }
 
 // The global focus ring is grass green, which reads as a third colour around the listening card.
@@ -594,6 +598,10 @@ input:focus-visible {
   grid-template-rows: 0.82em auto;
   justify-items: center;
   align-items: center;
+}
+
+.mode-cards--compact .mode-card__stage {
+  font-size: var(--ps-size-mode-stage-compact);
 }
 
 .mode-card__row {
@@ -712,6 +720,28 @@ input:focus-visible {
   margin-top: clamp(16px, 3vh, 28px);
   gap: var(--ps-space-3);
   justify-content: center;
+}
+
+.welcome-player-prompt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  margin-bottom: var(--ps-space-5);
+  gap: var(--ps-space-3);
+  justify-items: center;
+}
+
+.welcome-player-prompt__heading {
+  margin: 0;
+  @extend %ps-type-headline;
+  color: var(--ps-ink);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.welcome-player-prompt .profile-picker {
+  margin-top: 0;
 }
 
 .profile-chip {
@@ -1126,9 +1156,8 @@ input:focus-visible {
   cursor: not-allowed;
 }
 
-// Holds whichever of the three welcome steps is showing. The reserved height tracks the mode
-// cards — the tallest of them — off the same clamp their stage is sized from, so the slab and
-// the cards occupy one fixed block and nothing above shifts when they swap.
+// Holds whichever welcome start state is showing. The reserved height tracks the full-size mode
+// cards — the tallest first-play state — off the same clamp their stage is sized from.
 //
 // `minmax(0, 1fr)` is load-bearing, not tidiness. Every step inside is sized against the viewport
 // (`min(520px, 88vw)`, `min(440px, 88vw)`), which is wider than this stack's own
@@ -1145,14 +1174,12 @@ input:focus-visible {
   place-items: center;
 }
 
-// Every step shares one cell, so the spent Play slab can fade out directly over the cards that
-// have already taken its place instead of the two swapping in sequence.
 .welcome-action > * {
   grid-area: 1 / 1;
 }
 
-// One green slab is the whole of the first screen's ask: press this. Choosing *how* to play is
-// the next question, and the slab hands over to the mode cards rather than starting a round.
+// Once a child has completed a round, this green slab starts their remembered mode immediately.
+// The compact mode pictures below it remain direct starts for switching mode.
 .welcome-play-button {
   width: min(520px, 88vw);
   min-height: clamp(124px, 18vw, 170px);
@@ -1168,19 +1195,20 @@ input:focus-visible {
   animation: play-button-wiggle 5.8s ease-in-out infinite;
 }
 
-// Excluding the leaving slab is load-bearing: `:active` outranks the single-class rule below,
-// and a touch that is still down when the hand-off starts would otherwise cancel the fade.
-.welcome-play-button:active:not(.welcome-play-button--leaving) {
+.welcome-play-button:active {
   animation: none;
   transform: translateY(8px);
   box-shadow: 0 var(--ps-lift-2) 0 var(--ps-grass-shade);
 }
 
-// The slab sinks and shrinks towards the spot the two cards are about to rise from, so the
-// swap reads as one object becoming two rather than a panel being replaced.
-.welcome-play-button--leaving {
-  pointer-events: none;
-  animation: play-button-handoff 180ms ease-in both;
+.welcome-returning {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  // The slab's 14px object shadow does not participate in grid layout. A space-5 track gap
+  // leaves a quiet 10px strip of sun between that shadow and the compact cards.
+  gap: var(--ps-space-5);
+  justify-items: center;
 }
 
 .primary-button--small {
@@ -3283,36 +3311,6 @@ svg.scenery__sparkle--super {
   98% { transform: rotate(0deg); }
 }
 
-@keyframes play-button-handoff {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(14px) scale(0.88); }
-}
-
-// Starts square-on and lands on the card's own tilt, so the pair settles like two cut-outs
-// dropped onto the table rather than sliding into a layout. The flat opening stretch is the
-// wait for the slab to clear; the second card simply waits longer.
-@keyframes mode-card-deal {
-  0%, 26% {
-    opacity: 0;
-    transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
-  }
-  100% {
-    opacity: 1;
-    transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
-  }
-}
-
-@keyframes mode-card-deal-late {
-  0%, 43% {
-    opacity: 0;
-    transform: rotate(0deg) translate(var(--deal-shift, 0), 30px) scale(0.8);
-  }
-  100% {
-    opacity: 1;
-    transform: rotate(var(--card-tilt, 0deg)) translate(0, 0) scale(1);
-  }
-}
-
 @keyframes trail-croc-walk {
   0%, 100% { transform: translateX(-50%) rotate(-2deg); }
   50% { transform: translateX(-50%) translateY(-4px) rotate(2deg); }
@@ -3521,6 +3519,10 @@ svg.scenery__sparkle--super {
 
   .wordmark__title {
     --ps-size-wordmark: var(--ps-size-wordmark-compact);
+  }
+
+  .welcome-player-prompt {
+    margin-bottom: var(--ps-space-4);
   }
 
   // The book tab owns the bottom-right corner on a phone, so the language pill stops
@@ -3739,6 +3741,18 @@ svg.scenery__sparkle--super {
   }
 }
 
+// The shared-device prompt is the tallest welcome state. On a short portrait phone, use the
+// clamp's existing compact endpoints so the full question, action and fixed bottom controls fit
+// in one view instead of introducing a 20–30px ceremonial scroll.
+@media (orientation: portrait) and (max-width: 600px) and (max-height: 700px) {
+  .welcome-screen {
+    padding-top: 20px;
+    // The returning stack gained one space step between its slab and cards; trade the same
+    // amount from empty floor reserve so the shared-device state still fits without scrolling.
+    padding-bottom: 84px;
+  }
+}
+
 // A landscape tablet is short, and the welcome lockup is tall: croc, wordmark, the Play slab or
 // the cards it becomes, the name chips. The generous float above the paper-cut ground is the
 // first thing to give up, well before anything shrinks. Declared ahead of the shorter-screen
@@ -3747,6 +3761,23 @@ svg.scenery__sparkle--super {
   .welcome-screen {
     padding-top: clamp(16px, 3vh, 40px);
     padding-bottom: clamp(64px, 11vh, 150px);
+  }
+
+  .welcome-croc {
+    width: clamp(82px, 13vh, 104px);
+    height: clamp(82px, 13vh, 104px);
+    margin-bottom: var(--ps-space-2);
+  }
+
+  .welcome-returning {
+    // The short-screen slab uses a 10px shadow, so space-4 keeps 6px of visible sun.
+    gap: var(--ps-space-4);
+  }
+
+  .welcome-returning .welcome-play-button {
+    min-height: clamp(96px, 16vh, 124px);
+    box-shadow: 0 10px 0 var(--ps-grass-shade);
+    --ps-size-play-slab: var(--ps-size-play-slab-short);
   }
 }
 

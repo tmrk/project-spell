@@ -93,6 +93,7 @@ const messages = Object.freeze({
   startSuperRound: 'Super round',
   resumeRound: 'Keep going',
   startFresh: 'Start a new game',
+  whoIsPlayingHeading: 'Who is playing?',
   letterCompleted: 'completed',
   letterCurrent: 'current letter',
   letterNext: 'next',
