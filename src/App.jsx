@@ -158,6 +158,7 @@ const ROUND_SETTING_KEYS = Object.freeze([
   'syllables',
   'roundLength',
   'wordSource',
+  'wordPack',
   'customWords',
   'autoLadder',
 ]);
@@ -864,6 +865,7 @@ export default function App() {
       settings.syllables,
       settings.roundLength,
       settings.wordSource,
+      settings.wordPack,
       settings.customWords,
       settings.autoLadder,
     ]);

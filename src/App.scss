@@ -2487,6 +2487,58 @@ input:focus-visible {
   clear: both;
 }
 
+.word-pack-choice {
+  display: flex;
+  margin-bottom: var(--ps-space-4);
+  gap: var(--ps-space-2);
+  flex-wrap: wrap;
+}
+
+.word-pack-choice__option {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: var(--ps-space-1) var(--ps-space-3);
+  border: 2px solid var(--ps-ink-ghost);
+  border-radius: var(--ps-radius-pill);
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  gap: var(--ps-space-2);
+}
+
+.word-pack-choice__option:has(input:checked) {
+  border-color: var(--ps-grass);
+  background: color-mix(in srgb, var(--ps-grass) 12%, white);
+}
+
+.word-pack-choice__option:has(input:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--ps-grass) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.word-pack-choice__option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.word-pack-choice__option img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.word-pack-choice__option span {
+  @extend %ps-type-label;
+  color: var(--ps-ink);
+  font-weight: 800;
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

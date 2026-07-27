@@ -56,7 +56,15 @@ describe('settings', () => {
       roundLength: 20,
       syllables: 'any',
       wordSource: 'all',
+      wordPack: 'all',
     });
+  });
+
+  it('defaults old settings to all words and keeps only known pack ids', () => {
+    expect(DEFAULT_SETTINGS.wordPack).toBe('all');
+    expect(normaliseSettings({ music: false }).wordPack).toBe('all');
+    expect(normaliseSettings({ wordPack: 'animals' }).wordPack).toBe('animals');
+    expect(normaliseSettings({ wordPack: 'space' }).wordPack).toBe('all');
   });
 
   it('keeps valid boolean preferences', () => {
@@ -223,6 +231,39 @@ describe('word lists', () => {
     });
 
     expect(words.map(({ word }) => word)).toEqual(['cat', 'sun']);
+  });
+
+  it('applies a pack before composing it with source, length, and syllable filters', () => {
+    const words = getEligibleWords({
+      ...DEFAULT_SETTINGS,
+      locale: 'en-GB',
+      customWords: 'apple\nbread\ncat\nhoney\npizza',
+      wordSource: 'custom',
+      wordPack: 'food',
+      minLetters: 5,
+      maxLetters: 5,
+      syllables: '2',
+    });
+
+    expect(words.map(({ word }) => word)).toEqual(['apple', 'honey', 'pizza']);
+  });
+
+  it('reports an ordinary zero-match result when a pack and filters do not intersect', () => {
+    const availability = getRoundAvailability({
+      ...DEFAULT_SETTINGS,
+      autoLadder: false,
+      locale: 'en-GB',
+      wordPack: 'vehicles',
+      minLetters: 3,
+      maxLetters: 3,
+      syllables: '3',
+    });
+
+    expect(availability).toMatchObject({
+      allMatchingWordsMastered: false,
+      availableWords: [],
+      matchingCount: 0,
+    });
   });
 
   it('filters exact three-syllable and longer four-plus-syllable groups', () => {

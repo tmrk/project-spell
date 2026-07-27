@@ -10,6 +10,7 @@ import {
 } from './word-lists/en-US';
 import { wordBank as hungarianWordBank } from './word-lists/hu-HU';
 import { wordBank as swedishWordBank } from './word-lists/sv-SE';
+import { WORD_PACKS } from './word-lists/packs';
 import { ladderCap } from './progress';
 import { masteryOf } from './stats';
 
@@ -23,6 +24,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   syllables: 'any',
   roundLength: 5,
   wordSource: 'all',
+  wordPack: 'all',
   customWords: '',
   music: true,
   soundEffects: true,
@@ -231,6 +233,7 @@ export function normaliseSettings(value = {}) {
     syllables,
     roundLength: clamp(asInteger(value.roundLength, DEFAULT_SETTINGS.roundLength), 3, 20),
     wordSource: value.wordSource === 'custom' ? 'custom' : 'all',
+    wordPack: Object.hasOwn(WORD_PACKS, value.wordPack) ? value.wordPack : 'all',
     customWords: typeof value.customWords === 'string' ? value.customWords.slice(0, 4000) : '',
     music: typeof value.music === 'boolean' ? value.music : DEFAULT_SETTINGS.music,
     soundEffects:
@@ -349,7 +352,13 @@ export function getEligibleWords(value = DEFAULT_SETTINGS, excludedWords = []) {
   const source = settings.wordSource === 'custom'
     ? customWords
     : [...WORD_BANKS[settings.locale], ...customWords];
-  const unique = new Map(source.map((entry) => [entry.word, entry]));
+  const packWords = settings.wordPack === 'all'
+    ? null
+    : new Set(WORD_PACKS[settings.wordPack].words[settings.locale] ?? []);
+  const packedSource = packWords
+    ? source.filter(({ word }) => packWords.has(word))
+    : source;
+  const unique = new Map(packedSource.map((entry) => [entry.word, entry]));
   const excluded = normaliseExcludedWords(excludedWords, settings.locale);
 
   return [...unique.values()].filter(({ word, syllables }) => {

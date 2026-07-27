@@ -540,6 +540,20 @@ describe('Project Spell', () => {
     });
   });
 
+  it('defaults to all words and persists a real-radio word pack choice', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    const allWords = screen.getByRole('radio', { name: 'All words' });
+    const animals = screen.getByRole('radio', { name: 'Animals' });
+
+    expect(allWords).toBeChecked();
+    fireEvent.click(animals);
+    expect(animals).toBeChecked();
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).wordPack).toBe('animals');
+    });
+  });
+
   it('ends a playing round only after a round-setting change', () => {
     const first = render(<App />);
     playIn(PLAY_EASY);

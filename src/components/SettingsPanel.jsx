@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CloseIcon } from './Icons';
 import KeyboardChoice from './KeyboardChoice';
 import NameTag from './NameTag';
+import WordPackChoice from './WordPackChoice';
 import { MAX_PROFILES, getActiveProfile } from '../profiles';
 import {
   DEFAULT_SETTINGS,
@@ -462,6 +463,12 @@ export default function SettingsPanel({
 
           <fieldset className="settings-group">
             <legend>{copy.groupWords}</legend>
+            <WordPackChoice
+              copy={copy}
+              locale={settings.locale}
+              value={settings.wordPack}
+              onChange={(wordPack) => applyChange({ wordPack })}
+            />
             <div className="preset-grid">
               {Object.entries(PRESETS).map(([id, preset]) => {
                 const [labelKey, descriptionKey] = PRESET_MESSAGE_KEYS[id];
