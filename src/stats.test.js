@@ -3,6 +3,8 @@ import {
   averageLetterMs,
   completedWordsForLocale,
   createEmptyStats,
+  masteredWordsForLocale,
+  masteryOf,
   normaliseStats,
   recordAttempt,
   recordRoundCompleted,
@@ -80,7 +82,14 @@ describe('recording', () => {
     });
 
     expect(stats.totals).toMatchObject({ wordsCompleted: 2, perfectWords: 1 });
-    expect(stats.words['hu-HU/alma']).toEqual({ seen: 2, completed: 2, mistakes: 2, perfect: true });
+    expect(stats.words['hu-HU/alma']).toEqual({
+      seen: 2,
+      completed: 2,
+      mistakes: 2,
+      perfect: true,
+      cleanStreak: 1,
+      lastRound: 0,
+    });
   });
 
   it('accumulates play time from completed rounds', () => {
@@ -154,9 +163,26 @@ describe('normaliseStats', () => {
     });
     expect(normalised.letters).toEqual({ a: { attempts: 2, misses: 1, totalMs: 100 } });
     expect(normalised.confusions).toEqual({ 'a→s': 2 });
-    expect(normalised.words['en-GB/cat'].perfect).toBe(false);
+    expect(normalised.words['en-GB/cat']).toMatchObject({
+      cleanStreak: 0,
+      lastRound: 0,
+      perfect: false,
+    });
     expect(normalised.recentEvents).toEqual([['a', 1, 'a', 'a', 1, 100, 'easy']]);
     expect(normalised.unknown).toBeUndefined();
+  });
+
+  it('loads pre-F7 word records as learning rather than silently mastering them', () => {
+    const stats = normaliseStats({
+      version: 1,
+      totals: { roundsCompleted: 9 },
+      words: {
+        'en-GB/cat': { seen: 2, completed: 2, mistakes: 0, perfect: true },
+      },
+    });
+
+    expect(stats.words['en-GB/cat']).toMatchObject({ cleanStreak: 0, lastRound: 0 });
+    expect(masteryOf(stats.words['en-GB/cat'])).toBe('learning');
   });
 });
 
@@ -203,7 +229,7 @@ describe('summaries', () => {
     expect(starsForWord(Number.NaN)).toBe(1);
   });
 
-  it('classifies struggling and mastered words for the current locale only', () => {
+  it('classifies learning and known words for adaptive weighting in the current locale only', () => {
     const word = (overrides = {}) => ({
       word: 'cat',
       locale: 'en-GB',
@@ -226,12 +252,42 @@ describe('summaries', () => {
     const summary = summariseForSelection(stats, 'en-GB');
 
     expect([...summary.strugglingWords]).toEqual(['cat']);
-    expect([...summary.masteredWords].sort()).toEqual(['dog', 'hen']);
+    expect([...summary.masteredWords].sort()).toEqual(['dog', 'fox', 'hen']);
     expect(summary.trickyLetters).toEqual([]);
 
     const swedish = summariseForSelection(stats, 'sv-SE');
     expect([...swedish.strugglingWords]).toEqual(['katt']);
     expect([...swedish.masteredWords]).toEqual([]);
+  });
+
+  it('tracks clean streaks, round positions, and all mastery boundaries', () => {
+    let stats = createEmptyStats();
+    const complete = (mistakes = 0) => {
+      stats = recordWordCompleted(stats, {
+        word: 'cat',
+        locale: 'en-GB',
+        mistakes,
+        durationMs: 1000,
+        mode: 'easy',
+      });
+    };
+
+    expect(masteryOf(null)).toBe('new');
+    complete(1);
+    expect(masteryOf(stats.words['en-GB/cat'])).toBe('learning');
+    stats = recordRoundCompleted(stats, { length: 1, mistakes: 1, durationMs: 1000, mode: 'easy' });
+    complete();
+    expect(stats.words['en-GB/cat']).toMatchObject({ cleanStreak: 1, lastRound: 1 });
+    expect(masteryOf(stats.words['en-GB/cat'])).toBe('known');
+    complete();
+    expect(masteryOf(stats.words['en-GB/cat'])).toBe('known');
+    complete();
+    expect(masteryOf(stats.words['en-GB/cat'])).toBe('mastered');
+    expect([...masteredWordsForLocale(stats, 'en-GB')]).toEqual(['cat']);
+
+    complete(2);
+    expect(stats.words['en-GB/cat'].cleanStreak).toBe(0);
+    expect(masteryOf(stats.words['en-GB/cat'])).toBe('learning');
   });
 
   it('lists completed words for one locale so each child can keep a fresh word pool', () => {

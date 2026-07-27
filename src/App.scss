@@ -2172,6 +2172,10 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.sticker-card .sticker-card__word--mastered {
+  background: color-mix(in srgb, var(--ps-gold) 20%, transparent);
+}
+
 .sticker-card--silhouette {
   pointer-events: none;
 }
@@ -2803,8 +2807,12 @@ input:focus-visible {
 }
 
 .filter-match--empty strong {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--ps-coral-shade);
   background: color-mix(in srgb, var(--ps-coral) 12%, transparent);
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .text-button {
@@ -2858,6 +2866,13 @@ input:focus-visible {
   @extend %ps-type-caption;
   margin: 0 0 var(--ps-space-3);
   color: var(--ps-ink-soft);
+}
+
+.mastered-count-line {
+  @extend %ps-type-caption;
+  margin: 0 0 var(--ps-space-3);
+  color: var(--ps-ink-soft);
+  font-weight: 700;
 }
 
 .progress-actions {
@@ -3756,6 +3771,11 @@ svg.scenery__sparkle--super {
     align-items: flex-start;
     flex-direction: column;
     gap: var(--ps-space-2);
+  }
+
+  .filter-match--empty strong {
+    width: 100%;
+    text-align: left;
   }
 
   .confirmation-dialog__actions {

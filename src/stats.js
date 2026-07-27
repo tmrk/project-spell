@@ -26,6 +26,13 @@ export function createEmptyStats() {
 
 const asCount = (value) => (Number.isFinite(value) && value > 0 ? Math.round(value) : 0);
 
+export function masteryOf(record) {
+  if (!record || typeof record !== 'object' || asCount(record.completed) < 1) return 'new';
+  const cleanStreak = asCount(record.cleanStreak);
+  if (cleanStreak === 0) return 'learning';
+  return cleanStreak >= 3 ? 'mastered' : 'known';
+}
+
 function withEvent(stats, event) {
   let recentEvents = [...stats.recentEvents, event].slice(-RECENT_EVENTS_CAP);
   let next = { ...stats, recentEvents };
@@ -66,7 +73,14 @@ export function recordAttempt(stats, { expected, typed, correct, latencyMs, mode
 
 export function recordWordCompleted(stats, { word, locale, mistakes, durationMs, mode }) {
   const id = `${locale}/${word}`;
-  const entry = stats.words[id] ?? { seen: 0, completed: 0, mistakes: 0, perfect: false };
+  const entry = stats.words[id] ?? {
+    seen: 0,
+    completed: 0,
+    mistakes: 0,
+    perfect: false,
+    cleanStreak: 0,
+    lastRound: 0,
+  };
   const missCount = asCount(mistakes);
   const next = {
     ...stats,
@@ -82,6 +96,10 @@ export function recordWordCompleted(stats, { word, locale, mistakes, durationMs,
         completed: entry.completed + 1,
         mistakes: entry.mistakes + missCount,
         perfect: missCount === 0,
+        cleanStreak: missCount === 0 ? asCount(entry.cleanStreak) + 1 : 0,
+        // Word completion precedes the round-completed event, so this is the zero-based round
+        // position used by REVIEW_GAP: a word from round one is due when round four is composed.
+        lastRound: asCount(stats.totals.roundsCompleted),
       },
     },
   };
@@ -134,6 +152,10 @@ export function normaliseStats(value) {
         completed: asCount(entry.completed),
         mistakes: asCount(entry.mistakes),
         perfect: entry.perfect === true,
+        // Pre-F7 blobs deliberately enter as learning words. They can return through the new,
+        // explicit review loop rather than being silently treated as already mastered.
+        cleanStreak: asCount(entry.cleanStreak),
+        lastRound: asCount(entry.lastRound),
       };
     });
   }
@@ -169,8 +191,23 @@ export function completedWordsForLocale(stats, locale) {
   return completedWords;
 }
 
-// Feeds adaptive word selection (roadmap G6). `perfect` records whether the *most recent*
-// completion was clean, so a struggling word is one the child last got wrong.
+export function masteredWordsForLocale(stats, locale) {
+  const safe = stats?.words && typeof stats.words === 'object' ? stats : createEmptyStats();
+  const prefix = `${locale}/`;
+  const masteredWords = new Set();
+
+  Object.entries(safe.words).forEach(([id, entry]) => {
+    if (typeof id !== 'string' || !id.startsWith(prefix) || masteryOf(entry) !== 'mastered') return;
+    const word = id.slice(prefix.length);
+    if (word) masteredWords.add(word);
+  });
+
+  return masteredWords;
+}
+
+// Feeds adaptive word selection within F7's mastery pools. Learning words get extra practice;
+// known words are gently down-weighted while they wait for their next review. Truly mastered
+// words never reach the weighting stage because composeRound retires them.
 export function summariseForSelection(stats, locale) {
   const safe = stats?.words && typeof stats.words === 'object' ? stats : createEmptyStats();
   const prefix = `${locale}/`;
@@ -181,8 +218,9 @@ export function summariseForSelection(stats, locale) {
     if (typeof id !== 'string' || !id.startsWith(prefix) || !entry || typeof entry !== 'object') return;
     const word = id.slice(prefix.length);
     if (!word || asCount(entry.completed) < 1) return;
-    if (entry.perfect !== true) strugglingWords.add(word);
-    else if (asCount(entry.completed) >= 2) masteredWords.add(word);
+    const mastery = masteryOf(entry);
+    if (mastery === 'learning') strugglingWords.add(word);
+    else if (mastery === 'known') masteredWords.add(word);
   });
 
   return {

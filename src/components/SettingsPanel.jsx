@@ -3,19 +3,26 @@ import { CloseIcon } from './Icons';
 import KeyboardChoice from './KeyboardChoice';
 import NameTag from './NameTag';
 import { MAX_PROFILES, getActiveProfile } from '../profiles';
-import { DEFAULT_SETTINGS, PALETTES, PRESETS, getEligibleWords, normaliseSettings } from '../game';
+import {
+  DEFAULT_SETTINGS,
+  PALETTES,
+  PRESETS,
+  getRoundAvailability,
+  normaliseSettings,
+} from '../game';
 import {
   buildLetterHeatMap,
-  completedWordsForLocale,
   createEmptyStats,
   topConfusions,
   trickiestLetters,
 } from '../stats';
+import { createEmptyProgress, normaliseProgress } from '../progress';
 import { LOCALE_OPTIONS, formatMessage, getLocale } from '../locales';
 import { CREDITS } from '../credits';
 import packageInfo from '../../package.json';
 
 const EMPTY_STATS = createEmptyStats();
+const EMPTY_PROGRESS = createEmptyProgress();
 const NUMBER_OPTIONS = Array.from({ length: 13 }, (_, index) => index + 2);
 const ROUND_OPTIONS = [3, 5, 8, 10, 12, 15, 20];
 const PALETTE_MESSAGE_KEYS = Object.freeze({
@@ -208,13 +215,15 @@ export default function SettingsPanel({
     [customWords, settings],
   );
   const statsData = stats ?? EMPTY_STATS;
+  const progressData = progress ? normaliseProgress(progress) : EMPTY_PROGRESS;
   const wordCounts = useMemo(() => {
-    const matching = getEligibleWords(eligibleSettings).length;
-    const completed = completedWordsForLocale(statsData, eligibleSettings.locale);
-    const remaining = getEligibleWords(eligibleSettings, completed).length;
-    return { matching, remaining };
-  }, [eligibleSettings, statsData]);
-  const allMatchingWordsCompleted = wordCounts.matching > 0 && wordCounts.remaining === 0;
+    const availability = getRoundAvailability(eligibleSettings, statsData, progressData);
+    return {
+      allMastered: availability.allMatchingWordsMastered,
+      matching: availability.matchingCount,
+      remaining: availability.availableWords.length,
+    };
+  }, [eligibleSettings, progressData, statsData]);
   const hasPlayData = statsData.totals.attempts > 0 || statsData.totals.wordsCompleted > 0;
   const trickyLetters = trickiestLetters(statsData);
   const heatMap = useMemo(() => buildLetterHeatMap(statsData), [statsData]);
@@ -535,6 +544,18 @@ export default function SettingsPanel({
             </label>
             <label className="toggle-row toggle-row--described">
               <span className="toggle-copy">
+                <span>{copy.autoLadder}</span>
+                <small>{copy.autoLadderHelp}</small>
+              </span>
+              <input
+                type="checkbox"
+                aria-label={copy.autoLadder}
+                checked={settings.autoLadder}
+                onChange={(event) => applyChange({ autoLadder: event.target.checked })}
+              />
+            </label>
+            <label className="toggle-row toggle-row--described">
+              <span className="toggle-copy">
                 <span>{copy.adaptivePractice}</span>
                 <small>{copy.adaptivePracticeHelp}</small>
               </span>
@@ -554,8 +575,8 @@ export default function SettingsPanel({
                       count: wordCounts.remaining,
                       unit: wordCounts.remaining === 1 ? copy.wordSingular : copy.wordPlural,
                     })
-                  : allMatchingWordsCompleted
-                    ? copy.allMatchingWordsCompleted
+                  : wordCounts.allMastered
+                    ? copy.allWordsMastered
                     : copy.noWordsMatch}
               </strong>
             </div>
@@ -626,6 +647,9 @@ export default function SettingsPanel({
             ) : (
               <p className="progress-empty">{copy.progressNoData}</p>
             )}
+            <p className="mastered-count-line">
+              {formatMessage(copy.masteredCountLine, { count: progressData.masteredCount })}
+            </p>
             {heatMap.length > 0 && (
               // Parent-facing only. Nothing here is ever shown to the child, and it stays
               // folded away so the panel does not turn into a dashboard.

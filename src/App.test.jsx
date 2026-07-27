@@ -526,6 +526,20 @@ describe('Project Spell', () => {
       .toHaveTextContent('✓ Saved');
   });
 
+  it('defaults the gentle length ladder on and lets a parent turn it off', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent settings' }));
+    const ladder = screen.getByRole('checkbox', {
+      name: 'Start short, grow longer as words are mastered',
+    });
+
+    expect(ladder).toBeChecked();
+    fireEvent.click(ladder);
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEY)).autoLadder).toBe(false);
+    });
+  });
+
   it('ends a playing round only after a round-setting change', () => {
     const first = render(<App />);
     playIn(PLAY_EASY);
@@ -1034,13 +1048,13 @@ describe('Project Spell', () => {
     expect(screen.getByText(/No play data yet/)).toBeInTheDocument();
   });
 
-  it('keeps completed words out of future rounds until that child clears progress', () => {
+  it('retires a word after three clean completions and marks its sticker as mastered', () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
       SETTINGS_KEY,
       JSON.stringify({
         ...BASE_SETTINGS,
-        customWords: 'cat\ndog\nfox',
+        customWords: 'cat',
         wordSource: 'custom',
         roundLength: 3,
         music: false,
@@ -1050,35 +1064,83 @@ describe('Project Spell', () => {
 
     render(<App />);
     playIn(PLAY_EASY);
-    const completed = [];
+    completeCurrentRound('cat', 3);
 
-    for (let index = 0; index < 3; index += 1) {
-      const word = [...document.querySelectorAll('.letter__visual')]
-        .map((letter) => letter.textContent.trim())
-        .join('');
-      completed.push(word);
-      fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
-        target: { value: word },
-      });
-      act(() => vi.advanceTimersByTime(760));
-    }
-
-    expect(new Set(completed)).toEqual(new Set(['cat', 'dog', 'fox']));
+    expect(JSON.parse(window.localStorage.getItem(STATS_KEY)).words['en-GB/cat'])
+      .toMatchObject({ cleanStreak: 3, lastRound: 0 });
+    expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).masteredCount).toBe(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+    expect(screen.getByRole('button', { name: 'cat' }).querySelector('span'))
+      .toHaveClass('sticker-card__word--mastered');
+    fireEvent.click(screen.getByRole('button', { name: 'Close sticker book' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next round' }));
 
     expect(screen.getByRole('dialog', { name: 'Settings (for parents)' })).toBeInTheDocument();
     expect(screen.getByText(
-      'All matching words are complete. Clear progress below to play them again.',
+      'Every matching word is mastered — brilliant! Add more words or raise the filters.',
     )).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear progress' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Clear everything' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Next round' }));
+    expect(screen.getByText('1 words mastered')).toBeInTheDocument();
+  });
 
-    expect(document.querySelector('.app')).toHaveAttribute('data-phase', 'playing');
-    expect(['cat', 'dog', 'fox']).toContain([...document.querySelectorAll('.letter__visual')]
-      .map((letter) => letter.textContent.trim())
-      .join(''));
+  it('keeps a struggled word out of the next round and reviews it after three rounds', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const settings = {
+      ...BASE_SETTINGS,
+      autoLadder: false,
+      customWords: 'cat\ndog\nfox\nhen\npig\nsun',
+      wordSource: 'custom',
+      roundLength: 5,
+      music: false,
+      soundEffects: false,
+    };
+    const learningStats = (roundsCompleted) => ({
+      version: 1,
+      totals: { attempts: 1, wordsCompleted: 1, roundsCompleted },
+      letters: {},
+      confusions: {},
+      words: {
+        'en-GB/cat': {
+          seen: 1,
+          completed: 1,
+          mistakes: 1,
+          perfect: false,
+          cleanStreak: 0,
+          lastRound: 0,
+        },
+      },
+      recentEvents: [],
+    });
+    const playAndCollect = () => {
+      const words = [];
+      playIn(PLAY_EASY);
+      for (let index = 0; index < 5; index += 1) {
+        const word = [...document.querySelectorAll('.letter__visual')]
+          .map((letter) => letter.textContent.trim())
+          .join('');
+        words.push(word);
+        fireEvent.input(screen.getByRole('textbox', { name: 'Type the next letter' }), {
+          target: { value: word },
+        });
+        act(() => vi.advanceTimersByTime(760));
+      }
+      return words;
+    };
+
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    window.localStorage.setItem(STATS_KEY, JSON.stringify(learningStats(1)));
+    const nextRound = render(<App />);
+    expect(playAndCollect()).not.toContain('cat');
+    nextRound.unmount();
+
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    window.localStorage.setItem(STATS_KEY, JSON.stringify(learningStats(3)));
+    window.localStorage.removeItem(PROGRESS_KEY);
+    window.localStorage.removeItem(SESSION_KEY);
+    render(<App />);
+    const dueRound = playAndCollect();
+    expect(dueRound).toContain('cat');
+    expect(dueRound.indexOf('cat')).toBeGreaterThan(0);
   });
 
   it('exports valid local stats and reward progress as dated JSON', async () => {
@@ -2680,7 +2742,7 @@ describe('Project Spell', () => {
       expect(window.localStorage.getItem(PROGRESS_KEY)).toContain('"totalStars":12');
     });
 
-    it('keeps completed-word exclusions scoped to the child who completed them', () => {
+    it('keeps mastery scoped to the child who mastered the word', () => {
       window.localStorage.setItem(PROFILES_KEY, JSON.stringify({
         version: 1,
         activeId: 'default',
@@ -2704,7 +2766,14 @@ describe('Project Spell', () => {
         letters: {},
         confusions: {},
         words: {
-          'en-GB/cat': { seen: 1, completed: 1, mistakes: 0, perfect: true },
+          'en-GB/cat': {
+            seen: 3,
+            completed: 3,
+            mistakes: 0,
+            perfect: true,
+            cleanStreak: 3,
+            lastRound: 0,
+          },
         },
         recentEvents: [],
       }));
@@ -2712,7 +2781,7 @@ describe('Project Spell', () => {
       render(<App />);
       playIn(PLAY_EASY);
       expect(screen.getByText(
-        'All matching words are complete. Clear progress below to play them again.',
+        'Every matching word is mastered — brilliant! Add more words or raise the filters.',
       )).toBeInTheDocument();
 
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Play as Bo' }));

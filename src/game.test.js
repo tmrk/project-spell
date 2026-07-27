@@ -3,11 +3,14 @@ import {
   DEFAULT_SETTINGS,
   WORD_BANK,
   WORD_BANKS,
+  REVIEW_GAP,
+  composeRound,
   createAdaptiveRound,
   createRound,
   createReviewRound,
   estimateSyllables,
   getEligibleWords,
+  getRoundAvailability,
   letterColors,
   lettersMatch,
   normaliseSettings,
@@ -15,6 +18,7 @@ import {
   PALETTES,
 } from './game';
 import { LOCALES, detectDefaultLocale } from './locales';
+import { createEmptyStats, recordRoundCompleted, recordWordCompleted } from './stats';
 
 describe('regional default', () => {
   it('uses US English for US-spelling browser regions', () => {
@@ -88,6 +92,13 @@ describe('settings', () => {
     expect(normaliseSettings({ music: false, speech: true }).spellBack).toBe(true);
     expect(normaliseSettings({ spellBack: 'yes' }).spellBack).toBe(true);
     expect(normaliseSettings({ spellBack: false }).spellBack).toBe(false);
+  });
+
+  it('loads pre-F7 settings with the gentle length ladder on', () => {
+    expect(DEFAULT_SETTINGS.autoLadder).toBe(true);
+    expect(normaliseSettings({ music: false }).autoLadder).toBe(true);
+    expect(normaliseSettings({ autoLadder: false }).autoLadder).toBe(false);
+    expect(normaliseSettings({ autoLadder: 'no' }).autoLadder).toBe(true);
   });
 
   it('defaults the game mode to easy and accepts only normal as the alternative', () => {
@@ -260,6 +271,31 @@ describe('accent matching', () => {
 });
 
 describe('round creation', () => {
+  const masteryStats = (roundsCompleted, records = {}) => ({
+    totals: { roundsCompleted },
+    words: Object.fromEntries(
+      Object.entries(records).map(([word, record]) => [
+        `en-GB/${word}`,
+        {
+          seen: 1,
+          completed: 1,
+          mistakes: 0,
+          perfect: true,
+          cleanStreak: 1,
+          lastRound: 0,
+          ...record,
+        },
+      ]),
+    ),
+  });
+  const seeded = (seed) => {
+    let state = seed;
+    return () => {
+      state = (state * 1664525 + 1013904223) % 4294967296;
+      return state / 4294967296;
+    };
+  };
+
   it('fills the requested round length without adjacent repeats', () => {
     const round = createRound(
       {
@@ -281,7 +317,7 @@ describe('round creation', () => {
     ).toEqual([]);
   });
 
-  it('excludes completed words from ordinary, adaptive, and review rounds', () => {
+  it('honours explicit exclusions in the lower-level ordinary, adaptive, and review helpers', () => {
     const settings = {
       ...DEFAULT_SETTINGS,
       wordSource: 'custom',
@@ -305,6 +341,159 @@ describe('round creation', () => {
       summary,
       completed,
     ))).toEqual(new Set(['fox']));
+  });
+
+  it('composes a capped, non-adjacent review slice after the three-round gap', () => {
+    expect(REVIEW_GAP).toBe(3);
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      autoLadder: false,
+      wordSource: 'custom',
+      customWords: 'cat\ndog\nfox\nhen\npig\nsun\nant\nbat',
+      roundLength: 5,
+    };
+    const stats = masteryStats(3, {
+      cat: { cleanStreak: 0, lastRound: 0 },
+      dog: { cleanStreak: 2, lastRound: 0 },
+      fox: { cleanStreak: 1, lastRound: 2 },
+    });
+    const due = new Set(['cat', 'dog']);
+    const round = composeRound(settings, stats, seeded(7));
+    const duePositions = round
+      .map((word, index) => (due.has(word) ? index : -1))
+      .filter((index) => index >= 0);
+
+    expect(round).toHaveLength(5);
+    expect(duePositions).toHaveLength(2);
+    expect(duePositions.every((position) => position > 0)).toBe(true);
+    expect(Math.abs(duePositions[0] - duePositions[1])).toBeGreaterThan(1);
+    expect(round).not.toContain('fox');
+  });
+
+  it('gives a fresh child three entirely unseen rounds before deliberate review begins', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      autoLadder: false,
+      wordSource: 'custom',
+      customWords: 'ant\nbat\nbee\ncat\ncow\ncup\ndog\negg\nfly\nfox\nhen\njam\njar\nkey\nowl\npig\nsun\nyak',
+      roundLength: 5,
+    };
+    const random = seeded(20260727);
+    let stats = createEmptyStats();
+    const encountered = new Set();
+    const firstRound = new Set();
+
+    for (let roundIndex = 0; roundIndex < 3; roundIndex += 1) {
+      const round = composeRound(settings, stats, random);
+      expect(round).toHaveLength(5);
+      expect(
+        round.every((word) => !encountered.has(word)),
+        `round ${roundIndex + 1}: ${round.join(', ')}; already: ${[...encountered].join(', ')}`,
+      ).toBe(true);
+      if (roundIndex === 0) round.forEach((word) => firstRound.add(word));
+      round.forEach((word) => {
+        encountered.add(word);
+        stats = recordWordCompleted(stats, {
+          word,
+          locale: 'en-GB',
+          mistakes: 0,
+          durationMs: 1000,
+          mode: 'easy',
+        });
+      });
+      stats = recordRoundCompleted(stats, {
+        length: round.length,
+        mistakes: 0,
+        durationMs: 5000,
+        mode: 'easy',
+      });
+    }
+
+    const fourthRound = composeRound(settings, stats, random);
+    expect(fourthRound.filter((word) => firstRound.has(word))).toHaveLength(2);
+  });
+
+  it('prioritises unseen words, retires mastered words, and stays deterministic', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      autoLadder: false,
+      wordSource: 'custom',
+      customWords: 'cat\ndog\nfox\nhen\npig\nsun',
+      roundLength: 4,
+    };
+    const stats = masteryStats(1, {
+      cat: { cleanStreak: 0, lastRound: 0 },
+      dog: { cleanStreak: 3, lastRound: 0 },
+    });
+    const first = composeRound(settings, stats, seeded(19));
+    const second = composeRound(settings, stats, seeded(19));
+
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(4);
+    expect(first).not.toContain('cat');
+    expect(first).not.toContain('dog');
+    expect(new Set(first)).toEqual(new Set(['fox', 'hen', 'pig', 'sun']));
+    expect(first.every((word, index) => index === 0 || word !== first[index - 1])).toBe(true);
+  });
+
+  it('applies the length ladder inside parent filters and raises an exhausted rung', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      wordSource: 'custom',
+      customWords: 'cat\nlion\napple\nplanet',
+      minLetters: 3,
+      maxLetters: 8,
+      roundLength: 3,
+    };
+    const fresh = getRoundAvailability(settings, masteryStats(0), { masteredCount: 0 });
+    expect(fresh.cap).toBe(4);
+    expect(new Set(fresh.availableWords)).toEqual(new Set(['cat', 'lion']));
+
+    const parentMinimum = getRoundAvailability(
+      { ...settings, minLetters: 6 },
+      masteryStats(0),
+      { masteredCount: 0 },
+    );
+    expect(parentMinimum.cap).toBe(6);
+    expect(parentMinimum.availableWords).toEqual(['planet']);
+
+    const exhausted = getRoundAvailability(
+      settings,
+      masteryStats(8, {
+        cat: { cleanStreak: 3 },
+        lion: { cleanStreak: 3 },
+      }),
+      { masteredCount: 0 },
+    );
+    expect(exhausted.cap).toBe(5);
+    expect(exhausted.availableWords).toEqual(['apple']);
+
+    const ladderOff = getRoundAvailability(
+      { ...settings, autoLadder: false },
+      masteryStats(0),
+      { masteredCount: 0 },
+    );
+    expect(ladderOff.effectiveSettings.maxLetters).toBe(settings.maxLetters);
+    expect(ladderOff.availableWords).toEqual(['cat', 'lion', 'apple', 'planet']);
+  });
+
+  it('reports true exhaustion only when every parent-matching word is mastered', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      wordSource: 'custom',
+      customWords: 'cat\ndog',
+      roundLength: 3,
+    };
+    const stats = masteryStats(9, {
+      cat: { cleanStreak: 3 },
+      dog: { cleanStreak: 3 },
+    });
+    const availability = getRoundAvailability(settings, stats, { masteredCount: 2 });
+
+    expect(availability.availableWords).toEqual([]);
+    expect(availability.allMatchingWordsMastered).toBe(true);
+    expect(composeRound(settings, stats, seeded(1), { progress: { masteredCount: 2 } }))
+      .toEqual([]);
   });
 
   it('puts eligible struggle words first and tops up without adjacent repeats', () => {

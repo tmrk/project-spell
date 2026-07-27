@@ -24,6 +24,7 @@ export function createEmptyProgress() {
     badges: [],
     lastCelebratedPages: [],
     roundsTowardSuper: 0,
+    masteredCount: 0,
   };
 }
 
@@ -38,7 +39,17 @@ export function normaliseProgress(value) {
     badges: normaliseIds(value.badges),
     lastCelebratedPages: normaliseIds(value.lastCelebratedPages),
     roundsTowardSuper: asCyclePosition(value.roundsTowardSuper),
+    masteredCount: asCount(value.masteredCount),
   };
+}
+
+export function ladderCap(progress) {
+  return Math.min(4 + Math.floor(normaliseProgress(progress).masteredCount / 8), 12);
+}
+
+export function recordWordMastered(progress) {
+  const current = normaliseProgress(progress);
+  return { ...current, masteredCount: current.masteredCount + 1 };
 }
 
 export function addStars(progress, amount) {

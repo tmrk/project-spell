@@ -10,6 +10,8 @@ import {
 } from './word-lists/en-US';
 import { wordBank as hungarianWordBank } from './word-lists/hu-HU';
 import { wordBank as swedishWordBank } from './word-lists/sv-SE';
+import { ladderCap } from './progress';
+import { masteryOf } from './stats';
 
 export const SETTINGS_KEY = 'project-spell:settings:v1';
 
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   eyes: true,
   acceptUnaccented: false,
   adaptivePractice: true,
+  autoLadder: true,
   palette: 'sunshine',
   keyboard: 'system',
 });
@@ -243,6 +246,10 @@ export function normaliseSettings(value = {}) {
       typeof value.adaptivePractice === 'boolean'
         ? value.adaptivePractice
         : DEFAULT_SETTINGS.adaptivePractice,
+    autoLadder:
+      typeof value.autoLadder === 'boolean'
+        ? value.autoLadder
+        : DEFAULT_SETTINGS.autoLadder,
     palette: PALETTES.includes(value.palette) ? value.palette : DEFAULT_SETTINGS.palette,
     keyboard: KEYBOARD_MODES.includes(value.keyboard) ? value.keyboard : DEFAULT_SETTINGS.keyboard,
   };
@@ -418,6 +425,268 @@ function drawWeighted(candidates, weights, random) {
     if (ticket <= 0) return word;
   }
   return candidates.at(-1);
+}
+
+export const REVIEW_GAP = 3;
+
+function wordRecord(stats, locale, word) {
+  const words = stats?.words && typeof stats.words === 'object' ? stats.words : {};
+  return words[`${locale}/${word}`];
+}
+
+function partitionMastery(entries, stats, locale) {
+  const currentRound = Number.isFinite(stats?.totals?.roundsCompleted)
+    ? Math.max(0, Math.round(stats.totals.roundsCompleted))
+    : 0;
+  const dueBeforeOrAt = currentRound - REVIEW_GAP;
+  const result = { unseen: [], due: [], rest: [], mastered: [] };
+
+  entries.forEach(({ word }) => {
+    const record = wordRecord(stats, locale, word);
+    const mastery = masteryOf(record);
+    if (mastery === 'new') {
+      result.unseen.push(word);
+    } else if (mastery === 'mastered') {
+      result.mastered.push(word);
+    } else if ((Number.isFinite(record?.lastRound) ? Math.max(0, Math.round(record.lastRound)) : 0) <= dueBeforeOrAt) {
+      result.due.push(word);
+    } else {
+      result.rest.push(word);
+    }
+  });
+
+  return result;
+}
+
+function masteryAvailability(value, stats, progress) {
+  const settings = normaliseSettings(value);
+  const ladderCeiling = Math.min(
+    settings.maxLetters,
+    Math.max(settings.minLetters, 12),
+  );
+  let cap = settings.autoLadder
+    ? Math.min(settings.maxLetters, Math.max(settings.minLetters, ladderCap(progress)))
+    : settings.maxLetters;
+  let effectiveSettings = { ...settings, maxLetters: cap };
+  let pools = partitionMastery(
+    getEligibleWords(effectiveSettings),
+    stats,
+    settings.locale,
+  );
+
+  // A small custom list or a narrow syllable filter can exhaust a rung before the global
+  // eight-word threshold. Open one rung at a time until something new is available, without ever
+  // crossing the parent's outer bound or the twelve-letter learning ceiling.
+  while (
+    settings.autoLadder &&
+    pools.unseen.length + pools.due.length + pools.rest.length === 0 &&
+    cap < ladderCeiling
+  ) {
+    cap += 1;
+    effectiveSettings = { ...settings, maxLetters: cap };
+    pools = partitionMastery(
+      getEligibleWords(effectiveSettings),
+      stats,
+      settings.locale,
+    );
+  }
+
+  return { cap, effectiveSettings, pools };
+}
+
+export function getRoundAvailability(value = DEFAULT_SETTINGS, stats = null, progress = null) {
+  const settings = normaliseSettings(value);
+  const matching = getEligibleWords(settings);
+  const { cap, effectiveSettings, pools } = masteryAvailability(settings, stats, progress);
+  const availableWords = [...pools.unseen, ...pools.due, ...pools.rest];
+  const allMatchingWordsMastered =
+    matching.length > 0 &&
+    matching.every(({ word }) => masteryOf(wordRecord(stats, settings.locale, word)) === 'mastered');
+
+  return {
+    availableWords,
+    allMatchingWordsMastered,
+    cap,
+    effectiveSettings,
+    matchingCount: matching.length,
+    pools,
+  };
+}
+
+function pickFromPool(pool, summary, random, previous) {
+  if (!pool.length) return null;
+  const alternatives = pool.length > 1 ? pool.filter((word) => word !== previous) : pool;
+  const candidates = alternatives.length ? alternatives : pool;
+  const weighting = normaliseSummary(summary);
+  const weights = new Map(candidates.map((word) => [word, adaptiveWeight(word, weighting)]));
+  const picked = summary
+    ? drawWeighted(candidates, weights, random)
+    : candidates[Math.min(candidates.length - 1, Math.floor(random() * candidates.length))];
+  pool.splice(pool.indexOf(picked), 1);
+  return picked;
+}
+
+function pickReviewPositions(roundLength, count, random) {
+  if (count <= 0) return new Set();
+  const candidates = shuffle(
+    Array.from({ length: Math.max(0, roundLength - 1) }, (_unused, index) => index + 1),
+    random,
+  );
+  const positions = [];
+  for (const position of candidates) {
+    if (positions.every((chosen) => Math.abs(chosen - position) > 1)) {
+      positions.push(position);
+      if (positions.length === count) break;
+    }
+  }
+  return new Set(positions);
+}
+
+function drawPriority(groups, summary, random, previous) {
+  for (const group of groups) {
+    if (group.some((word) => word !== previous) || (group.length && groups.every(
+      (candidateGroup) => !candidateGroup.some((word) => word !== previous),
+    ))) {
+      const picked = pickFromPool(group, summary, random, previous);
+      if (picked) return picked;
+    }
+  }
+  return null;
+}
+
+function refillPriorityPools(originalPools) {
+  const seen = new Set();
+  return originalPools.map((pool) => pool.filter((word) => {
+    if (seen.has(word)) return false;
+    seen.add(word);
+    return true;
+  }));
+}
+
+function composeOrdinaryRound(settings, pools, summary, random) {
+  const reviewCount = Math.min(
+    pools.due.length,
+    settings.roundLength >= 5 ? 2 : 1,
+  );
+  const reviewPositions = pickReviewPositions(settings.roundLength, reviewCount, random);
+  const dueForSlots = [...pools.due];
+  const reservedDue = [];
+  for (let index = 0; index < reviewCount; index += 1) {
+    reservedDue.push(pickFromPool(dueForSlots, summary, random, reservedDue.at(-1)));
+  }
+
+  const originals = [
+    [...pools.unseen],
+    dueForSlots,
+    [...pools.rest],
+  ];
+  const allAvailable = [...new Set([...pools.unseen, ...pools.due, ...pools.rest])];
+  let working = originals.map((pool) => [...pool]);
+  let repeats = [...allAvailable];
+  const round = [];
+
+  for (let index = 0; index < settings.roundLength; index += 1) {
+    const previous = round.at(-1);
+    let picked;
+    if (reviewPositions.has(index)) {
+      picked = pickFromPool(reservedDue, summary, random, previous);
+    } else {
+      // A due word never opens an ordinary round. If discovery is exhausted, a recent known word
+      // is a calmer opener than pulling a scheduled review forwards into position zero.
+      const groups = index === 0
+        ? [working[0], working[2], working[1]]
+        : working;
+      picked = drawPriority(groups, summary, random, previous);
+      if (!picked) {
+        working = refillPriorityPools(originals);
+        picked = drawPriority(working, summary, random, previous);
+      }
+    }
+    if (!picked) {
+      // Only reserved words, or a completely exhausted tiny bank, remain. Draw from a separate
+      // repeat pool so a word reserved for a later review slot stays reserved.
+      if (!repeats.length) repeats = [...allAvailable];
+      picked = pickFromPool(repeats, summary, random, previous);
+    }
+    if (!picked) break;
+    round.push(picked);
+  }
+
+  return round;
+}
+
+function asNormalisedWordSet(value, locale) {
+  const source = value instanceof Set ? [...value] : Array.isArray(value) ? value : [];
+  return new Set(source
+    .filter((word) => typeof word === 'string' && word)
+    .map((word) => word.normalize('NFC').toLocaleLowerCase(locale)));
+}
+
+function composeSuperRound(settings, pools, stats, struggles, summary, random) {
+  const available = [...pools.unseen, ...pools.due, ...pools.rest];
+  const struggleSet = asNormalisedWordSet(struggles, settings.locale);
+  const rememberedSet = asNormalisedWordSet(
+    normaliseSummary(summary).strugglingWords,
+    settings.locale,
+  );
+  const isLearning = (word) =>
+    masteryOf(wordRecord(stats, settings.locale, word)) === 'learning';
+  const groups = [
+    available.filter((word) => struggleSet.has(word) && isLearning(word)),
+    available.filter((word) => struggleSet.has(word) && !isLearning(word)),
+    available.filter(
+      (word) => !struggleSet.has(word) && rememberedSet.has(word) && isLearning(word),
+    ),
+    available.filter(
+      (word) => !struggleSet.has(word) && rememberedSet.has(word) && !isLearning(word),
+    ),
+    available.filter((word) => !struggleSet.has(word) && !rememberedSet.has(word)),
+  ];
+  const originals = refillPriorityPools(groups);
+  let working = originals.map((group) => [...group]);
+  const round = [];
+
+  while (round.length < settings.roundLength) {
+    let picked = drawPriority(working, summary, random, round.at(-1));
+    if (!picked) {
+      working = refillPriorityPools(originals);
+      picked = drawPriority(working, summary, random, round.at(-1));
+    }
+    if (!picked) break;
+    round.push(picked);
+  }
+  return round;
+}
+
+/**
+ * Builds one mastery-aware round. Deterministic for a given random source. The public three-
+ * argument form is the ordinary path; options carry orchestration facts without leaking browser
+ * state into this pure selector.
+ */
+export function composeRound(
+  value = DEFAULT_SETTINGS,
+  stats = null,
+  random = Math.random,
+  {
+    progress = null,
+    selectionSummary = null,
+    struggles = [],
+    superRound = false,
+  } = {},
+) {
+  const { effectiveSettings, pools } = masteryAvailability(value, stats, progress);
+  const availableCount = pools.unseen.length + pools.due.length + pools.rest.length;
+  if (!availableCount) return [];
+  return superRound
+    ? composeSuperRound(
+        effectiveSettings,
+        pools,
+        stats,
+        struggles,
+        selectionSummary,
+        random,
+      )
+    : composeOrdinaryRound(effectiveSettings, pools, selectionSummary, random);
 }
 
 export function createAdaptiveRound(

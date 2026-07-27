@@ -35,7 +35,7 @@ export function StickerPicture({ codepoint, className = '', style }) {
   return asset ? <img className={className} src={asset} alt="" style={style} /> : null;
 }
 
-function StickerItem({ party, sticker, onSpeak, onWobble, wobbling }) {
+function StickerItem({ mastered, party, sticker, onSpeak, onWobble, wobbling }) {
   const rotation = (hashCode(sticker.id) % 9) - 4;
   const picture = (
     <StickerPicture
@@ -73,7 +73,7 @@ function StickerItem({ party, sticker, onSpeak, onWobble, wobbling }) {
       aria-label={sticker.word}
     >
       {picture}
-      <span>{sticker.word}</span>
+      <span className={mastered ? 'sticker-card__word--mastered' : undefined}>{sticker.word}</span>
     </button>
   );
 }
@@ -82,6 +82,7 @@ export default function StickerBook({
   copy,
   croc,
   locale,
+  masteredWords = new Set(),
   onCelebratePages,
   onClose,
   onSpeak,
@@ -168,6 +169,7 @@ export default function StickerBook({
                     {page.stickers.map((sticker) => (
                       <StickerItem
                         key={sticker.id}
+                        mastered={masteredWords.has(sticker.word)}
                         party={partyVisible}
                         sticker={sticker}
                         onSpeak={onSpeak}

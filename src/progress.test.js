@@ -9,11 +9,13 @@ import {
   celebratePages,
   createEmptyProgress,
   isSuperRoundNext,
+  ladderCap,
   newBadges,
   normaliseProgress,
   pickShinyAward,
   pickStickerAward,
   recordRoundInCycle,
+  recordWordMastered,
 } from './progress';
 
 describe('progress store', () => {
@@ -27,6 +29,7 @@ describe('progress store', () => {
       badges: [],
       lastCelebratedPages: [],
       roundsTowardSuper: 0,
+      masteredCount: 0,
     });
   });
 
@@ -54,7 +57,22 @@ describe('progress store', () => {
       badges: ['starter'],
       lastCelebratedPages: ['animals'],
       roundsTowardSuper: 3,
+      masteredCount: 0,
     });
+  });
+
+  it('loads pre-F7 progress safely and grows the length cap every eight mastered words', () => {
+    expect(normaliseProgress({ version: 1, totalStars: 8 }).masteredCount).toBe(0);
+    expect(ladderCap(createEmptyProgress())).toBe(4);
+    expect(ladderCap({ ...createEmptyProgress(), masteredCount: 7 })).toBe(4);
+    expect(ladderCap({ ...createEmptyProgress(), masteredCount: 8 })).toBe(5);
+    expect(ladderCap({ ...createEmptyProgress(), masteredCount: 64 })).toBe(12);
+    expect(ladderCap({ ...createEmptyProgress(), masteredCount: 999 })).toBe(12);
+
+    const original = createEmptyProgress();
+    const next = recordWordMastered(original);
+    expect(next.masteredCount).toBe(1);
+    expect(original.masteredCount).toBe(0);
   });
 
   it('adds stars without mutating the original and ignores invalid deductions', () => {

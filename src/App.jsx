@@ -18,17 +18,16 @@ import { ChevronIcon, HomeIcon, MusicIcon, RepeatIcon, SettingsIcon, StarIcon } 
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
-  createAdaptiveRound,
-  createReviewRound,
-  createRound,
+  composeRound,
   letterColors,
   lettersMatch,
   normaliseSettings,
 } from './game';
 import {
   STATS_KEY,
-  completedWordsForLocale,
   createEmptyStats,
+  masteredWordsForLocale,
+  masteryOf,
   normaliseStats,
   recordAttempt,
   recordRoundCompleted,
@@ -52,6 +51,7 @@ import {
   pickShinyAward,
   pickStickerAward,
   recordRoundInCycle,
+  recordWordMastered,
 } from './progress';
 import {
   MAX_NAME_LENGTH,
@@ -159,6 +159,7 @@ const ROUND_SETTING_KEYS = Object.freeze([
   'roundLength',
   'wordSource',
   'customWords',
+  'autoLadder',
 ]);
 
 const emptyRoundReward = () => ({
@@ -709,6 +710,7 @@ export default function App() {
   const [superIntroVisible, setSuperIntroVisible] = useState(false);
   const [stickerBookOpen, setStickerBookOpen] = useState(false);
   const [stickerBookProgress, setStickerBookProgress] = useState(createEmptyProgress);
+  const [stickerBookMasteredWords, setStickerBookMasteredWords] = useState(() => new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsStats, setSettingsStats] = useState(null);
   const [settingsProgress, setSettingsProgress] = useState(null);
@@ -863,6 +865,7 @@ export default function App() {
       settings.roundLength,
       settings.wordSource,
       settings.customWords,
+      settings.autoLadder,
     ]);
     if (sessionFilterKeyRef.current !== null && sessionFilterKeyRef.current !== filterKey) {
       sessionStrugglesRef.current.clear();
@@ -1100,22 +1103,16 @@ export default function App() {
   const startRound = useCallback((options = {}) => {
     const activeSettings = options.settings ?? settings;
     const nextRoundKind = isSuperRoundNext(progressRef.current) ? 'super' : 'normal';
-    const completedWords = completedWordsForLocale(statsRef.current, activeSettings.locale);
     const selectionSummary =
       activeSettings.adaptivePractice && statsRef.current.totals.attempts >= ADAPTIVE_MIN_ATTEMPTS
         ? summariseForSelection(statsRef.current, activeSettings.locale)
         : null;
-    const words = nextRoundKind === 'super'
-      ? createReviewRound(
-          activeSettings,
-          sessionStrugglesRef.current,
-          Math.random,
-          selectionSummary,
-          completedWords,
-        )
-      : selectionSummary
-        ? createAdaptiveRound(activeSettings, selectionSummary, Math.random, completedWords)
-        : createRound(activeSettings, Math.random, completedWords);
+    const words = composeRound(activeSettings, statsRef.current, Math.random, {
+      progress: progressRef.current,
+      selectionSummary,
+      struggles: sessionStrugglesRef.current,
+      superRound: nextRoundKind === 'super',
+    });
     if (!words.length) {
       // A child may have completed every word matching the current filters. Give the
       // Grown-ups panel the live profile data so its clear-progress action can restore the
@@ -1619,6 +1616,8 @@ export default function App() {
         const wordStars = starsForWord(wordMissesRef.current);
         wordStarsRef.current = [...wordStarsRef.current, wordStars];
         progressRef.current = addStars(progressRef.current, wordStars);
+        const wordId = `${settings.locale}/${currentWord}`;
+        const previousMastery = masteryOf(statsRef.current.words[wordId]);
         statsRef.current = recordWordCompleted(statsRef.current, {
           word: currentWord,
           locale: settings.locale,
@@ -1626,6 +1625,12 @@ export default function App() {
           durationMs: completionTime - wordStartRef.current,
           mode: settings.gameMode,
         });
+        if (
+          previousMastery !== 'mastered' &&
+          masteryOf(statsRef.current.words[wordId]) === 'mastered'
+        ) {
+          progressRef.current = recordWordMastered(progressRef.current);
+        }
         if (wordMissesRef.current > 0) sessionStrugglesRef.current.add(currentWord);
         const isLastWord = wordIndex === roundWords.length - 1;
         if (isLastWord) {
@@ -1803,6 +1808,7 @@ export default function App() {
     cancelSpeech();
     pauseMusic();
     setStickerBookProgress(progressRef.current);
+    setStickerBookMasteredWords(masteredWordsForLocale(statsRef.current, settings.locale));
     setStickerBookOpen(true);
   };
 
@@ -1847,6 +1853,7 @@ export default function App() {
     setSettingsStats(statsRef.current);
     setSettingsProgress(progressRef.current);
     setStickerBookProgress(progressRef.current);
+    setStickerBookMasteredWords(new Set());
     setResumable(null);
   }, [activeProfileId]);
 
@@ -2568,6 +2575,7 @@ export default function App() {
           copy={copy}
           croc={croc}
           locale={settings.locale}
+          masteredWords={stickerBookMasteredWords}
           progress={stickerBookProgress}
           onCelebratePages={celebrateBookPages}
           onClose={closeStickerBook}
