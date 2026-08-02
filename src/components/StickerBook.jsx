@@ -1,22 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import CelebrationConfetti from './CelebrationConfetti';
-import { CloseIcon, StarIcon } from './Icons';
+import { CloseIcon } from './Icons';
+import Medal from './Medals';
 import { formatMessage } from '../locales';
+import { MEDAL_IDS, MEDAL_LABEL_KEYS } from '../medals';
 import { buildBookPages, hashCode } from '../stickers/map';
 
 const stickerAssets = import.meta.glob('../assets/stickers/*.svg', {
   eager: true,
   query: '?url&no-inline',
   import: 'default',
-});
-
-const BADGE_LABEL_KEYS = Object.freeze({
-  'first-round': 'badgeFirstRound',
-  'words-10': 'badgeWords10',
-  'words-50': 'badgeWords50',
-  'words-100': 'badgeWords100',
-  'perfect-round': 'badgePerfectRound',
-  'normal-round': 'badgeNormalRound',
 });
 
 const THEME_LABEL_KEYS = Object.freeze({
@@ -83,6 +76,7 @@ export default function StickerBook({
   croc,
   locale,
   masteredWords = new Set(),
+  onCelebrateBadges,
   onCelebratePages,
   onClose,
   onSpeak,
@@ -93,7 +87,22 @@ export default function StickerBook({
     const celebrated = new Set(progress.lastCelebratedPages ?? []);
     return pages.filter(({ complete }) => complete).map(({ id }) => id).filter((id) => !celebrated.has(id));
   }, [pages, progress.lastCelebratedPages]);
-  const [partyPageId, setPartyPageId] = useState(uncelebratedPages[0] ?? null);
+  const uncelebratedBadges = useMemo(() => {
+    const earned = new Set(progress.badges ?? []);
+    const celebrated = new Set(progress.celebratedBadges ?? []);
+    return MEDAL_IDS.filter((id) => earned.has(id) && !celebrated.has(id));
+  }, [progress.badges, progress.celebratedBadges]);
+  // Only one party owns the book at a time. A just-completed sticker page keeps its existing
+  // priority; medals wait for the next opening instead of stacking two confetti bursts.
+  const [party, setParty] = useState(() => {
+    if (uncelebratedPages.length) {
+      return { focusId: uncelebratedPages[0], ids: uncelebratedPages, type: 'page' };
+    }
+    if (uncelebratedBadges.length) {
+      return { focusId: uncelebratedBadges[0], ids: uncelebratedBadges, type: 'badges' };
+    }
+    return null;
+  });
   const [wobblingSticker, setWobblingSticker] = useState(null);
   const closeButtonRef = useRef(null);
   const partyRecordedRef = useRef(false);
@@ -117,10 +126,13 @@ export default function StickerBook({
   }, [onClose]);
 
   useEffect(() => {
-    if (partyRecordedRef.current || !uncelebratedPages.length) return;
+    if (partyRecordedRef.current || !party) return;
     partyRecordedRef.current = true;
-    onCelebratePages(uncelebratedPages);
-  }, [onCelebratePages, uncelebratedPages]);
+    if (party.type === 'page') onCelebratePages(party.ids);
+    else onCelebrateBadges(party.ids);
+  }, [onCelebrateBadges, onCelebratePages, party]);
+
+  const partyBadgeIds = new Set(party?.type === 'badges' ? party.ids : []);
 
   return (
     <div className="sticker-book-backdrop" role="presentation" onPointerDown={onClose}>
@@ -152,7 +164,7 @@ export default function StickerBook({
             {pages.map((page) => {
               const pageOwnedCount = page.stickers.filter(({ owned }) => owned).length;
               const themeLabel = copy[THEME_LABEL_KEYS[page.id]];
-              const partyVisible = partyPageId === page.id;
+              const partyVisible = party?.type === 'page' && party.focusId === page.id;
               return (
                 <section
                   className={`sticker-book__section sticker-book__page${partyVisible ? ' sticker-book__page--party' : ''}`}
@@ -181,28 +193,37 @@ export default function StickerBook({
                   {partyVisible && (
                     <CelebrationConfetti
                       className="sticker-book__confetti"
-                      onAnimationEnd={() => setPartyPageId(null)}
+                      onAnimationEnd={() => setParty(null)}
                     />
                   )}
                 </section>
               );
             })}
-          </div>
 
-          {progress.badges.length > 0 && (
-            <footer className="badge-row" aria-label={copy.badgesHeading}>
-              {progress.badges.map((badge) => {
-                const labelKey = BADGE_LABEL_KEYS[badge];
-                if (!labelKey) return null;
-                return (
-                  <span className="badge" key={badge}>
-                    <StarIcon filled />
-                    <span>{copy[labelKey]}</span>
-                  </span>
-                );
-              })}
-            </footer>
-          )}
+            <section
+              className="sticker-book__section medal-case"
+              aria-labelledby="sticker-book-medals"
+            >
+              <h3 id="sticker-book-medals">{copy.medalCaseHeading}</h3>
+              <div className="medal-case__grid">
+                {MEDAL_IDS.map((id) => {
+                  const earned = progress.badges.includes(id);
+                  const celebrating = partyBadgeIds.has(id);
+                  return (
+                    <Medal
+                      key={id}
+                      id={id}
+                      label={copy[MEDAL_LABEL_KEYS[id]]}
+                      earned={earned}
+                      celebrating={celebrating}
+                      showConfetti={celebrating && party?.focusId === id}
+                      onCelebrationEnd={() => setParty(null)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         </div>
 
         <img className="sticker-book__croc" src={croc} alt="" aria-hidden="true" />
@@ -211,4 +232,4 @@ export default function StickerBook({
   );
 }
 
-export { BADGE_LABEL_KEYS, THEME_LABEL_KEYS };
+export { MEDAL_LABEL_KEYS as BADGE_LABEL_KEYS, THEME_LABEL_KEYS };

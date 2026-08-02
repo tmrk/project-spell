@@ -6,6 +6,7 @@ import {
   addShinySticker,
   addSticker,
   addStars,
+  celebrateBadges,
   celebratePages,
   createEmptyProgress,
   isSuperRoundNext,
@@ -27,6 +28,7 @@ describe('progress store', () => {
       stickers: [],
       shinyStickers: [],
       badges: [],
+      celebratedBadges: [],
       lastCelebratedPages: [],
       roundsTowardSuper: 0,
       masteredCount: 0,
@@ -45,6 +47,7 @@ describe('progress store', () => {
         stickers: ['cat', ' cat ', '', 7, 'cat'],
         shinyStickers: ['1f451', ' 1f451 ', null],
         badges: ['starter', null],
+        celebratedBadges: ['starter', ' starter ', null],
         lastCelebratedPages: ['animals', ' animals ', null],
         roundsTowardSuper: 20,
         unknown: true,
@@ -55,6 +58,7 @@ describe('progress store', () => {
       stickers: ['cat'],
       shinyStickers: ['1f451'],
       badges: ['starter'],
+      celebratedBadges: ['starter'],
       lastCelebratedPages: ['animals'],
       roundsTowardSuper: 3,
       masteredCount: 0,
@@ -172,5 +176,15 @@ describe('progress store', () => {
     expect(celebrated.lastCelebratedPages).toEqual(['animals']);
     expect(celebratePages(celebrated, ['animals'])).toEqual(celebrated);
     expect(original.lastCelebratedPages).toEqual([]);
+  });
+
+  it('records each earned medal celebration once without changing earned badges', () => {
+    const original = { ...createEmptyProgress(), badges: ['first-round', 'perfect-round'] };
+    const celebrated = celebrateBadges(original, ['first-round', 'first-round']);
+
+    expect(celebrated.badges).toEqual(original.badges);
+    expect(celebrated.celebratedBadges).toEqual(['first-round']);
+    expect(celebrateBadges(celebrated, ['first-round'])).toEqual(celebrated);
+    expect(original.celebratedBadges).toEqual([]);
   });
 });

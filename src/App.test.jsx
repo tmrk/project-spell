@@ -1479,10 +1479,12 @@ describe('Project Spell', () => {
     expect(within(book).getByText('Animals · 1 stickers')).toBeInTheDocument();
     expect(within(book).getByText('Food · 1 stickers')).toBeInTheDocument();
     expect(within(book).getByText('Things · 0 stickers')).toBeInTheDocument();
-    expect(book.querySelectorAll('.sticker-book__section')).toHaveLength(3);
+    expect(book.querySelectorAll('.sticker-book__section')).toHaveLength(4);
     expect(within(book).queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
     expect(book.querySelectorAll('.sticker-card--silhouette')).toHaveLength(4);
     expect(book.querySelector('.sticker-card--silhouette button')).not.toBeInTheDocument();
+    expect(within(book).getByRole('heading', { name: 'Medals' })).toBeInTheDocument();
+    expect(book.querySelectorAll('.medal--silhouette')).toHaveLength(6);
 
     fireEvent.keyDown(book, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'My sticker book' })).not.toBeInTheDocument();
@@ -1491,7 +1493,7 @@ describe('Project Spell', () => {
     expect(screen.queryByRole('button', { name: 'Open sticker book' })).not.toBeInTheDocument();
   });
 
-  it('awards one round sticker, earns quiet badges, and speaks stickers from the book', () => {
+  it('awards one round sticker, earns quiet medals, and speaks stickers from the book', () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
       SETTINGS_KEY,
@@ -1525,6 +1527,7 @@ describe('Project Spell', () => {
       stickers: ['en-GB/cat'],
       badges: expect.arrayContaining(['first-round', 'perfect-round']),
     });
+    expect(screen.getByRole('button', { name: 'Open sticker book' })).toHaveClass('book-tab--new');
 
     const roundPraise = window.speechSynthesis.speak.mock.calls.at(-1)[0];
     const speechCountAfterPraise = window.speechSynthesis.speak.mock.calls.length;
@@ -1537,7 +1540,18 @@ describe('Project Spell', () => {
     expect(within(book).getByText('Animals · 1 stickers')).toBeInTheDocument();
     fireEvent.click(within(book).getByRole('button', { name: 'cat' }));
     expect(window.speechSynthesis.speak.mock.calls.at(-1)[0].text).toBe('cat');
-    expect(within(book).getByText('First round')).toBeInTheDocument();
+    expect(within(book).getByRole('img', { name: 'First round' })).toBeInTheDocument();
+    expect(within(book).getByRole('img', { name: 'Perfect round' })).toBeInTheDocument();
+    expect(within(book).queryByText('First round')).not.toBeInTheDocument();
+    expect(book.querySelectorAll('.medal--party')).toHaveLength(2);
+    expect(book.querySelectorAll('.medal__confetti span')).toHaveLength(12);
+    expect(JSON.parse(window.localStorage.getItem(PROGRESS_KEY)).celebratedBadges)
+      .toEqual(expect.arrayContaining(['first-round', 'perfect-round']));
+
+    fireEvent.click(within(book).getByRole('button', { name: 'Close sticker book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open sticker book' }));
+    expect(document.querySelector('.medal--party')).not.toBeInTheDocument();
+    expect(document.querySelector('.medal__confetti')).not.toBeInTheDocument();
   });
 
   it('celebrates a completed sticker page only on its first opening', () => {

@@ -22,6 +22,7 @@ export function createEmptyProgress() {
     stickers: [],
     shinyStickers: [],
     badges: [],
+    celebratedBadges: [],
     lastCelebratedPages: [],
     roundsTowardSuper: 0,
     masteredCount: 0,
@@ -37,6 +38,7 @@ export function normaliseProgress(value) {
     stickers: normaliseIds(value.stickers),
     shinyStickers: normaliseIds(value.shinyStickers),
     badges: normaliseIds(value.badges),
+    celebratedBadges: normaliseIds(value.celebratedBadges),
     lastCelebratedPages: normaliseIds(value.lastCelebratedPages),
     roundsTowardSuper: asCyclePosition(value.roundsTowardSuper),
     masteredCount: asCount(value.masteredCount),
@@ -131,6 +133,14 @@ export function addBadges(progress, ids) {
   const current = normaliseProgress(progress);
   const next = normaliseIds(ids).filter((id) => !current.badges.includes(id));
   return next.length ? { ...current, badges: [...current.badges, ...next] } : current;
+}
+
+export function celebrateBadges(progress, ids) {
+  const current = normaliseProgress(progress);
+  const next = normaliseIds(ids).filter((id) => !current.celebratedBadges.includes(id));
+  return next.length
+    ? { ...current, celebratedBadges: [...current.celebratedBadges, ...next] }
+    : current;
 }
 
 export function celebratePages(progress, pageIds) {

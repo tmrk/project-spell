@@ -46,7 +46,7 @@ These coordination files may be intentionally untracked. Read them and inspect `
 - A crocodile star trail that walks the round letter by letter, with a gold star for each finished word and no numbers on the play screen.
 - Super rounds every fourth round: a golden theme, a short gift intro, words the child found tricky, and a shiny prize sticker.
 - Adaptive practice that quietly brings tricky words back sooner once there is enough play history; a default-on parent switch, invisible to the child.
-- Gentle stars, milestone badges, and a themed sticker book of die-cut rewards whose collected word pictures can be tapped to hear them again.
+- Gentle stars, milestone medals, and a themed sticker book of die-cut rewards whose collected word pictures can be tapped to hear them again.
 - Optional spoken prompts, reusable sound effects, and rotating background music that ducks under speech.
 - A fixed-length round with a star trail, completion ceremony, a journey strip toward the next super round, a short fanfare, and replay.
 - Responsive layouts for touch devices, iPad portrait/landscape, and desktop.

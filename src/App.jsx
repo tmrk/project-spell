@@ -43,6 +43,7 @@ import {
   addShinySticker,
   addSticker,
   addStars,
+  celebrateBadges,
   celebratePages,
   createEmptyProgress,
   isSuperRoundNext,
@@ -1826,6 +1827,13 @@ export default function App() {
     persistProgress();
   }, [persistProgress]);
 
+  const celebrateBookBadges = useCallback((badgeIds) => {
+    progressRef.current = celebrateBadges(progressRef.current, badgeIds);
+    setVisibleProgress(progressRef.current);
+    setStickerBookProgress(progressRef.current);
+    persistProgress();
+  }, [persistProgress]);
+
   const speakSticker = (word, stickerLocale) => {
     say(word, { locale: stickerLocale, rate: 0.78, pitch: 1.04 });
   };
@@ -2213,7 +2221,7 @@ export default function App() {
       {(phase === 'welcome' || phase === 'complete') && (
         <BookTab
           ariaLabel={copy.openStickerBook}
-          bounce={phase === 'complete' && Boolean(roundReward.sticker || roundReward.shiny)}
+          bounce={phase === 'complete' && Boolean(roundReward.sticker || roundReward.shiny || roundReward.badge)}
           onClick={openStickerBook}
           recentSticker={mostRecentSticker}
         />
@@ -2579,6 +2587,7 @@ export default function App() {
           locale={settings.locale}
           masteredWords={stickerBookMasteredWords}
           progress={stickerBookProgress}
+          onCelebrateBadges={celebrateBookBadges}
           onCelebratePages={celebrateBookPages}
           onClose={closeStickerBook}
           onSpeak={speakSticker}
